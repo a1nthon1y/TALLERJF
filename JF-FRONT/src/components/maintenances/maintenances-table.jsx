@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Table,
   TableBody,
@@ -35,16 +35,23 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { configService } from "@/services/configService"
 
 const formSchema = z.object({
   estado: z.enum(["pendiente", "en_proceso", "completado"], { message: "El estado es requerido" }),
+  partes_reparadas: z.array(z.string()).optional()
 })
 
 export function MaintenancesTable() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMaintenance, setSelectedMaintenance] = useState(null)
+  const [partConfigs, setPartConfigs] = useState([])
   const { data: maintenances, isLoading: isLoadingMaintenances, isError: isErrorMaintenances, mutate } = useMaintenances()
   const { data: technicians, isLoading: isLoadingTechnicians, isError: isErrorTechnicians } = useTechnicians()
+
+  useEffect(() => {
+     configService.getConfigs().then(setPartConfigs).catch(() => {})
+  }, [])
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -55,8 +62,9 @@ export function MaintenancesTable() {
 
   const handleUpdateStatus = async (values) => {
     try {
-      await maintenanceService.updateMaintenanceStatus(selectedMaintenance.id, values.estado)
-      toast.success("Estado actualizado correctamente")
+      const partsArray = values.estado === "completado" ? values.partes_reparadas.map(Number) : [];
+      await maintenanceService.updateMaintenanceStatus(selectedMaintenance.id, values.estado, partsArray)
+      toast.success("Estado y reglas predictivas actualizados correctamente")
       setSelectedMaintenance(null)
       await mutate()
     } catch (error) {
@@ -66,7 +74,7 @@ export function MaintenancesTable() {
 
   const handleEditClick = (maintenance) => {
     setSelectedMaintenance(maintenance)
-    form.reset({ estado: maintenance.estado })
+    form.reset({ estado: maintenance.estado, partes_reparadas: [] })
   }
 
   const getStatusBadge = (status) => {
@@ -181,6 +189,43 @@ export function MaintenancesTable() {
                   </FormItem>
                 )}
               />
+
+              {form.watch("estado") === "completado" && (
+                <FormField
+                  control={form.control}
+                  name="partes_reparadas"
+                  render={({ field }) => (
+                     <FormItem>
+                       <div className="mb-4">
+                         <FormLabel className="text-base">Piezas/Sistemas Reparados</FormLabel>
+                         <p className="text-sm text-muted-foreground">
+                           Selecciona los elementos mantenidos para reiniciar sus respectivos contadores de kilómetros predictivos:
+                         </p>
+                       </div>
+                       <div className="grid grid-cols-2 gap-2 border p-4 rounded bg-slate-50 dark:bg-slate-900 overflow-y-auto max-h-40">
+                         {partConfigs.map((item) => (
+                           <label key={item.id} className="flex flex-row items-center space-x-3 space-y-0 cursor-pointer">
+                             <input
+                               type="checkbox"
+                               className="h-4 w-4 rounded border-gray-300"
+                               checked={field.value?.includes(String(item.id))}
+                               onChange={(e) => {
+                                 let updated = [...(field.value || [])];
+                                 if (e.target.checked) updated.push(String(item.id));
+                                 else updated = updated.filter(val => val !== String(item.id));
+                                 field.onChange(updated);
+                               }}
+                             />
+                             <span className="font-normal text-sm">{item.nombre}</span>
+                           </label>
+                         ))}
+                       </div>
+                       <FormMessage />
+                     </FormItem>
+                  )}
+                />
+              )}
+
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setSelectedMaintenance(null)}>
                   Cancelar

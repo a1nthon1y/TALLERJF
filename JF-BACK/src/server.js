@@ -14,6 +14,8 @@ const ownerRoutes = require("./routes/owner.routes");
 const userRoutes = require("./routes/user.routes");
 const technicianRoutes = require("./routes/technician.routes");
 const materialRoutes = require("./routes/material.routes");
+const configRoutes = require("./routes/config.routes");
+
 // Inicializar servidor
 const app = express();
 app.use(cors());
@@ -31,6 +33,8 @@ app.use("/api/owners", ownerRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/technicians", technicianRoutes);
 app.use("/api/materials", materialRoutes);
+app.use("/api/config", configRoutes);
+
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

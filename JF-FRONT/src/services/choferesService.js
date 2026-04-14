@@ -50,3 +50,13 @@ export async function deleteChofer(id) {
   }
 }
 
+// Registrar Llegada Predictiva
+export async function registrarLlegada(llegadaData) {
+  try {
+    const data = await makePostRequest("/choferes/llegada", llegadaData);
+    return data;
+  } catch (error) {
+    throw new Error(error.response?.data?.error || error.response?.data?.message || 'Error al registrar llegada');
+  }
+}
+

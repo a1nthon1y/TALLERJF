@@ -124,9 +124,36 @@ const getUnitsByOwnerReport = async (req, res) => {
   }
 };
 
+// Reporte exclusivo para el Chofer logueado (sólo ve su unidad actual)
+const getMyUnitReports = async (req, res) => {
+  try {
+    const usuario_id = req.user.id;
+    const choferQuery = await pool.query("SELECT id FROM choferes WHERE usuario_id = $1", [usuario_id]);
+    if (choferQuery.rows.length === 0) return res.status(403).json({ error: "Rol inválido o chofer no encontrado" });
+    const chofer_id = choferQuery.rows[0].id;
+
+    const unidadQuery = await pool.query("SELECT id, placa FROM unidades WHERE chofer_id = $1", [chofer_id]);
+    if (unidadQuery.rows.length === 0) return res.status(404).json({ error: "No tienes unidad asignada" });
+    
+    const result = await pool.query(`
+      SELECT m.id AS mantenimiento_id, u.placa AS unidad, m.tipo, m.estado, 
+             m.fecha_solicitud, m.fecha_realizacion, m.observaciones
+      FROM mantenimientos m
+      JOIN unidades u ON m.unidad_id = u.id
+      WHERE m.unidad_id = $1
+      ORDER BY m.fecha_solicitud DESC
+    `, [unidadQuery.rows[0].id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   getMaintenanceReport,
   getMaterialUsageReport,
   getCostReport,
-  getUnitsByOwnerReport, // Nuevo reporte agregado
+  getUnitsByOwnerReport,
+  getMyUnitReports,
 };
