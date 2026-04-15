@@ -1,18 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const materialController = require("../controllers/material.controller");
-const authenticate = require("../middlewares/auth.middleware"); // si deseas protegerlo
+const authenticate = require("../middlewares/auth.middleware");
+const checkRole = require("../middlewares/role.middleware");
 
-// Obtener todos los materiales
+// Lectura para cualquier autenticado (choferes pueden ver materiales)
 router.get("/", authenticate, materialController.getMaterials);
 
-// Crear nuevo material
-router.post("/", authenticate, materialController.createMaterial);
-
-// Editar material
-router.put("/:id", authenticate, materialController.updateMaterial);
-
-// Eliminar material
-router.delete("/:id", authenticate, materialController.deleteMaterial);
+// Escritura solo ADMIN y ENCARGADO
+router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), materialController.createMaterial);
+router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), materialController.updateMaterial);
+router.delete("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), materialController.deleteMaterial);
 
 module.exports = router;

@@ -39,7 +39,12 @@ import { configService } from "@/services/configService"
 
 const formSchema = z.object({
   estado: z.enum(["pendiente", "en_proceso", "completado"], { message: "El estado es requerido" }),
+  tecnico_id: z.string().optional(),
   partes_reparadas: z.array(z.string()).optional()
+}).superRefine((data, ctx) => {
+  if (data.estado === "completado" && !data.tecnico_id) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Debe asignar un técnico para completar", path: ["tecnico_id"] })
+  }
 })
 
 export function MaintenancesTable() {
@@ -57,13 +62,16 @@ export function MaintenancesTable() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       estado: "pendiente",
+      tecnico_id: "",
+      partes_reparadas: [],
     },
   })
 
   const handleUpdateStatus = async (values) => {
     try {
-      const partsArray = values.estado === "completado" ? values.partes_reparadas.map(Number) : [];
-      await maintenanceService.updateMaintenanceStatus(selectedMaintenance.id, values.estado, partsArray)
+      const partsArray = values.estado === "completado" ? (values.partes_reparadas || []).map(Number) : [];
+      const tecnicoId = values.estado === "completado" ? parseInt(values.tecnico_id) : null;
+      await maintenanceService.updateMaintenanceStatus(selectedMaintenance.id, values.estado, partsArray, tecnicoId)
       toast.success("Estado y reglas predictivas actualizados correctamente")
       setSelectedMaintenance(null)
       await mutate()
@@ -74,7 +82,7 @@ export function MaintenancesTable() {
 
   const handleEditClick = (maintenance) => {
     setSelectedMaintenance(maintenance)
-    form.reset({ estado: maintenance.estado, partes_reparadas: [] })
+    form.reset({ estado: maintenance.estado?.toLowerCase() || "pendiente", tecnico_id: maintenance.tecnico_id?.toString() || "", partes_reparadas: [] })
   }
 
   const getStatusBadge = (status) => {
@@ -87,9 +95,9 @@ export function MaintenancesTable() {
   }
 
   const getTechnicianName = (id) => {
-    if (!technicians) return "No asignado"
+    if (!technicians || !id) return "No asignado"
     const tech = technicians.find(t => t.id === id)
-    return tech ? tech.name : "No asignado"
+    return tech ? tech.nombre : "No asignado"
   }
 
   const filteredMaintenances = maintenances?.filter((maintenance) => {
@@ -189,6 +197,33 @@ export function MaintenancesTable() {
                   </FormItem>
                 )}
               />
+
+              {form.watch("estado") === "completado" && (
+                <FormField
+                  control={form.control}
+                  name="tecnico_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Técnico Responsable <span className="text-destructive">*</span></FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccione el técnico que realizó el trabajo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {technicians?.filter(t => t.activo).map((t) => (
+                            <SelectItem key={t.id} value={t.id.toString()}>
+                              {t.nombre} — {t.especialidad}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               {form.watch("estado") === "completado" && (
                 <FormField

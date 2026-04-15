@@ -1,15 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const authenticate = require("../middlewares/auth.middleware");
+const checkRole = require("../middlewares/role.middleware");
 const partsController = require("../controllers/part.controller");
 
-// 🔹 Registrar una parte para una unidad
-router.post("/", authenticate, partsController.createPart);
-
-// 🔹 Obtener todas las partes registradas
+// Lectura para cualquier autenticado
 router.get("/", authenticate, partsController.getAllParts);
-
-// 🔹 Obtener las partes de una unidad específica
 router.get("/:unidadId", authenticate, partsController.getPartsByUnit);
+
+// Escritura solo ADMIN y ENCARGADO
+router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), partsController.createPart);
 
 module.exports = router;

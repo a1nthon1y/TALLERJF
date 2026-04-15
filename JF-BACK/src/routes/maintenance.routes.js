@@ -2,17 +2,14 @@ const express = require("express");
 const router = express.Router();
 const maintenanceController = require("../controllers/maintenance.controller");
 const authenticate = require("../middlewares/auth.middleware");
+const checkRole = require("../middlewares/role.middleware");
 
-// Registrar un mantenimiento (preventivo o correctivo)
-router.post("/", authenticate, maintenanceController.createMaintenance);
-
-// Obtener todos los mantenimientos
+// Lectura para cualquier autenticado
 router.get("/", authenticate, maintenanceController.getAllMaintenances);
-
-// Obtener un mantenimiento por ID
 router.get("/:id", authenticate, maintenanceController.getMaintenanceById);
 
-// Actualizar estado de un mantenimiento (ejemplo: completado)
-router.put("/:id", authenticate, maintenanceController.updateMaintenanceStatus);
+// Escritura solo ADMIN y ENCARGADO
+router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), maintenanceController.createMaintenance);
+router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), maintenanceController.updateMaintenanceStatus);
 
 module.exports = router;

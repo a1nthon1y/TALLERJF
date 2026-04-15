@@ -1,12 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const ownerController = require("../controllers/owner.controller");
-const authenticate = require("../middlewares/auth.middleware"); // Protegemos las rutas
+const authenticate = require("../middlewares/auth.middleware");
+const checkRole = require("../middlewares/role.middleware");
 
-router.post("/", authenticate, ownerController.createOwner);
-router.get("/", authenticate, ownerController.getAllOwners);
-router.get("/:id", authenticate, ownerController.getOwnerById);
-router.put("/:id", authenticate, ownerController.updateOwner);
-router.delete("/:id", authenticate, ownerController.deleteOwner);
+// Solo ADMIN y ENCARGADO gestionan dueños
+router.get("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), ownerController.getAllOwners);
+router.get("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), ownerController.getOwnerById);
+router.post("/", authenticate, checkRole(["ADMIN"]), ownerController.createOwner);
+router.put("/:id", authenticate, checkRole(["ADMIN"]), ownerController.updateOwner);
+router.delete("/:id", authenticate, checkRole(["ADMIN"]), ownerController.deleteOwner);
 
 module.exports = router;

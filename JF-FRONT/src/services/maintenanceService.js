@@ -48,9 +48,9 @@ export const maintenanceService = {
   },
 
   // Actualizar estado de un mantenimiento y mandar las piezas
-  async updateMaintenanceStatus(maintenanceId, status, partes_reparadas = []) {
+  async updateMaintenanceStatus(maintenanceId, status, partes_reparadas = [], tecnico_id = null) {
     try {
-      const response = await makePutRequest(`/maintenances/${maintenanceId}`, { estado: status, partes_reparadas });
+      const response = await makePutRequest(`/maintenances/${maintenanceId}`, { estado: status, partes_reparadas, tecnico_id });
       return response;
     } catch (error) {
       throw new Error(error.response?.data?.error || 'Error al actualizar estado');

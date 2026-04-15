@@ -61,20 +61,28 @@ const getMaintenanceById = async (req, res) => {
 const updateMaintenanceStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado, partes_reparadas } = req.body; // partes_reparadas es array de config ID's
+    const { estado, partes_reparadas, tecnico_id } = req.body;
 
     const mantQuery = await pool.query("SELECT * FROM mantenimientos WHERE id = $1", [id]);
     if (mantQuery.rows.length === 0) return res.status(404).json({ message: "Mantenimiento no encontrado" });
     const m = mantQuery.rows[0];
 
+    const estadoNorm = estado?.toUpperCase();
+
+    // Validar que tecnico_id sea obligatorio al completar
+    if (estadoNorm === "COMPLETADO" && !tecnico_id) {
+      return res.status(400).json({ message: "tecnico_id es obligatorio para marcar como COMPLETADO" });
+    }
+
     const result = await pool.query(
-      `UPDATE mantenimientos SET estado = $1, fecha_realizacion = NOW() 
+      `UPDATE mantenimientos 
+       SET estado = $1, fecha_realizacion = NOW(), tecnico_id = COALESCE($3, tecnico_id)
        WHERE id = $2 RETURNING *`,
-      [estado, id]
+      [estadoNorm, id, tecnico_id || null]
     );
 
     // CASUÍSTICA 3: Si se completó la reparación e indicaron piezas cambiadas, resetear sus predicciones
-    if (estado === "COMPLETADO" && partes_reparadas && partes_reparadas.length > 0) {
+    if (estadoNorm === "COMPLETADO" && partes_reparadas && partes_reparadas.length > 0) {
        for (let p_id of partes_reparadas) {
          await pool.query(
            `INSERT INTO estado_partes_unidad (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)

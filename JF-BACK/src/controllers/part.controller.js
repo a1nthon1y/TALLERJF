@@ -27,11 +27,12 @@ const createPart = async (req, res) => {
 // 🔹 Obtener todas las partes registradas
 const getAllParts = async (req, res) => {
     try {
-        const result = await pool.query("SELECT * FROM partes_unidades");
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: "No hay partes registradas." });
-        }
+        const result = await pool.query(
+            `SELECT pu.*, u.placa, u.kilometraje 
+             FROM partes_unidades pu
+             LEFT JOIN unidades u ON pu.unidad_id = u.id
+             ORDER BY pu.unidad_id, pu.id`
+        );
 
         res.status(200).json(result.rows);
     } catch (error) {
@@ -50,12 +51,7 @@ const getPartsByUnit = async (req, res) => {
             return res.status(400).json({ error: "El ID de la unidad debe ser un número válido." });
         }
 
-        const result = await pool.query("SELECT * FROM partes_unidades WHERE unidad_id = $1", [unidadId]);
-
-        if (result.rows.length === 0) {
-            return res.status(404).json({ message: "No se encontraron partes para esta unidad." });
-        }
-
+        const result = await pool.query("SELECT * FROM partes_unidades WHERE unidad_id = $1 ORDER BY id", [unidadId]);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error("Error al obtener partes de la unidad:", error);

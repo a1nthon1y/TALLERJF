@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { BarChart3, Bus, Wrench, Package, FileBarChart, Users, LogOut, Settings, Building2, ChevronLeft, UserCircle } from "lucide-react"
+import { BarChart3, Bus, Wrench, Package, FileBarChart, Users, LogOut, Settings, Building2, ChevronLeft, UserCircle, MapPin, Hammer } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarRail } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ const adminNavItems = [
   { title: "Unidades", href: "/unidades", icon: Bus },
   { title: "Dueños", href: "/duenos", icon: Building2 },
   { title: "Choferes", href: "/choferes", icon: UserCircle },
+  { title: "Técnicos", href: "/tecnicos", icon: Hammer },
   { title: "Partes de Unidades", href: "/partes-unidades", icon: Settings },
   { title: "Materiales", href: "/materiales", icon: Package },
   { title: "Reportes", href: "/reportes", icon: FileBarChart },
@@ -24,9 +25,8 @@ const adminNavItems = [
 
 const choferNavItems = [
   { title: "Dashboard", href: "/chofer/dashboard", icon: BarChart3 },
-  { title: "Mi Unidad", href: "/chofer/unidad", icon: Bus },
-  { title: "Mantenimientos", href: "/chofer/mantenimientos", icon: Wrench },
-  { title: "Reportes", href: "/chofer/reportes", icon: FileBarChart },
+  { title: "Mis Mantenimientos", href: "/chofer/mis-mantenimientos", icon: Wrench },
+  { title: "Reportar Llegada", href: "/chofer/reportar-llegada", icon: MapPin },
 ]
 
 export function SidebarNav() {
@@ -91,7 +91,7 @@ export function SidebarNav() {
               <div className="ml-3">
                 <div className="font-semibold text-lg text-sidebar-foreground">ExpresoJFTaller</div>
                 <div className="text-xs text-sidebar-foreground/70">
-                  {user.rol === 'ADMIN' ? 'Administrador' : 'Chofer'}
+                  {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : 'Chofer'}
                 </div>
               </div>
             )}

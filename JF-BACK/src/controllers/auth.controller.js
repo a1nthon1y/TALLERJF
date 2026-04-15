@@ -3,12 +3,21 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const register = async (req, res) => {
-  const { nombre, correo, password, rol } = req.body;
+  const { nombre, correo, password } = req.body;
+  // El rol siempre es CHOFER en auto-registro; para crear admins/encargados usar POST /api/users
+  const rol = "CHOFER";
   try {
+    if (!nombre || !correo || !password) {
+      return res.status(400).json({ error: "nombre, correo y password son obligatorios" });
+    }
+    const existing = await pool.query("SELECT id FROM usuarios WHERE correo = $1", [correo]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: "Ya existe un usuario con ese correo" });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
       "INSERT INTO usuarios (nombre, correo, password, rol, activo) VALUES ($1, $2, $3, $4, $5) RETURNING id, nombre, correo, rol, activo",
-      [nombre, correo, hashedPassword, rol, true] // Se registra como activo por defecto
+      [nombre, correo, hashedPassword, rol, true]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {

@@ -200,8 +200,8 @@ export function UsersTable() {
                 </TableCell>
                 <TableCell>{user.correo}</TableCell>
                 <TableCell>
-                  <Badge variant={user.rol === "ADMIN" ? "default" : "secondary"}>
-                    {user.rol}
+                  <Badge variant={user.rol === "ADMIN" ? "default" : user.rol === "ENCARGADO" ? "outline" : "secondary"}>
+                    {user.rol === "ADMIN" ? "Administrador" : user.rol === "ENCARGADO" ? "Encargado" : "Chofer"}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -287,6 +287,7 @@ export function UsersTable() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="ADMIN">Administrador</SelectItem>
+                        <SelectItem value="ENCARGADO">Encargado</SelectItem>
                         <SelectItem value="CHOFER">Chofer</SelectItem>
                       </SelectContent>
                     </Select>

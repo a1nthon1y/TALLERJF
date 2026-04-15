@@ -130,6 +130,7 @@ export default function UsersPage() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="ADMIN">Administrador</SelectItem>
+                          <SelectItem value="ENCARGADO">Encargado</SelectItem>
                           <SelectItem value="CHOFER">Chofer</SelectItem>
                         </SelectContent>
                       </Select>

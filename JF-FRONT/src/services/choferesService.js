@@ -50,6 +50,16 @@ export async function deleteChofer(id) {
   }
 }
 
+// Obtener la unidad asignada al chofer autenticado
+export async function getMiUnidad() {
+  try {
+    const data = await makeGetRequest("/choferes/mi-unidad");
+    return data;
+  } catch (error) {
+    throw new Error(error.message || 'No tienes una unidad asignada');
+  }
+}
+
 // Registrar Llegada Predictiva
 export async function registrarLlegada(llegadaData) {
   try {

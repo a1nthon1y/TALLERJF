@@ -2,17 +2,12 @@ const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/user.controller");
 const authenticate = require("../middlewares/auth.middleware");
+const checkRole = require("../middlewares/role.middleware");
 
-// Obtener lista de usuarios (solo admin)
-router.get("/", authenticate, userController.getUsers);
-
-// Crear un usuario (solo admin)
-router.post("/", authenticate, userController.createUser);
-
-// Editar usuario (nombre, correo, rol)
-router.put("/:id", authenticate, userController.updateUser);
-
-// Activar o desactivar usuario
-router.put("/:id/status", authenticate, userController.toggleUserStatus);
+// Solo ADMIN puede gestionar usuarios
+router.get("/", authenticate, checkRole(["ADMIN"]), userController.getUsers);
+router.post("/", authenticate, checkRole(["ADMIN"]), userController.createUser);
+router.put("/:id", authenticate, checkRole(["ADMIN"]), userController.updateUser);
+router.put("/:id/status", authenticate, checkRole(["ADMIN"]), userController.toggleUserStatus);
 
 module.exports = router;

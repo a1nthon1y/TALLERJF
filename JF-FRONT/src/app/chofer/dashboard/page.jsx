@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { authService } from "@/services/authService";
-import { unitService } from "@/services/unitsService";
+import { getMiUnidad } from "@/services/choferesService";
 import { maintenanceService } from "@/services/maintenanceService";
+import { makeGetRequest } from "@/utils/api";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -30,19 +31,25 @@ export default function DriverDashboard() {
   useEffect(() => {
     async function loadDriverData() {
       try {
-        if (!user?.id) return;
-
-        // Cargar unidad asignada
-        const unitData = await unitService.getDriverUnit(user.id);
-        setUnit(unitData);
+        // Cargar unidad asignada al chofer autenticado
+        const { unidad } = await getMiUnidad();
+        setUnit(unidad);
 
         // Cargar partes de la unidad
-        const partsData = await unitService.getUnitParts(unitData.id);
-        setParts(partsData);
+        try {
+          const partsData = await makeGetRequest(`/parts/${unidad.id}`);
+          setParts(Array.isArray(partsData) ? partsData : []);
+        } catch {
+          setParts([]);
+        }
 
         // Cargar historial de mantenimientos
-        const maintenanceData = await maintenanceService.getMaintenancesByUnit(unitData.id);
-        setMaintenances(maintenanceData);
+        try {
+          const maintenanceData = await maintenanceService.getMaintenancesByUnit(unidad.id);
+          setMaintenances(Array.isArray(maintenanceData) ? maintenanceData : []);
+        } catch {
+          setMaintenances([]);
+        }
       } catch (error) {
         console.error(error);
       } finally {
@@ -50,7 +57,7 @@ export default function DriverDashboard() {
       }
     }
 
-    if (user?.id) {
+    if (user) {
       loadDriverData();
     }
   }, [user]);
