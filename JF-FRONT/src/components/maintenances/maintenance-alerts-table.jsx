@@ -137,13 +137,18 @@ export function MaintenanceAlertsTable() {
                   <div className="flex space-x-2">
                     {alert.estado === "ACTIVO" && (
                       <>
-                        <Button variant="outline" size="icon" title="Programar mantenimiento">
-                          <Calendar className="h-4 w-4" />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Programar mantenimiento"
+                          asChild
+                        >
+                          <a href="/configuraciones"><Calendar className="h-4 w-4" /></a>
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="icon" 
-                          title="Resolver alerta"
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Resolver alerta"
                           onClick={() => handleResolveAlert(alert.id)}
                         >
                           <Wrench className="h-4 w-4" />

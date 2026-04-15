@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Edit, MoreHorizontal } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
 import { maintenanceService } from "@/services/maintenanceService"
@@ -96,21 +97,30 @@ export function MaintenancesTable() {
 
   const getTechnicianName = (id) => {
     if (!technicians || !id) return "No asignado"
-    const tech = technicians.find(t => t.id === id)
+    const tech = technicians.find(t => Number(t.id) === Number(id))
     return tech ? tech.nombre : "No asignado"
   }
 
   const filteredMaintenances = maintenances?.filter((maintenance) => {
     const searchLower = searchTerm.toLowerCase()
     return (
-      maintenance.unidad_id?.toString().toLowerCase().includes(searchLower) ||
+      maintenance.placa?.toLowerCase().includes(searchLower) ||
+      maintenance.unidad_id?.toString().includes(searchLower) ||
       maintenance.tipo?.toLowerCase().includes(searchLower) ||
       maintenance.observaciones?.toLowerCase().includes(searchLower)
     )
   })
 
-  if (isLoadingMaintenances || isLoadingTechnicians) return <div>Cargando...</div>
-  if (isErrorMaintenances || isErrorTechnicians) return <div>Error al cargar los datos</div>
+  if (isLoadingMaintenances || isLoadingTechnicians) {
+    return <PageSkeleton rowCount={5} columnCount={7} />
+  }
+  if (isErrorMaintenances || isErrorTechnicians) {
+    return (
+      <div className="rounded-lg border border-destructive p-4 text-destructive text-sm">
+        Error al cargar los datos de mantenimientos.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -138,10 +148,10 @@ export function MaintenancesTable() {
           <TableBody>
             {filteredMaintenances?.map((maintenance) => (
               <TableRow key={maintenance.id}>
-                <TableCell>{maintenance.unidad_id}</TableCell>
-                <TableCell>{maintenance.tipo}</TableCell>
+                <TableCell>{maintenance.placa ?? maintenance.unidad_id}</TableCell>
+                <TableCell className="capitalize">{maintenance.tipo?.toLowerCase()}</TableCell>
                 <TableCell>{getStatusBadge(maintenance.estado)}</TableCell>
-                <TableCell>{getTechnicianName(maintenance.id_tecnico)}</TableCell>
+                <TableCell>{getTechnicianName(maintenance.tecnico_id ?? maintenance.id_tecnico)}</TableCell>
                 <TableCell>{maintenance.observaciones}</TableCell>
                 <TableCell>{maintenance.kilometraje_actual}</TableCell>
                 <TableCell>

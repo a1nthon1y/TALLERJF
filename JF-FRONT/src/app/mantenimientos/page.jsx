@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { MaintenancesTable } from "@/components/maintenances/maintenances-table"
 import { Button } from "@/components/ui/button"
 import { Plus, AlertCircle } from "lucide-react"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { maintenanceService } from "@/services/maintenanceService"
 import { toast } from "sonner"
 import {
@@ -89,8 +90,16 @@ export default function MaintenancesPage() {
     }
   }
 
-  if (isLoadingMaintenances || isLoadingTechnicians || isLoadingUnits) return <div>Cargando...</div>
-  if (isErrorMaintenances || isErrorTechnicians || isErrorUnits) return <div>Error al cargar los datos</div>
+  if (isLoadingMaintenances || isLoadingTechnicians || isLoadingUnits) {
+    return <PageSkeleton rowCount={5} columnCount={7} />
+  }
+  if (isErrorMaintenances || isErrorTechnicians || isErrorUnits) {
+    return (
+      <div className="rounded-lg border border-destructive p-4 text-destructive text-sm">
+        Error al cargar los datos de mantenimientos.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">

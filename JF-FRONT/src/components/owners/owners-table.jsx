@@ -12,10 +12,10 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Edit, MoreHorizontal, Trash, Loader2, Building2 } from "lucide-react"
+import { Edit, MoreHorizontal, Trash, Loader2, Building2, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { getAllOwners, deleteOwner, createOwner } from "@/services/ownersService"
 import { getAllUnits } from "@/services/unitsService"
@@ -24,6 +24,7 @@ export function OwnersTable() {
   const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [usuarioId, setUsuarioId] = useState("")
 
   const { data: owners = [], isLoading } = useQuery({
@@ -64,9 +65,15 @@ export function OwnersTable() {
   const getUnidadesCount = (ownerId) =>
     allUnits.filter((u) => u.dueno_id === ownerId).length
 
-  const handleDelete = (id) => {
-    if (!confirm("¿Eliminar este dueño? Esta acción no se puede deshacer.")) return
-    deleteMutation.mutate(id)
+  const handleDelete = (owner) => {
+    setDeleteTarget(owner)
+  }
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return
+    deleteMutation.mutate(deleteTarget.id, {
+      onSettled: () => setDeleteTarget(null),
+    })
   }
 
   const handleCreate = (e) => {
@@ -153,7 +160,7 @@ export function OwnersTable() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
-                        onClick={() => handleDelete(owner.id)}
+                        onClick={() => handleDelete(owner)}
                       >
                         <Trash className="mr-2 h-4 w-4" /> Eliminar
                       </DropdownMenuItem>
@@ -165,6 +172,35 @@ export function OwnersTable() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Dialog: Confirmar eliminación */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" /> Eliminar Dueño
+            </DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas eliminar a{" "}
+              <span className="font-semibold">{deleteTarget?.nombre}</span>?
+              Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Registrar nuevo dueño */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

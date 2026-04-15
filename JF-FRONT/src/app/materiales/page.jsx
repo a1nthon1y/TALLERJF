@@ -30,7 +30,7 @@ const formSchema = z.object({
 
 export default function MaterialsPage() {
   const [isCreating, setIsCreating] = useState(false);
-  const { data: materials, isLoading, isError, mutate } = useMaterials()
+  const { mutate } = useMaterials()
 
   const form = useForm({
     resolver: zodResolver(formSchema),

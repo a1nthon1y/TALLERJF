@@ -1,6 +1,7 @@
 import { MaintenanceAlertsTable } from "@/components/maintenances/maintenance-alerts-table"
 import { Button } from "@/components/ui/button"
 import { Settings } from "lucide-react"
+import Link from "next/link"
 
 export default function MaintenanceAlertsPage() {
   return (
@@ -10,8 +11,10 @@ export default function MaintenanceAlertsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Alertas de Mantenimiento</h1>
           <p className="text-muted-foreground">Gestión de alertas de mantenimiento basadas en kilometraje</p>
         </div>
-        <Button>
-          <Settings className="mr-2 h-4 w-4" /> Configurar Intervalos
+        <Button asChild>
+          <Link href="/configuraciones">
+            <Settings className="mr-2 h-4 w-4" /> Configurar Intervalos
+          </Link>
         </Button>
       </div>
       <MaintenanceAlertsTable />

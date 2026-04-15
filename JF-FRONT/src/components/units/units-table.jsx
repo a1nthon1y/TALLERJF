@@ -235,13 +235,10 @@ export function UnitsTable() {
                   <TableCell>{formatNumber(unit.kilometraje || 0)}</TableCell>
                   <TableCell>{unit.chofer_nombre || 'Sin asignar'}</TableCell>
                   <TableCell>
-                    <Link 
-                      href={`/duenos/${unit.dueno_id}`} 
-                      className="flex items-center hover:underline"
-                    >
+                    <div className="flex items-center">
                       <Building2 className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
                       {getOwnerName(unit)}
-                    </Link>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>

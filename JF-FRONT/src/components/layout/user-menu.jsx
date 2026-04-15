@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { LogOut, User, Settings, HelpCircle } from "lucide-react"
+import { LogOut, User, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { authService } from "@/services/authService"
@@ -82,25 +82,17 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem onClick={() => router.push("/perfil")}>
-            <User className="mr-2 h-4 w-4" />
-            <span>Perfil</span>
-            <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          {user.rol === "ADMIN" && (
-            <DropdownMenuItem onClick={() => router.push("/configuracion")}>
-              <Settings className="mr-2 h-4 w-4" />
-              <span>Configuración</span>
-              <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onClick={() => router.push("/ayuda")}>
-            <HelpCircle className="mr-2 h-4 w-4" />
-            <span>Ayuda</span>
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
+        {user.rol === "ADMIN" && (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => router.push("/configuraciones")}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Configuraciones</span>
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem 
           onClick={handleLogout} 
           disabled={isLoading} 

@@ -177,7 +177,7 @@ export function Notifications() {
                       className="mt-2 text-xs"
                       onClick={(e) => {
                         e.stopPropagation()
-                        window.location.href = `/mantenimientos/partes/${notification.partId}`
+                        window.location.href = `/mantenimientos/alertas`
                       }}
                     >
                       Programar mantenimiento

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react"
 import { alertService } from "@/services/alertService"
-import { toast } from "sonner"
 
 export function useAlerts() {
   const [alerts, setAlerts] = useState([])
@@ -38,13 +37,8 @@ export function useAlerts() {
   }
 
   const resolveAlert = async (alertId) => {
-    try {
-      await alertService.resolveAlert(alertId)
-      toast.success("Alerta resuelta correctamente")
-      await mutate()
-    } catch (error) {
-      toast.error(error.message)
-    }
+    await alertService.resolveAlert(alertId)
+    await mutate()
   }
 
   return {
