@@ -200,8 +200,8 @@ export function UsersTable() {
                 </TableCell>
                 <TableCell>{user.correo}</TableCell>
                 <TableCell>
-                  <Badge variant={user.rol === "ADMIN" ? "default" : user.rol === "ENCARGADO" ? "outline" : "secondary"}>
-                    {user.rol === "ADMIN" ? "Administrador" : user.rol === "ENCARGADO" ? "Encargado" : "Chofer"}
+                  <Badge variant={user.rol === "ADMIN" ? "default" : user.rol === "ENCARGADO" ? "outline" : user.rol === "OWNER" ? "outline" : "secondary"}>
+                    {user.rol === "ADMIN" ? "Administrador" : user.rol === "ENCARGADO" ? "Encargado" : user.rol === "OWNER" ? "Dueño" : "Chofer"}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -288,6 +288,7 @@ export function UsersTable() {
                       <SelectContent>
                         <SelectItem value="ADMIN">Administrador</SelectItem>
                         <SelectItem value="ENCARGADO">Encargado</SelectItem>
+                        <SelectItem value="OWNER">Dueño</SelectItem>
                         <SelectItem value="CHOFER">Chofer</SelectItem>
                       </SelectContent>
                     </Select>

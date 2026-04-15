@@ -16,7 +16,10 @@ router.get("/costs", authenticate, checkRole(["ADMIN", "ENCARGADO"]), reportCont
 // Reporte de unidades por dueño (solo admins)
 router.get("/units/:duenoId", authenticate, checkRole(["ADMIN", "ENCARGADO"]), reportController.getUnitsByOwnerReport);
 
-// ** NUEVO: Mis reportes ** (Sólo choferes)
+// Reporte del OWNER autenticado: mantenimientos de todas sus unidades
+router.get("/my-units", authenticate, checkRole(["OWNER"]), reportController.getMyUnitsReport);
+
+// Mis reportes de chofer (solo ve su unidad asignada)
 router.get("/my-unit", authenticate, checkRole(["CHOFER"]), reportController.getMyUnitReports);
 
 module.exports = router;

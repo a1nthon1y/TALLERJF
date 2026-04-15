@@ -131,6 +131,7 @@ export default function UsersPage() {
                         <SelectContent>
                           <SelectItem value="ADMIN">Administrador</SelectItem>
                           <SelectItem value="ENCARGADO">Encargado</SelectItem>
+                          <SelectItem value="OWNER">Dueño</SelectItem>
                           <SelectItem value="CHOFER">Chofer</SelectItem>
                         </SelectContent>
                       </Select>

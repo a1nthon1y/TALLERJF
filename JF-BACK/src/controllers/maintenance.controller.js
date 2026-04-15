@@ -107,9 +107,29 @@ const updateMaintenanceStatus = async (req, res) => {
   }
 };
 
+// Obtener mantenimientos filtrados por unidad (usado por chofer y owner)
+const getMaintenancesByUnit = async (req, res) => {
+  try {
+    const { unidadId } = req.params;
+    const result = await pool.query(
+      `SELECT m.*, u.placa, t.nombre AS tecnico_nombre
+       FROM mantenimientos m
+       JOIN unidades u ON m.unidad_id = u.id
+       LEFT JOIN tecnicos t ON m.tecnico_id = t.id
+       WHERE m.unidad_id = $1
+       ORDER BY m.fecha_solicitud DESC`,
+      [unidadId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener mantenimientos de la unidad" });
+  }
+};
+
 module.exports = {
   createMaintenance,
   getAllMaintenances,
   getMaintenanceById,
   updateMaintenanceStatus,
+  getMaintenancesByUnit,
 };

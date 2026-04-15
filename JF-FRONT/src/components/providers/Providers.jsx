@@ -28,23 +28,32 @@ export function Providers({ children }) {
     if (user && pathname === '/login') {
       if (user.rol === 'CHOFER') {
         router.push('/chofer/dashboard');
+      } else if (user.rol === 'OWNER') {
+        router.push('/dueno/dashboard');
       } else {
         router.push('/');
       }
       return;
     }
 
-    // Si hay usuario y es chofer intentando acceder a rutas de admin
-    // Solo las rutas que empiezan con '/chofer/' (con barra) son rutas de chofer
-    // '/choferes' es una ruta de admin, no de chofer
+    // CHOFER solo puede acceder a rutas /chofer/*
     if (user?.rol === 'CHOFER' && !pathname.startsWith('/chofer/')) {
       router.push('/chofer/dashboard');
       return;
     }
 
-    // Si hay usuario y es admin intentando acceder a rutas de chofer
-    // Solo las rutas que empiezan con '/chofer/' (con barra) son rutas de chofer
-    if (user?.rol === 'ADMIN' && pathname.startsWith('/chofer/')) {
+    // OWNER solo puede acceder a rutas /dueno/*
+    if (user?.rol === 'OWNER' && !pathname.startsWith('/dueno/')) {
+      router.push('/dueno/dashboard');
+      return;
+    }
+
+    // ADMIN/ENCARGADO no pueden acceder a rutas de chofer ni dueño
+    if (['ADMIN', 'ENCARGADO'].includes(user?.rol) && pathname.startsWith('/chofer/')) {
+      router.push('/');
+      return;
+    }
+    if (['ADMIN', 'ENCARGADO'].includes(user?.rol) && pathname.startsWith('/dueno/')) {
       router.push('/');
       return;
     }

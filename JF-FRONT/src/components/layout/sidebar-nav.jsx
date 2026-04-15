@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { BarChart3, Bus, Wrench, Package, FileBarChart, Users, LogOut, Settings, Building2, ChevronLeft, UserCircle, MapPin, Hammer } from "lucide-react"
+import { BarChart3, Bus, Wrench, Package, FileBarChart, Users, LogOut, Settings, Building2, ChevronLeft, UserCircle, MapPin, Hammer, ClipboardList } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarRail } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,12 @@ const choferNavItems = [
   { title: "Dashboard", href: "/chofer/dashboard", icon: BarChart3 },
   { title: "Mis Mantenimientos", href: "/chofer/mis-mantenimientos", icon: Wrench },
   { title: "Reportar Llegada", href: "/chofer/reportar-llegada", icon: MapPin },
+]
+
+const ownerNavItems = [
+  { title: "Dashboard", href: "/dueno/dashboard", icon: BarChart3 },
+  { title: "Mis Unidades", href: "/dueno/mis-unidades", icon: Bus },
+  { title: "Mantenimientos", href: "/dueno/mantenimientos", icon: ClipboardList },
 ]
 
 export function SidebarNav() {
@@ -70,7 +76,10 @@ export function SidebarNav() {
   }
 
   // Determinar qué items mostrar según el rol
-  const navItems = user.rol === 'CHOFER' ? choferNavItems : adminNavItems
+  const navItems =
+    user.rol === 'CHOFER' ? choferNavItems :
+    user.rol === 'OWNER'  ? ownerNavItems  :
+    adminNavItems
 
   return (
     <div className="relative">
@@ -91,7 +100,7 @@ export function SidebarNav() {
               <div className="ml-3">
                 <div className="font-semibold text-lg text-sidebar-foreground">ExpresoJFTaller</div>
                 <div className="text-xs text-sidebar-foreground/70">
-                  {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : 'Chofer'}
+                  {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : user.rol === 'OWNER' ? 'Dueño' : 'Chofer'}
                 </div>
               </div>
             )}

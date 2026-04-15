@@ -4,7 +4,9 @@ const unitController = require("../controllers/unit.controller");
 const authenticate = require("../middlewares/auth.middleware");
 const checkRole = require("../middlewares/role.middleware");
 
-// Lectura para cualquier autenticado (choferes necesitan ver su unidad)
+// Unidades propias del OWNER autenticado (debe ir ANTES de /:id)
+router.get("/my-units", authenticate, checkRole(["OWNER"]), unitController.getMyUnits);
+// Lectura para admin/encargado
 router.get("/owner/:duenoId", authenticate, checkRole(["ADMIN", "ENCARGADO"]), unitController.getUnitsByOwner);
 router.get("/", authenticate, unitController.getAllUnits);
 router.get("/:id", authenticate, unitController.getUnitById);

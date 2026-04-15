@@ -6,6 +6,8 @@ const checkRole = require("../middlewares/role.middleware");
 
 // Lectura para cualquier autenticado
 router.get("/", authenticate, maintenanceController.getAllMaintenances);
+// Mantenimientos por unidad (debe ir ANTES de /:id para no confundir rutas)
+router.get("/unit/:unidadId", authenticate, maintenanceController.getMaintenancesByUnit);
 router.get("/:id", authenticate, maintenanceController.getMaintenanceById);
 
 // Escritura solo ADMIN y ENCARGADO

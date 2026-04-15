@@ -1,5 +1,23 @@
 import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
 
+// Perfil del dueño autenticado (rol OWNER)
+export async function getMyOwnerProfile() {
+  try {
+    return await makeGetRequest("/owners/me");
+  } catch (error) {
+    throw new Error(error.message || 'No se encontró perfil de dueño');
+  }
+}
+
+// Reporte de mantenimientos de las unidades del dueño autenticado
+export async function getMyUnitsReport() {
+  try {
+    return await makeGetRequest("/reports/my-units");
+  } catch (error) {
+    throw new Error(error.message || 'Error al obtener mantenimientos');
+  }
+}
+
 export async function getAllOwners() {
   try {
     return await makeGetRequest("/owners");

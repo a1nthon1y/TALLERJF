@@ -1,5 +1,15 @@
 import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
 
+// Unidades del OWNER autenticado
+export async function getMyUnits() {
+  try {
+    const data = await makeGetRequest("/units/my-units");
+    return data;
+  } catch (error) {
+    throw new Error(error.message || 'Error al obtener tus unidades');
+  }
+}
+
 // Obtener todas las unidades
 export async function getAllUnits() {
   try {

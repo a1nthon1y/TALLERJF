@@ -199,6 +199,38 @@ const deleteUnit = async (req, res) => {
   }
 };
 
+// Unidades del OWNER autenticado (busca dueno por usuario_id del token)
+const getMyUnits = async (req, res) => {
+  try {
+    const usuario_id = req.user.id;
+    const duenoPQuery = await pool.query(
+      "SELECT id FROM duenos WHERE usuario_id = $1",
+      [usuario_id]
+    );
+    if (duenoPQuery.rows.length === 0) {
+      return res.status(404).json({ error: "No se encontró perfil de dueño para este usuario" });
+    }
+    const dueno_id = duenoPQuery.rows[0].id;
+
+    const result = await pool.query(
+      `SELECT 
+         u.id, u.placa, u.modelo, u.año, u.tipo, u.kilometraje, u.creado_en,
+         c.id AS chofer_id,
+         us.nombre AS chofer_nombre,
+         us.correo AS chofer_correo
+       FROM unidades u
+       LEFT JOIN choferes c ON u.chofer_id = c.id
+       LEFT JOIN usuarios us ON c.usuario_id = us.id
+       WHERE u.dueno_id = $1
+       ORDER BY u.placa`,
+      [dueno_id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener tus unidades" });
+  }
+};
+
 module.exports = {
   createUnit,
   getAllUnits,
@@ -206,4 +238,5 @@ module.exports = {
   getUnitById,
   updateUnit,
   deleteUnit,
+  getMyUnits,
 };

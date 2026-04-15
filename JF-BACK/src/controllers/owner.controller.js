@@ -108,10 +108,31 @@ const deleteOwner = async (req, res) => {
   }
 };
 
+// Obtener el perfil del dueño autenticado (por su usuario_id del token)
+const getMyProfile = async (req, res) => {
+  try {
+    const usuario_id = req.user.id;
+    const result = await pool.query(
+      `SELECT d.id, d.usuario_id, u.nombre, u.correo, u.rol, u.activo, d.creado_en
+       FROM duenos d
+       JOIN usuarios u ON d.usuario_id = u.id
+       WHERE d.usuario_id = $1`,
+      [usuario_id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "No se encontró perfil de dueño para este usuario" });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener perfil de dueño" });
+  }
+};
+
 module.exports = {
   createOwner,
   getAllOwners,
   getOwnerById,
   updateOwner,
   deleteOwner,
+  getMyProfile,
 };
