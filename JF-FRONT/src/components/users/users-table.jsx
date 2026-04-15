@@ -15,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Edit, Power, MoreHorizontal } from "lucide-react"
-import { useUsers } from "@/hooks/useUsers"
+// useUsers moved to parent (usuarios/page.jsx) to avoid double fetch
 import { userService } from "@/services/userService"
 import { toast } from "sonner"
 import {
@@ -43,9 +43,8 @@ const formSchema = z.object({
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres" }).optional().or(z.literal("")),
 })
 
-export function UsersTable() {
+export function UsersTable({ users, isLoading, isError, mutate }) {
   const router = useRouter()
-  const { data: users, isLoading, isError, mutate } = useUsers()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")

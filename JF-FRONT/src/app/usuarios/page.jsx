@@ -152,7 +152,7 @@ export default function UsersPage() {
           </DialogContent>
         </Dialog>
       </div>
-      <UsersTable />
+      <UsersTable users={users} isLoading={isLoading} isError={isError} mutate={mutate} />
     </div>
   )
 }

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Edit, Trash2, MoreHorizontal, Package } from "lucide-react"
-import { useMaterials } from "@/hooks/useMaterials"
+// useMaterials moved to parent (materiales/page.jsx) to avoid double fetch
 import { materialService } from "@/services/materialService"
 import { toast } from "sonner"
 import {
@@ -39,9 +39,8 @@ const formSchema = z.object({
   precio: z.string().min(1, { message: "El precio es requerido" }),
 })
 
-export function MaterialsTable() {
+export function MaterialsTable({ materials, isLoading, isError, mutate }) {
   const router = useRouter()
-  const { data: materials, isLoading, isError, mutate } = useMaterials()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")

@@ -20,6 +20,10 @@ export const authService = {
     if (now > parseInt(expiresAt)) {
       this.removeToken();
       this.removeUser();
+      if (typeof document !== "undefined") {
+        document.cookie = "auth_token=; path=/; max-age=0";
+        document.cookie = "auth_role=; path=/; max-age=0";
+      }
       return null;
     }
     
@@ -75,6 +79,10 @@ export const authService = {
       if (data.token) {
         this.setToken(data.token);
         this.setUser(data.user);
+        // Cookies auxiliares para el middleware (no almacenan el JWT completo)
+        const maxAge = 8 * 60 * 60; // 8 horas, igual que el token
+        document.cookie = `auth_token=1; path=/; max-age=${maxAge}; SameSite=Lax`;
+        document.cookie = `auth_role=${data.user?.rol ?? ''}; path=/; max-age=${maxAge}; SameSite=Lax`;
       }
       
       return data;
@@ -90,6 +98,9 @@ export const authService = {
   logout() {
     this.removeToken();
     this.removeUser();
+    // Limpiar cookies auxiliares del middleware
+    document.cookie = "auth_token=; path=/; max-age=0";
+    document.cookie = "auth_role=; path=/; max-age=0";
     window.location.href = '/login';
   }
 };
