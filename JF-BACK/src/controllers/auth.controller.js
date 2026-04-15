@@ -30,7 +30,7 @@ const login = async (req, res) => {
   const { correo, password } = req.body;
   try {
     const result = await pool.query("SELECT * FROM usuarios WHERE correo = $1", [correo]);
-    if (result.rows.length === 0) return res.status(400).json({ error: "Usuario no encontrado" });
+    if (result.rows.length === 0) return res.status(401).json({ error: "Credenciales inválidas" });
 
     const user = result.rows[0];
 
@@ -38,7 +38,7 @@ const login = async (req, res) => {
     if (!user.activo) return res.status(403).json({ error: "Tu cuenta está inactiva. Contacta al administrador." });
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: "Contraseña incorrecta" });
+    if (!isMatch) return res.status(401).json({ error: "Credenciales inválidas" });
 
     const token = jwt.sign({ id: user.id, rol: user.rol }, process.env.JWT_SECRET, { expiresIn: "8h" });
 
