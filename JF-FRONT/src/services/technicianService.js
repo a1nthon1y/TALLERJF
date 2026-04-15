@@ -6,7 +6,7 @@ export const technicianService = {
             const response = await makeGetRequest("/technicians");
             return response;
         } catch (error) {
-            throw new Error(error.response?.data?.error || 'Error al obtener tecnicos');
+            throw new Error(error.message || 'Error al obtener tecnicos');
         }
     },
     async createTechnician(technicianData) {
@@ -14,7 +14,7 @@ export const technicianService = {
             const response = await makePostRequest("/technicians", technicianData);
             return response;
         } catch (error) {
-            throw new Error(error.response?.data?.error || "Error al crear el técnico");
+            throw new Error(error.message || "Error al crear el técnico");
         }
     },
 
@@ -23,7 +23,7 @@ export const technicianService = {
             const response = await makePutRequest(`/technicians/${id}`, materialData);
             return response;
         } catch (error) {
-            throw new Error(error.response?.data?.error || "Error al actualizar el técnico");
+            throw new Error(error.message || "Error al actualizar el técnico");
         }
     },
 
@@ -32,7 +32,7 @@ export const technicianService = {
             const response = await makeDeleteRequest(`/technicians/${id}`);
             return response;
         } catch (error) {
-            throw new Error(error.response?.data?.error || "Error al eliminar el técnico");
+            throw new Error(error.message || "Error al eliminar el técnico");
         }
     }
 

@@ -10,7 +10,7 @@ export default function ChoferesPage() {
         <p className="text-muted-foreground">Gestiona los choferes del sistema</p>
       </div>
       <Button>
-          <PlusCircle className="mr-2 h-4 w-4" /> Registrar Nuevo Dueño
+          <PlusCircle className="mr-2 h-4 w-4" /> Registrar Nuevo Chofer
         </Button>
       </div>
       <ChoferesTable />

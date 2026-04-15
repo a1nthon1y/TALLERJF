@@ -1,69 +1,60 @@
-import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
+import { makeGetRequest, makePostRequest, makePutRequest } from '@/utils/api';
 
 export const maintenanceService = {
-  // Obtener todos los mantenimientos
   async getMaintenances() {
     try {
-      const response = await makeGetRequest("/maintenances");
-      return response;
+      return await makeGetRequest("/maintenances");
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al obtener mantenimientos');
+      throw new Error(error.message || 'Error al obtener mantenimientos');
     }
   },
 
-  // Obtener mantenimientos por unidad
   async getMaintenancesByUnit(unidadId) {
     try {
-      const response = await makeGetRequest(`/maintenances/unit/${unidadId}`);
-      return response;
+      return await makeGetRequest(`/maintenances/unit/${unidadId}`);
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al obtener mantenimientos');
+      throw new Error(error.message || 'Error al obtener mantenimientos de la unidad');
     }
   },
 
-  // Registrar nuevo mantenimiento
   async createMaintenance(maintenanceData) {
     try {
-      // Por defecto, el estado es pendiente y se asigna un técnico
-      const dataWithDefaults = {
+      return await makePostRequest('/maintenances', {
         ...maintenanceData,
-        estado: "pendiente",
-        id_tecnico: maintenanceData.id_tecnico || null
-      };
-      const response = await makePostRequest('/maintenances', dataWithDefaults);
-      return response;
+        estado: "PENDIENTE",
+      });
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al crear mantenimiento');
+      throw new Error(error.message || 'Error al crear mantenimiento');
     }
   },
 
-  // Obtener detalles de un mantenimiento
   async getMaintenanceDetails(maintenanceId) {
     try {
-      const response = await makeGetRequest(`/maintenances/${maintenanceId}`);
-      return response;
+      return await makeGetRequest(`/maintenances/${maintenanceId}`);
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al obtener detalles');
+      throw new Error(error.message || 'Error al obtener detalles del mantenimiento');
     }
   },
 
-  // Actualizar estado de un mantenimiento y mandar las piezas
   async updateMaintenanceStatus(maintenanceId, status, partes_reparadas = [], tecnico_id = null) {
     try {
-      const response = await makePutRequest(`/maintenances/${maintenanceId}`, { estado: status, partes_reparadas, tecnico_id });
-      return response;
+      return await makePutRequest(`/maintenances/${maintenanceId}`, {
+        estado: status,
+        partes_reparadas,
+        tecnico_id,
+      });
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al actualizar estado');
+      throw new Error(error.message || 'Error al actualizar estado del mantenimiento');
     }
   },
 
-  // Asignar técnico a un mantenimiento
   async assignTechnician(maintenanceId, technicianId) {
     try {
-      const response = await makePutRequest(`/maintenances/${maintenanceId}/assign`, { id_tecnico: technicianId });
-      return response;
+      return await makePutRequest(`/maintenances/${maintenanceId}/assign`, {
+        id_tecnico: technicianId,
+      });
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al asignar técnico');
+      throw new Error(error.message || 'Error al asignar técnico');
     }
-  }
-}; 
+  },
+};

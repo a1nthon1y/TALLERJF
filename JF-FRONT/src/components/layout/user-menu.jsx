@@ -77,7 +77,7 @@ export function UserMenu() {
               {user.correo}
             </p>
             <p className="text-xs leading-none text-muted-foreground mt-1">
-              {user.rol === 'ADMIN' ? 'Administrador' : 'Chofer'}
+              {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : user.rol === 'OWNER' ? 'Dueño' : 'Chofer'}
             </p>
           </div>
         </DropdownMenuLabel>

@@ -66,7 +66,7 @@ export async function registrarLlegada(llegadaData) {
     const data = await makePostRequest("/choferes/llegada", llegadaData);
     return data;
   } catch (error) {
-    throw new Error(error.response?.data?.error || error.response?.data?.message || 'Error al registrar llegada');
+    throw new Error(error.message || 'Error al registrar llegada');
   }
 }
 

@@ -1,8 +1,6 @@
 import axios from "axios";
 import environment from "@/config/environment";
 import { authService } from "@/services/authService";
-import { useState, useEffect } from "react";
-import { toast } from "sonner";
 
 const BASE_URL = environment.url_backend;
 

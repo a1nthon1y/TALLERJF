@@ -40,13 +40,17 @@ export function MaintenanceAlertsTable() {
 
   const filteredAlerts = alerts?.filter((alert) => {
     if (!alert) return false;
-    
+
     const searchLower = searchTerm.toLowerCase();
-    return (
+    const matchesSearch =
       (alert.placa?.toLowerCase() || '').includes(searchLower) ||
       (alert.parte?.toLowerCase() || '').includes(searchLower) ||
-      (alert.mensaje?.toLowerCase() || '').includes(searchLower)
-    );
+      (alert.mensaje?.toLowerCase() || '').includes(searchLower);
+
+    const matchesStatus = statusFilter === "all" || alert.estado === statusFilter;
+    const matchesUnit = unitFilter === "all" || alert.placa === unitFilter;
+
+    return matchesSearch && matchesStatus && matchesUnit;
   }) || [];
 
   const getStatusBadge = (status) => {

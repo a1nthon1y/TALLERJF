@@ -7,7 +7,7 @@ export const materialService = {
       const response = await makeGetRequest("/materials");
       return response;
     } catch (error) {
-      throw new Error(error.response?.data?.error || "Error al obtener los materiales");
+      throw new Error(error.message || "Error al obtener los materiales");
     }
   },
 
@@ -16,7 +16,7 @@ export const materialService = {
       const response = await makePostRequest("/materials", materialData);
       return response;
     } catch (error) {
-      throw new Error(error.response?.data?.error || "Error al crear el material");
+      throw new Error(error.message || "Error al crear el material");
     }
   },
 
@@ -25,7 +25,7 @@ export const materialService = {
       const response = await makePutRequest(`/materials/${id}`, materialData);
       return response;
     } catch (error) {
-      throw new Error(error.response?.data?.error || "Error al actualizar el material");
+      throw new Error(error.message || "Error al actualizar el material");
     }
   },
 
@@ -34,7 +34,7 @@ export const materialService = {
       const response = await makeDeleteRequest(`/materials/${id}`);
       return response;
     } catch (error) {
-      throw new Error(error.response?.data?.error || "Error al eliminar el material");
+      throw new Error(error.message || "Error al eliminar el material");
     }
   }
 } 

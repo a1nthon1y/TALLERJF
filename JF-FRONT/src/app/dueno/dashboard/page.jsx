@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bus, Wrench, AlertTriangle, CheckCircle } from "lucide-react";
+import { Bus, Wrench, AlertTriangle } from "lucide-react";
 import { getMyUnits } from "@/services/unitsService";
 import { getMyUnitsReport } from "@/services/ownersService";
 import { makeGetRequest } from "@/utils/api";
@@ -38,7 +38,6 @@ export default function DuenoDashboardPage() {
   const pendingMaints = maintenances.filter(
     (m) => m.estado === "PENDIENTE" || m.estado === "EN_PROCESO"
   );
-  const lastMaint = maintenances[0];
 
   if (loading) {
     return (

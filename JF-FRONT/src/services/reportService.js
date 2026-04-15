@@ -5,7 +5,7 @@ export const reportService = {
     try {
       return await makeGetRequest("/reports/my-unit");
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al obtener reportes');
+      throw new Error(error.message || 'Error al obtener reportes');
     }
   }
 };

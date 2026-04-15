@@ -210,15 +210,33 @@ export function UnitPartsManager() {
       {/* Resumen */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
-          { label: "Crítico", icon: AlertCircle, cls: "red", filter: "critical" },
-          { label: "Advertencia", icon: AlertTriangle, cls: "amber", filter: "warning" },
-          { label: "Normal", icon: CheckCircle, cls: "green", filter: "normal" },
-        ].map(({ label, icon: Icon, cls, filter: f }) => {
+          {
+            label: "Crítico",
+            icon: AlertCircle,
+            filter: "critical",
+            cardClass: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",
+            iconClass: "h-5 w-5 text-red-500",
+          },
+          {
+            label: "Advertencia",
+            icon: AlertTriangle,
+            filter: "warning",
+            cardClass: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+            iconClass: "h-5 w-5 text-amber-500",
+          },
+          {
+            label: "Normal",
+            icon: CheckCircle,
+            filter: "normal",
+            cardClass: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800",
+            iconClass: "h-5 w-5 text-green-500",
+          },
+        ].map(({ label, icon: Icon, filter: f, cardClass, iconClass }) => {
           const count = filtered.filter((p) => getStatus(calculateRemainingLife(p, units)) === f).length
           return (
-            <div key={f} className={`bg-${cls}-50 dark:bg-${cls}-950/20 p-4 rounded-lg border border-${cls}-200 dark:border-${cls}-800`}>
+            <div key={f} className={`p-4 rounded-lg border ${cardClass}`}>
               <div className="flex items-center gap-2 mb-1">
-                <Icon className={`h-5 w-5 text-${cls}-500`} />
+                <Icon className={iconClass} />
                 <h3 className="font-medium">{label}</h3>
               </div>
               <p className="text-sm text-muted-foreground">{count} partes</p>

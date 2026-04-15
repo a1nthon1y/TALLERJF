@@ -7,7 +7,7 @@ export const alertService = {
       const response = await makeGetRequest("/alerts");
       return response;
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al obtener alertas');
+      throw new Error(error.message || 'Error al obtener alertas');
     }
   },
 
@@ -17,7 +17,7 @@ export const alertService = {
       const response = await makePutRequest(`/alerts/${alertId}`);
       return response;
     } catch (error) {
-      throw new Error(error.response?.data?.error || 'Error al resolver alerta');
+      throw new Error(error.message || 'Error al resolver alerta');
     }
   }
 }; 

@@ -19,6 +19,7 @@ export const authService = {
     const now = new Date().getTime();
     if (now > parseInt(expiresAt)) {
       this.removeToken();
+      this.removeUser();
       return null;
     }
     
