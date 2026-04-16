@@ -5,6 +5,9 @@ const createMaintenance = async (req, res) => {
   try {
     const { unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id } = req.body;
 
+    // Normalizar tipo a mayúsculas (la DB requiere PREVENTIVO/CORRECTIVO)
+    const tipoNorm = (tipo || "CORRECTIVO").toUpperCase();
+
     // Verificar si la unidad existe
     const unidad = await pool.query("SELECT * FROM unidades WHERE id = $1", [unidad_id]);
     if (unidad.rows.length === 0) {
@@ -15,7 +18,7 @@ const createMaintenance = async (req, res) => {
     const result = await pool.query(
       `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id) 
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id || null]
+      [unidad_id, tipoNorm, observaciones, kilometraje_actual, tecnico_id || null]
     );
 
     // Actualizar el kilometraje de la unidad
