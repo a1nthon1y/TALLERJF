@@ -89,3 +89,13 @@ export async function getUnitParts(unitId) {
     throw new Error(error.message || 'Error al obtener partes');
   }
 }
+
+// Estado predictivo de partes por unidad (km recorridos vs umbral)
+export async function getPartsStatus(unitId) {
+  try {
+    const data = await makeGetRequest(`/units/${unitId}/parts-status`);
+    return data;
+  } catch (error) {
+    throw new Error(error.message || 'Error al obtener estado de partes');
+  }
+}

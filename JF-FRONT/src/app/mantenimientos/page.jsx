@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { MaintenancesTable } from "@/components/maintenances/maintenances-table"
+import { FleetPartsStatus } from "@/components/maintenances/fleet-parts-status"
 import { Button } from "@/components/ui/button"
 import { Plus, AlertCircle } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
@@ -256,6 +257,7 @@ export default function MaintenancesPage() {
           </DialogContent>
         </Dialog>
       </div>
+      <FleetPartsStatus />
       <MaintenancesTable />
     </div>
   )

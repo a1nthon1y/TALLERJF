@@ -1,4 +1,4 @@
-import { makeGetRequest, makePostRequest, makePutRequest } from '@/utils/api';
+import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
 
 export const configService = {
   async getConfigs() {
@@ -20,6 +20,13 @@ export const configService = {
       return await makePutRequest(`/config/${id}`, data);
     } catch (error) {
       throw new Error(error.message || 'Error al actualizar configuración');
+    }
+  },
+  async deleteConfig(id) {
+    try {
+      return await makeDeleteRequest(`/config/${id}`);
+    } catch (error) {
+      throw new Error(error.message || 'Error al eliminar configuración');
     }
   }
 };

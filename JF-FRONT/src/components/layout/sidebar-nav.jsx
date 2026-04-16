@@ -27,7 +27,7 @@ const choferNavItems = [
   { title: "Dashboard", href: "/chofer/dashboard", icon: BarChart3 },
   { title: "Mis Mantenimientos", href: "/chofer/mis-mantenimientos", icon: Wrench },
   { title: "Solicitar Mantenimiento", href: "/chofer/solicitar-mantenimiento", icon: ClipboardList },
-  { title: "Reportar Llegada", href: "/chofer/reportar-llegada", icon: MapPin },
+  { title: "Llegada al Taller", href: "/chofer/reportar-llegada", icon: MapPin },
 ]
 
 const tecnicoNavItems = [

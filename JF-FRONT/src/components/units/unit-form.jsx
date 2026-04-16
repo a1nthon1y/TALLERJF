@@ -166,7 +166,7 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
           name="kilometraje"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Kilometraje</FormLabel>
+              <FormLabel>Kilometraje inicial del tacómetro</FormLabel>
               <FormControl>
                 <Input
                   type="number"
@@ -176,7 +176,9 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
                   onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : 0)}
                 />
               </FormControl>
-              <FormDescription>Kilometraje actual de la unidad</FormDescription>
+              <FormDescription>
+                Ingrese el kilometraje actual que muestra el tacómetro de la unidad. Este valor es la referencia base para el seguimiento de mantenimientos predictivos.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getMiUnidad } from "@/services/choferesService";
 import { maintenanceService } from "@/services/maintenanceService";
-import { makeGetRequest } from "@/utils/api";
+import { getPartsStatus } from "@/services/unitsService";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertCircle, Bus, Wrench } from "lucide-react";
+import { AlertCircle, Bus, Wrench, Gauge, CheckCircle2, AlertTriangle } from "lucide-react";
 
 const estadoBadge = (estado) => {
   const e = estado?.toLowerCase();
@@ -39,7 +39,7 @@ export default function DriverDashboard() {
         setUnit(unidad);
 
         const [partsData, maintenanceData] = await Promise.allSettled([
-          makeGetRequest(`/parts/${unidad.id}`),
+          getPartsStatus(unidad.id),
           maintenanceService.getMaintenancesByUnit(unidad.id),
         ]);
 
@@ -99,38 +99,54 @@ export default function DriverDashboard() {
         </div>
       </Card>
 
-      {/* Estado de componentes */}
-      {parts.length > 0 && (
-        <Card className="p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Wrench className="h-6 w-6 text-primary" />
-            <h2 className="text-xl font-bold">Estado de Componentes</h2>
+      {/* Estado de componentes con barras de progreso */}
+      <Card className="p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <Gauge className="h-6 w-6 text-primary" />
+          <h2 className="text-xl font-bold">Estado de Componentes</h2>
+          <span className="text-xs text-muted-foreground ml-auto">km recorridos desde último mantenimiento</span>
+        </div>
+        {parts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Sin reglas predictivas configuradas.</p>
+        ) : (
+          <div className="space-y-4">
+            {parts.map((p) => {
+              const pct = Math.min(Number(p.porcentaje), 100);
+              const barColor =
+                pct >= 100 ? "bg-red-500" :
+                pct >= 80  ? "bg-orange-400" :
+                pct >= 60  ? "bg-yellow-400" :
+                "bg-green-500";
+              const Icon =
+                pct >= 80 ? <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0" /> :
+                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />;
+              return (
+                <div key={p.id} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2">
+                      {Icon}
+                      <span className="font-medium">{p.nombre}</span>
+                    </div>
+                    <span className="text-muted-foreground text-xs">
+                      {Number(p.km_recorridos).toLocaleString()} / {Number(p.umbral_km).toLocaleString()} km
+                      <span className="ml-1 font-semibold text-foreground">({pct}%)</span>
+                    </span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${barColor}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {pct >= 100 && (
+                    <p className="text-xs text-red-600 font-medium">¡Requiere mantenimiento!</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {parts.map((part) => (
-              <div
-                key={part.id}
-                className={`rounded-lg border p-4 ${
-                  part.estado === "ALERTA"
-                    ? "border-destructive bg-destructive/5"
-                    : "border-green-300 bg-green-50 dark:bg-green-950/20"
-                }`}
-              >
-                <h3 className="font-semibold">{part.nombre}</h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Último mant.: {part.ultimo_mantenimiento_km?.toLocaleString() ?? "—"} km
-                </p>
-                <Badge
-                  variant={part.estado === "ALERTA" ? "destructive" : "outline"}
-                  className={part.estado !== "ALERTA" ? "border-green-500 text-green-600 mt-2" : "mt-2"}
-                >
-                  {part.estado === "ALERTA" ? "Requiere revisión" : "En buen estado"}
-                </Badge>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
       {/* Historial de mantenimientos */}
       <Card className="p-6">

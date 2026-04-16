@@ -8,5 +8,6 @@ const checkRole = require("../middlewares/role.middleware");
 router.get("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.getPartConfigs);
 router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.createPartConfig);
 router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.updatePartConfig);
+router.delete("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.deletePartConfig);
 
 module.exports = router;

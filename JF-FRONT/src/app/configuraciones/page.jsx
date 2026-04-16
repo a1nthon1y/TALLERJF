@@ -10,10 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
-import { PlusCircle, Edit, Loader2, Settings } from "lucide-react";
+import { PlusCircle, Edit, Loader2, Settings, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 const ruleSchema = z.object({
@@ -25,6 +25,7 @@ export default function ConfiguracionesPage() {
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const { data: configs = [], isLoading } = useQuery({
     queryKey: ["configs"],
@@ -86,6 +87,16 @@ export default function ConfiguracionesPage() {
     updateMutation.mutate({ id: config.id, umbral_km: config.umbral_km, activo: !config.activo });
   };
 
+  const deleteMutation = useMutation({
+    mutationFn: (id) => configService.deleteConfig(id),
+    onSuccess: () => {
+      toast.success("Regla eliminada");
+      queryClient.invalidateQueries({ queryKey: ["configs"] });
+      setDeletingId(null);
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -142,9 +153,20 @@ export default function ConfiguracionesPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-center">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Editar regla">
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Editar regla">
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeletingId(c.id)}
+                        title="Eliminar regla"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -152,6 +174,29 @@ export default function ConfiguracionesPage() {
           </Table>
         </div>
       )}
+
+      {/* Dialog: Confirmar Eliminación */}
+      <Dialog open={!!deletingId} onOpenChange={(v) => { if (!v) setDeletingId(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar regla?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Esta acción es irreversible. Si hay alertas activas vinculadas a esta parte, no podrá eliminarse.
+          </p>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeletingId(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMutation.mutate(deletingId)}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Crear / Editar */}
       <Dialog open={isOpen} onOpenChange={(v) => { if (!v) closeDialog() }}>
