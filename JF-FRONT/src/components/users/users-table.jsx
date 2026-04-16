@@ -34,127 +34,95 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { authService } from "@/services/authService"
 import { useRouter } from "next/navigation"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 const formSchema = z.object({
-  nombre: z.string().min(1, { message: "El nombre es requerido" }),
-  correo: z.string().email({ message: "Ingrese un correo válido" }),
-  rol: z.string().min(1, { message: "El rol es requerido" }),
-  activo: z.boolean(),
+  nombre:   z.string().min(1, { message: "El nombre es requerido" }),
+  username: z.string().min(1, { message: "El usuario es requerido" })
+             .regex(/^[a-z0-9]+$/, { message: "Solo letras minúsculas y números" }),
+  correo:   z.string().email({ message: "Ingrese un correo válido" }).optional().or(z.literal("")),
+  rol:      z.string().min(1, { message: "El rol es requerido" }),
+  activo:   z.boolean(),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres" }).optional().or(z.literal("")),
 })
 
+const ROL_LABEL = { ADMIN: "Administrador", ENCARGADO: "Encargado", OWNER: "Dueño", CHOFER: "Chofer" }
+const ROL_BADGE = { ADMIN: "default", ENCARGADO: "outline", OWNER: "info", CHOFER: "secondary" }
+
 export function UsersTable({ users, isLoading, isError, mutate }) {
-  const router = useRouter()
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const router    = useRouter()
+  const [authUser, setAuthUser]     = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedUser, setSelectedUser] = useState(null)
-  const [isEditing, setIsEditing] = useState(false)
+  const [isEditing, setIsEditing]   = useState(false)
 
   const form = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      nombre: "",
-      correo: "",
-      rol: "",
-      activo: true,
-      password: "",
-    },
+    defaultValues: { nombre: "", username: "", correo: "", rol: "", activo: true, password: "" },
   })
 
   useEffect(() => {
-    const currentUser = authService.getUser()
-    if (!currentUser) {
-      router.push('/login')
-      return
-    }
-    setUser(currentUser)
-    setLoading(false)
+    const current = authService.getUser()
+    if (!current) { router.push("/login"); return }
+    setAuthUser(current)
+    setAuthLoading(false)
   }, [router])
 
-  if (loading) {
+  if (authLoading) return <PageSkeleton />
+  if (!authUser)   return null
+  if (isLoading)   return <PageSkeleton />
+  if (isError)     return <p className="text-destructive p-4">Error al cargar usuarios.</p>
+
+  const filteredUsers = Array.isArray(users) ? users.filter(u => {
+    if (!u) return false
+    const s = searchTerm.toLowerCase()
     return (
-      <div className="flex items-center justify-center p-4">
-        <div className="text-center">Verificando sesión...</div>
-      </div>
+      (u.nombre?.toLowerCase()   ?? "").includes(s) ||
+      (u.username?.toLowerCase() ?? "").includes(s) ||
+      (u.correo?.toLowerCase()   ?? "").includes(s) ||
+      (u.rol?.toLowerCase()      ?? "").includes(s)
     )
-  }
+  }) : []
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <div className="text-center">Por favor, inicie sesión para ver esta información</div>
-      </div>
-    )
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <div className="text-center">Cargando usuarios...</div>
-      </div>
-    )
-  }
-
-  if (isError) {
-    return (
-      <div className="flex items-center justify-center p-4">
-        <div className="text-center text-red-500">
-          Error al cargar los usuarios. Por favor, intente nuevamente.
-        </div>
-      </div>
-    )
-  }
-
-  const filteredUsers = Array.isArray(users) ? users.filter((user) => {
-    if (!user) return false;
-    
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      (user.nombre?.toLowerCase() || '').includes(searchLower) ||
-      (user.correo?.toLowerCase() || '').includes(searchLower) ||
-      (user.rol?.toLowerCase() || '').includes(searchLower)
-    );
-  }) : [];
-
-  const handleToggleStatus = async (user) => {
+  const handleToggleStatus = async (u) => {
     try {
-      await userService.toggleUserStatus(user.id, !user.activo)
+      await userService.toggleUserStatus(u.id, !u.activo)
+      toast.success(`Usuario ${u.activo ? "desactivado" : "activado"}`)
       await mutate()
     } catch (error) {
-      console.error('Error toggling user status:', error)
+      toast.error(error.message)
     }
   }
 
   const handleUpdateUser = async (values) => {
     try {
-      const dataToSubmit = {
-        nombre: values.nombre,
-        correo: values.correo,
-        rol: values.rol,
-        activo: values.activo,
+      const payload = {
+        nombre:   values.nombre,
+        username: values.username,
+        correo:   values.correo || undefined,
+        rol:      values.rol,
+        activo:   values.activo,
       }
-
-      if (values.password && values.password.trim() !== "") {
-        dataToSubmit.password = values.password
-      }
-      
-      await userService.updateUser(selectedUser.id, dataToSubmit)
+      if (values.password?.trim()) payload.password = values.password
+      await userService.updateUser(selectedUser.id, payload)
+      toast.success("Usuario actualizado")
       setIsEditing(false)
       setSelectedUser(null)
       await mutate()
     } catch (error) {
-      console.error('Error updating user:', error)
+      toast.error(error.message)
     }
   }
 
-  const handleEditClick = (user) => {
-    setSelectedUser(user)
+  const handleEditClick = (u) => {
+    setSelectedUser(u)
     form.reset({
-      nombre: user.nombre,
-      correo: user.correo,
-      rol: user.rol,
-      activo: user.activo,
+      nombre:   u.nombre,
+      username: u.username ?? "",
+      correo:   u.correo   ?? "",
+      rol:      u.rol,
+      activo:   u.activo,
       password: "",
     })
     setIsEditing(true)
@@ -164,48 +132,55 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Input
-          placeholder="Buscar por nombre, email o rol..."
+          placeholder="Buscar por nombre, usuario, correo o rol..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={e => setSearchTerm(e.target.value)}
           className="max-w-sm"
         />
-        {isLoading && (
-          <div className="text-sm text-muted-foreground">
-            Actualizando datos...
-          </div>
-        )}
       </div>
+
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Nombre</TableHead>
               <TableHead>Usuario</TableHead>
-              <TableHead>Email</TableHead>
+              <TableHead>Correo</TableHead>
               <TableHead>Rol</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="w-[80px]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredUsers.map((user) => (
-              <TableRow key={user.id}>
+            {filteredUsers.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  No se encontraron usuarios
+                </TableCell>
+              </TableRow>
+            )}
+            {filteredUsers.map(u => (
+              <TableRow key={u.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarFallback>{user.nombre.slice(0, 2).toUpperCase()}</AvatarFallback>
+                      <AvatarFallback>{u.nombre.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <span className="font-medium">{user.nombre}</span>
+                    <span className="font-medium">{u.nombre}</span>
                   </div>
                 </TableCell>
-                <TableCell>{user.correo}</TableCell>
                 <TableCell>
-                  <Badge variant={user.rol === "ADMIN" ? "default" : user.rol === "ENCARGADO" ? "outline" : user.rol === "OWNER" ? "outline" : "secondary"}>
-                    {user.rol === "ADMIN" ? "Administrador" : user.rol === "ENCARGADO" ? "Encargado" : user.rol === "OWNER" ? "Dueño" : "Chofer"}
+                  <span className="font-mono text-sm bg-muted px-2 py-0.5 rounded">{u.username ?? "—"}</span>
+                </TableCell>
+                <TableCell className="text-muted-foreground text-sm">{u.correo ?? <span className="italic">sin correo</span>}</TableCell>
+                <TableCell>
+                  <Badge variant={ROL_BADGE[u.rol] ?? "secondary"}>
+                    {ROL_LABEL[u.rol] ?? u.rol}
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={user.activo ? "outline" : "destructive"}>
-                    {user.activo ? "Activo" : "Inactivo"}
+                  <Badge variant={u.activo ? "success" : "destructive"}>
+                    {u.activo ? "Activo" : "Inactivo"}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -219,13 +194,12 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleEditClick(user)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Editar
+                      <DropdownMenuItem onClick={() => handleEditClick(u)}>
+                        <Edit className="mr-2 h-4 w-4" /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleStatus(user)}>
+                      <DropdownMenuItem onClick={() => handleToggleStatus(u)}>
                         <Power className="mr-2 h-4 w-4" />
-                        {user.activo ? "Desactivar" : "Activar"}
+                        {u.activo ? "Desactivar" : "Activar"}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -236,103 +210,87 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
         </Table>
       </div>
 
-      <Dialog open={isEditing} onOpenChange={setIsEditing}>
-        <DialogContent>
+      {/* Dialog de edición */}
+      <Dialog open={isEditing} onOpenChange={open => { setIsEditing(open); if (!open) setSelectedUser(null) }}>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar Usuario</DialogTitle>
             <DialogDescription>
-              Modifique los datos del usuario. La contraseña es opcional, déjela en blanco si no desea cambiarla.
+              Modifica los datos del usuario. La contraseña es opcional.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleUpdateUser)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="nombre"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre</FormLabel>
+
+              <FormField control={form.control} name="nombre" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre completo</FormLabel>
+                  <FormControl><Input {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="username" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Usuario (login)</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      onChange={e => field.onChange(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
+                      className="font-mono"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="correo" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Correo <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
+                  <FormControl><Input {...field} type="email" /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="rol" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Rol</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <Input {...field} />
+                      <SelectTrigger><SelectValue placeholder="Seleccione un rol" /></SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="correo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="email" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="rol"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Rol</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione un rol" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="ADMIN">Administrador</SelectItem>
-                        <SelectItem value="ENCARGADO">Encargado</SelectItem>
-                        <SelectItem value="OWNER">Dueño</SelectItem>
-                        <SelectItem value="CHOFER">Chofer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="activo"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Estado</FormLabel>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nueva Contraseña (opcional)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        {...field} 
-                        type="password" 
-                        placeholder="Dejar en blanco para mantener la contraseña actual" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <SelectContent>
+                      <SelectItem value="ADMIN">Administrador</SelectItem>
+                      <SelectItem value="ENCARGADO">Encargado</SelectItem>
+                      <SelectItem value="OWNER">Dueño</SelectItem>
+                      <SelectItem value="CHOFER">Chofer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="activo" render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                  <FormLabel className="text-base mb-0">Cuenta activa</FormLabel>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )} />
+
+              <FormField control={form.control} name="password" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nueva contraseña <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
+                  <FormControl>
+                    <Input {...field} type="password" placeholder="Dejar en blanco para no cambiar" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
-                  Cancelar
-                </Button>
+                <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>Cancelar</Button>
                 <Button type="submit">Guardar cambios</Button>
               </DialogFooter>
             </form>

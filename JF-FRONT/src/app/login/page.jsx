@@ -13,14 +13,11 @@ import { toast } from "sonner";
 import { authService } from "@/services/authService";
 
 const formSchema = z.object({
-  correo: z
-    .string()
-    .min(1, { message: "El correo es requerido" })
-    .email({ message: "Ingrese un correo electrónico válido" }),
+  username: z.string().min(1, { message: "El usuario es requerido" }),
   password: z
     .string()
     .min(1, { message: "La contraseña es requerida" })
-    .min(6, { message: "La contraseña debe tener al menos 6 caracteres" })
+    .min(6, { message: "La contraseña debe tener al menos 6 caracteres" }),
 });
 
 export default function LoginPage() {
@@ -31,7 +28,7 @@ export default function LoginPage() {
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      correo: "",
+      username: "",
       password: "",
     },
   });
@@ -41,14 +38,15 @@ export default function LoginPage() {
     setErrorMessage("");
     try {
       const result = await authService.login(values);
-      
+
       if (result.token && result.user) {
         toast.success("Inicio de sesión exitoso");
-        // Redirigir según el rol del usuario
-        if (result.user.rol === 'CHOFER') {
-          router.push('/chofer/dashboard');
+        if (result.user.rol === "CHOFER") {
+          router.push("/chofer/dashboard");
+        } else if (result.user.rol === "OWNER") {
+          router.push("/dueno/dashboard");
         } else {
-          router.push('/');
+          router.push("/");
         }
       }
     } catch (error) {
@@ -85,19 +83,21 @@ export default function LoginPage() {
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="correo"
+                name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Correo electrónico</FormLabel>
+                    <FormLabel>Usuario</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="ejemplo@ExpresoJFTaller.com" 
-                        {...field} 
+                      <Input
+                        placeholder="ej: aespinoza"
+                        {...field}
                         disabled={isLoading}
+                        autoComplete="username"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         className={`transition-all duration-200 focus:ring-2 focus:ring-primary
-                          ${form.formState.errors.correo ? 'border-destructive' : ''}`}
-                        type="email"
-                        autoComplete="email"
+                          ${form.formState.errors.username ? "border-destructive" : ""}`}
                       />
                     </FormControl>
                     <FormMessage />
@@ -111,21 +111,21 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Contraseña</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="password" 
-                        {...field} 
+                      <Input
+                        type="password"
+                        {...field}
                         disabled={isLoading}
-                        className={`transition-all duration-200 focus:ring-2 focus:ring-primary
-                          ${form.formState.errors.password ? 'border-destructive' : ''}`}
                         autoComplete="current-password"
+                        className={`transition-all duration-200 focus:ring-2 focus:ring-primary
+                          ${form.formState.errors.password ? "border-destructive" : ""}`}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 className="w-full transition-all duration-200"
                 disabled={isLoading}
               >

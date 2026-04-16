@@ -60,13 +60,19 @@ export const authService = {
         throw new Error('La URL del backend no está configurada');
       }
 
+      // Normalize: accept either {username} or legacy {correo} field
+      const payload = {
+        username: credentials.username ?? credentials.correo,
+        password: credentials.password,
+      };
+
       const response = await fetch(`${backendUrl}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify(credentials)
+        body: JSON.stringify(payload)
       });
       
       if (!response.ok) {

@@ -50,24 +50,17 @@ req POST "$BASE/auth/register" '{"nombre":"Test Admin","correo":"testadmin_jf@te
 # No assert — puede ser 409 si ya existe
 
 # Login ADMIN
-req POST "$BASE/auth/login" '{"correo":"testadmin_jf@test.com","password":"Test1234!"}'
+req POST "$BASE/auth/login" '{"username":"tadmin","password":"Test1234!"}'
 if [[ "$STATUS" == "200" ]]; then
   TOKEN_ADMIN=$(echo "$BODY" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-  ok "Login ADMIN (HTTP 200)"
+  ok "Login ADMIN por username (HTTP 200)"
 else
-  # Intentar con credencial alternativa si existe
-  req POST "$BASE/auth/login" '{"correo":"admin@tallerjf.com","password":"admin123"}'
-  if [[ "$STATUS" == "200" ]]; then
-    TOKEN_ADMIN=$(echo "$BODY" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-    ok "Login ADMIN alternativo (HTTP 200)"
-  else
-    fail "Login ADMIN" "HTTP $STATUS — $BODY"
-  fi
+  fail "Login ADMIN" "HTTP $STATUS — $BODY"
 fi
 
-# Login con credenciales incorrectas → debe ser 401 (o 400 en versión vieja)
-req POST "$BASE/auth/login" '{"correo":"nadie@test.com","password":"wrong"}'
-assert_status "Login credenciales inválidas → 401" "401" "400"
+# Login con credenciales incorrectas → debe ser 401
+req POST "$BASE/auth/login" '{"username":"usuarioinexistente","password":"wrong"}'
+assert_status "Login credenciales inválidas → 401" "401"
 
 # Sin token → protegida debe ser 401/403
 req GET "$BASE/units" "" ""
@@ -90,7 +83,7 @@ if [[ -n "$TOKEN_ADMIN" ]]; then
     skip "Crear usuario ENCARGADO (ya existe o error: $STATUS)"
   fi
   # Login ENCARGADO
-  req POST "$BASE/auth/login" '{"correo":"encargado_jf@test.com","password":"Test1234!"}'
+  req POST "$BASE/auth/login" '{"username":"etest","password":"Test1234!"}'
   [[ "$STATUS" == "200" ]] && TOKEN_ENCARGADO=$(echo "$BODY" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 fi
 
@@ -101,7 +94,7 @@ if [[ -n "$TOKEN_ADMIN" ]]; then
   [[ "$STATUS" == "201" || "$STATUS" == "200" ]] && ok "Crear usuario OWNER (HTTP $STATUS)" || skip "Crear usuario OWNER ($STATUS)"
 
   # Login OWNER
-  req POST "$BASE/auth/login" '{"correo":"owner_jf@test.com","password":"Test1234!"}'
+  req POST "$BASE/auth/login" '{"username":"otest","password":"Test1234!"}'
   [[ "$STATUS" == "200" ]] && TOKEN_OWNER=$(echo "$BODY" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 fi
 
@@ -112,7 +105,7 @@ if [[ -n "$TOKEN_ADMIN" ]]; then
   [[ "$STATUS" == "201" || "$STATUS" == "200" ]] && ok "Crear usuario CHOFER (HTTP $STATUS)" || skip "Crear usuario CHOFER ($STATUS)"
 
   # Login CHOFER
-  req POST "$BASE/auth/login" '{"correo":"chofer_jf@test.com","password":"Test1234!"}'
+  req POST "$BASE/auth/login" '{"username":"ctest","password":"Test1234!"}'
   [[ "$STATUS" == "200" ]] && TOKEN_CHOFER=$(echo "$BODY" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 fi
 

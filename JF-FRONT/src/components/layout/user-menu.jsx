@@ -60,7 +60,7 @@ export function UserMenu() {
           <UserAvatar 
             user={{
               name: user.nombre,
-              email: user.correo
+              email: user.username ?? user.correo
             }}
             variant="menu"
             className="h-8 w-8 border-2 border-primary/20"
@@ -73,8 +73,8 @@ export function UserMenu() {
             <p className="text-sm font-medium leading-none">
               {user.nombre}
             </p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {user.correo}
+            <p className="text-xs leading-none text-muted-foreground font-mono">
+              @{user.username ?? user.correo}
             </p>
             <p className="text-xs leading-none text-muted-foreground mt-1">
               {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : user.rol === 'OWNER' ? 'Dueño' : 'Chofer'}
