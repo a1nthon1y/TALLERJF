@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bus, Wrench, AlertTriangle } from "lucide-react";
+import { Bus, Wrench, AlertTriangle, DollarSign } from "lucide-react";
 import { getMyUnits } from "@/services/unitsService";
 import { getMyUnitsReport } from "@/services/ownersService";
 import { makeGetRequest } from "@/utils/api";
@@ -39,6 +39,11 @@ export default function DuenoDashboardPage() {
     (m) => m.estado === "PENDIENTE" || m.estado === "EN_PROCESO"
   );
 
+  const totalInvertido = maintenances.reduce(
+    (sum, m) => sum + Number(m.costo_total || 0),
+    0
+  );
+
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -63,7 +68,7 @@ export default function DuenoDashboardPage() {
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Mis Unidades</CardTitle>
@@ -101,6 +106,19 @@ export default function DuenoDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{alerts.length}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Invertido</CardTitle>
+            <DollarSign className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {totalInvertido > 0 ? `S/. ${totalInvertido.toFixed(2)}` : "S/. 0.00"}
+            </div>
+            <p className="text-xs text-muted-foreground">en materiales</p>
           </CardContent>
         </Card>
       </div>

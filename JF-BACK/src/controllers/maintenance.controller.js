@@ -112,10 +112,18 @@ const getMaintenancesByUnit = async (req, res) => {
   try {
     const { unidadId } = req.params;
     const result = await pool.query(
-      `SELECT m.*, u.placa, t.nombre AS tecnico_nombre
+      `SELECT m.*, u.placa, t.nombre AS tecnico_nombre,
+              COALESCE(mat_resumen.nombres_materiales, '') AS materiales_usados
        FROM mantenimientos m
        JOIN unidades u ON m.unidad_id = u.id
        LEFT JOIN tecnicos t ON m.tecnico_id = t.id
+       LEFT JOIN (
+         SELECT dm.mantenimiento_id,
+                STRING_AGG(mat.nombre, ', ') AS nombres_materiales
+         FROM detalles_mantenimiento dm
+         JOIN materiales mat ON dm.material_id = mat.id
+         GROUP BY dm.mantenimiento_id
+       ) mat_resumen ON mat_resumen.mantenimiento_id = m.id
        WHERE m.unidad_id = $1
        ORDER BY m.fecha_solicitud DESC`,
       [unidadId]

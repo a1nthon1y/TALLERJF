@@ -123,7 +123,7 @@ const getUnitsByOwnerReport = async (req, res) => {
   }
 };
 
-// Reporte del OWNER autenticado: historial de mantenimientos de todas sus unidades
+// Reporte del OWNER autenticado: historial de mantenimientos con materiales y costos
 const getMyUnitsReport = async (req, res) => {
   try {
     const usuario_id = req.user.id;
@@ -148,10 +148,25 @@ const getMyUnitsReport = async (req, res) => {
          m.fecha_realizacion,
          m.observaciones,
          m.kilometraje_actual,
-         t.nombre AS tecnico_nombre
+         t.nombre AS tecnico_nombre,
+         COALESCE(mat_resumen.costo_total, 0) AS costo_total,
+         COALESCE(mat_resumen.materiales, '[]'::json) AS materiales
        FROM mantenimientos m
        JOIN unidades u ON m.unidad_id = u.id
        LEFT JOIN tecnicos t ON m.tecnico_id = t.id
+       LEFT JOIN (
+         SELECT dm.mantenimiento_id,
+                json_agg(json_build_object(
+                  'nombre', mat.nombre,
+                  'cantidad', dm.cantidad,
+                  'precio_unitario', mat.precio,
+                  'costo_total', dm.costo_total
+                )) AS materiales,
+                SUM(dm.costo_total) AS costo_total
+         FROM detalles_mantenimiento dm
+         JOIN materiales mat ON dm.material_id = mat.id
+         GROUP BY dm.mantenimiento_id
+       ) mat_resumen ON mat_resumen.mantenimiento_id = m.id
        WHERE u.dueno_id = $1
        ORDER BY m.fecha_solicitud DESC`,
       [dueno_id]
@@ -177,10 +192,18 @@ const getMyUnitReports = async (req, res) => {
     const result = await pool.query(
       `SELECT m.id AS mantenimiento_id, u.placa AS unidad, m.tipo, m.estado,
               m.fecha_solicitud, m.fecha_realizacion, m.observaciones, m.kilometraje_actual,
-              t.nombre AS tecnico_nombre
+              t.nombre AS tecnico_nombre,
+              COALESCE(mat_resumen.nombres_materiales, '') AS materiales_usados
        FROM mantenimientos m
        JOIN unidades u ON m.unidad_id = u.id
        LEFT JOIN tecnicos t ON m.tecnico_id = t.id
+       LEFT JOIN (
+         SELECT dm.mantenimiento_id,
+                STRING_AGG(mat.nombre, ', ') AS nombres_materiales
+         FROM detalles_mantenimiento dm
+         JOIN materiales mat ON dm.material_id = mat.id
+         GROUP BY dm.mantenimiento_id
+       ) mat_resumen ON mat_resumen.mantenimiento_id = m.id
        WHERE m.unidad_id = $1
        ORDER BY m.fecha_solicitud DESC`,
       [unidadQuery.rows[0].id]

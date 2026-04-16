@@ -1,4 +1,4 @@
-import { makeGetRequest, makePostRequest, makePutRequest } from '@/utils/api';
+import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
 
 export const maintenanceService = {
   async getMaintenances() {
@@ -79,6 +79,30 @@ export const maintenanceService = {
       return await makePutRequest(`/maintenances/${maintenanceId}/close`, { observaciones_cierre });
     } catch (error) {
       throw new Error(error.message || 'Error al cerrar el mantenimiento');
+    }
+  },
+
+  async getMaintenanceMaterials(maintenanceId) {
+    try {
+      return await makeGetRequest(`/maintenances/${maintenanceId}/materials`);
+    } catch (error) {
+      throw new Error(error.message || 'Error al obtener materiales del mantenimiento');
+    }
+  },
+
+  async addMaintenanceMaterial(maintenanceId, material_id, cantidad) {
+    try {
+      return await makePostRequest(`/maintenances/${maintenanceId}/materials`, { material_id, cantidad });
+    } catch (error) {
+      throw new Error(error.message || 'Error al agregar material');
+    }
+  },
+
+  async removeMaintenanceMaterial(maintenanceId, detalleId) {
+    try {
+      return await makeDeleteRequest(`/maintenances/${maintenanceId}/materials/${detalleId}`);
+    } catch (error) {
+      throw new Error(error.message || 'Error al eliminar material');
     }
   },
 };

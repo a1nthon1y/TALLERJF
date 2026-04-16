@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2 } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -40,6 +40,7 @@ import { z } from "zod"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { configService } from "@/services/configService"
+import { materialService } from "@/services/materialService"
 
 const formSchema = z.object({
   estado: z.enum(["pendiente", "en_proceso", "completado"], { message: "El estado es requerido" }),
@@ -58,6 +59,16 @@ export function MaintenancesTable() {
   const [closeObs, setCloseObs] = useState("")
   const [isClosing, setIsClosing] = useState(false)
   const [partConfigs, setPartConfigs] = useState([])
+
+  // Materiales dialog state
+  const [materialsMaintenance, setMaterialsMaintenance] = useState(null)
+  const [materials, setMaterials] = useState([])
+  const [catalog, setCatalog] = useState([])
+  const [matLoading, setMatLoading] = useState(false)
+  const [addMatId, setAddMatId] = useState("")
+  const [addMatQty, setAddMatQty] = useState(1)
+  const [addingMat, setAddingMat] = useState(false)
+
   const { data: maintenances, isLoading: isLoadingMaintenances, isError: isErrorMaintenances, mutate } = useMaintenances()
   const { data: technicians, isLoading: isLoadingTechnicians, isError: isErrorTechnicians } = useTechnicians()
   const currentUser = authService.getUser()
@@ -123,6 +134,61 @@ export function MaintenancesTable() {
 
   const canClose = (estado) =>
     ["ADMIN", "ENCARGADO"].includes(currentUser?.rol) && estado?.toUpperCase() === "COMPLETADO"
+
+  const isAdminOrEncargado = ["ADMIN", "ENCARGADO"].includes(currentUser?.rol)
+
+  const openMaterialsDialog = async (maintenance) => {
+    setMaterialsMaintenance(maintenance)
+    setAddMatId("")
+    setAddMatQty(1)
+    setMatLoading(true)
+    try {
+      const [mats, cat] = await Promise.all([
+        maintenanceService.getMaintenanceMaterials(maintenance.id),
+        materialService.getMaterials(),
+      ])
+      setMaterials(Array.isArray(mats) ? mats : [])
+      setCatalog(Array.isArray(cat) ? cat.filter(m => m.stock > 0) : [])
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setMatLoading(false)
+    }
+  }
+
+  const handleAddMaterial = async () => {
+    if (!addMatId || addMatQty < 1) return
+    setAddingMat(true)
+    try {
+      const added = await maintenanceService.addMaintenanceMaterial(materialsMaintenance.id, parseInt(addMatId), addMatQty)
+      setMaterials(prev => [...prev, added])
+      setCatalog(prev => prev.map(m => m.id === parseInt(addMatId) ? { ...m, stock: m.stock - addMatQty } : m).filter(m => m.stock > 0))
+      setAddMatId("")
+      setAddMatQty(1)
+      toast.success("Material agregado")
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setAddingMat(false)
+    }
+  }
+
+  const handleRemoveMaterial = async (detalleId, materialId, cantidad) => {
+    try {
+      await maintenanceService.removeMaintenanceMaterial(materialsMaintenance.id, detalleId)
+      setMaterials(prev => prev.filter(m => m.id !== detalleId))
+      setCatalog(prev => {
+        const existing = prev.find(m => m.id === materialId)
+        if (existing) return prev.map(m => m.id === materialId ? { ...m, stock: m.stock + cantidad } : m)
+        return prev
+      })
+      toast.success("Material eliminado")
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  const totalCosto = materials.reduce((sum, m) => sum + Number(m.costo_total || 0), 0)
 
   const getTechnicianName = (id) => {
     if (!technicians || !id) return "No asignado"
@@ -197,6 +263,12 @@ export function MaintenancesTable() {
                           Actualizar Estado
                         </DropdownMenuItem>
                       )}
+                      {isAdminOrEncargado && (
+                        <DropdownMenuItem onClick={() => openMaterialsDialog(maintenance)}>
+                          <Package className="mr-2 h-4 w-4" />
+                          Materiales usados
+                        </DropdownMenuItem>
+                      )}
                       {canClose(maintenance.estado) && (
                         <DropdownMenuItem
                           onClick={() => { setClosingMaintenance(maintenance); setCloseObs("") }}
@@ -214,6 +286,113 @@ export function MaintenancesTable() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Dialog: Materiales usados en el mantenimiento */}
+      <Dialog open={!!materialsMaintenance} onOpenChange={(v) => { if (!v) setMaterialsMaintenance(null) }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" /> Materiales — {materialsMaintenance?.placa ?? materialsMaintenance?.unidad_id}
+            </DialogTitle>
+            <DialogDescription>
+              Materiales y repuestos utilizados en este mantenimiento
+            </DialogDescription>
+          </DialogHeader>
+
+          {matLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Lista actual */}
+              {materials.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
+                  No se han registrado materiales para este mantenimiento.
+                </p>
+              ) : (
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Material</TableHead>
+                        <TableHead className="text-right">Cantidad</TableHead>
+                        <TableHead className="text-right">Precio unit.</TableHead>
+                        <TableHead className="text-right">Subtotal</TableHead>
+                        <TableHead className="w-[40px]" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {materials.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-medium">{m.nombre}</TableCell>
+                          <TableCell className="text-right">{m.cantidad}</TableCell>
+                          <TableCell className="text-right">S/. {Number(m.precio_unitario).toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-semibold">S/. {Number(m.costo_total).toFixed(2)}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => handleRemoveMaterial(m.id, m.material_id, m.cantidad)}
+                              aria-label="Eliminar material"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-muted/30">
+                        <TableCell colSpan={3} className="font-semibold text-right">Total</TableCell>
+                        <TableCell className="text-right font-bold text-base">S/. {totalCosto.toFixed(2)}</TableCell>
+                        <TableCell />
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {/* Agregar material */}
+              <div className="border rounded-md p-3 space-y-2 bg-muted/20">
+                <p className="text-sm font-medium">Agregar material del catálogo</p>
+                <div className="flex gap-2 flex-wrap">
+                  <Select value={addMatId} onValueChange={setAddMatId}>
+                    <SelectTrigger className="flex-1 min-w-[180px]">
+                      <SelectValue placeholder="Seleccionar material..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {catalog.length === 0 ? (
+                        <SelectItem value="_none" disabled>Sin stock disponible</SelectItem>
+                      ) : catalog.map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.nombre} — S/. {Number(c.precio).toFixed(2)} (stock: {c.stock})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={catalog.find(c => c.id === parseInt(addMatId))?.stock ?? 999}
+                    value={addMatQty}
+                    onChange={(e) => setAddMatQty(Number(e.target.value))}
+                    className="w-24"
+                    placeholder="Cant."
+                  />
+                  <Button onClick={handleAddMaterial} disabled={!addMatId || addMatQty < 1 || addingMat}>
+                    {addingMat ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                    Agregar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMaterialsMaintenance(null)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Cerrar / Aprobar mantenimiento */}
       <Dialog open={!!closingMaintenance} onOpenChange={() => setClosingMaintenance(null)}>

@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const maintenanceController = require("../controllers/maintenance.controller");
+const { getMaterials, addMaterial, removeMaterial } = require("../controllers/maintenance-materials.controller");
 const authenticate = require("../middlewares/auth.middleware");
 const checkRole = require("../middlewares/role.middleware");
 
@@ -23,5 +24,10 @@ router.put("/:id/my-status", authenticate, checkRole(["TECNICO"]), maintenanceCo
 
 // Encargado cierra/aprueba el mantenimiento (COMPLETADO → CERRADO)
 router.put("/:id/close", authenticate, checkRole(["ENCARGADO", "ADMIN"]), maintenanceController.closeMaintenance);
+
+// Materiales usados en un mantenimiento
+router.get("/:id/materials", authenticate, getMaterials);
+router.post("/:id/materials", authenticate, checkRole(["ADMIN", "ENCARGADO"]), addMaterial);
+router.delete("/:id/materials/:detalleId", authenticate, checkRole(["ADMIN", "ENCARGADO"]), removeMaterial);
 
 module.exports = router;

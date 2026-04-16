@@ -6,7 +6,7 @@ import { getMiUnidad } from "@/services/choferesService";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Wrench } from "lucide-react";
+import { Loader2, Wrench, Package } from "lucide-react";
 
 const estadoBadge = (estado) => {
   const e = estado?.toLowerCase();
@@ -57,6 +57,7 @@ export default function MisMantenimientosPage() {
               <TableRow>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Observaciones</TableHead>
+                <TableHead>Materiales</TableHead>
                 <TableHead>Kilometraje</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha</TableHead>
@@ -65,14 +66,26 @@ export default function MisMantenimientosPage() {
             <TableBody>
               {mantenimientos.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
                     No hay mantenimientos registrados para tu unidad.
                   </TableCell>
                 </TableRow>
               ) : mantenimientos.map((m) => (
                 <TableRow key={m.id}>
                   <TableCell className="font-medium capitalize">{m.tipo}</TableCell>
-                  <TableCell>{m.observaciones || "—"}</TableCell>
+                  <TableCell className="max-w-[200px]">
+                    <p className="text-sm line-clamp-2">{m.observaciones || "—"}</p>
+                  </TableCell>
+                  <TableCell>
+                    {m.materiales_usados ? (
+                      <div className="flex items-start gap-1">
+                        <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                        <p className="text-xs text-muted-foreground">{m.materiales_usados}</p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>{m.kilometraje_actual?.toLocaleString()} km</TableCell>
                   <TableCell>{estadoBadge(m.estado)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
