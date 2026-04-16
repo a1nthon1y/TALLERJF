@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2 } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -241,6 +241,16 @@ export function MaintenancesTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {filteredMaintenances?.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center">
+                  <Wrench className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" aria-hidden="true" />
+                  <p className="text-muted-foreground text-sm">
+                    {searchTerm ? "Sin resultados para esa búsqueda" : "No hay mantenimientos registrados"}
+                  </p>
+                </TableCell>
+              </TableRow>
+            )}
             {filteredMaintenances?.map((maintenance) => (
               <TableRow key={maintenance.id}>
                 <TableCell>{maintenance.placa ?? maintenance.unidad_id}</TableCell>
@@ -252,8 +262,8 @@ export function MaintenancesTable() {
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <MoreHorizontal className="h-4 w-4" />
+                      <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Abrir menú de acciones">
+                        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">

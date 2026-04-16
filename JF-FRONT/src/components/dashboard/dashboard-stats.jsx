@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Bus, Clock, Wrench, Package } from "lucide-react"
+import { Bus, Clock, Wrench, Package, AlertCircle } from "lucide-react"
 import { makeGetRequest } from "@/utils/api"
 
 export function DashboardStats() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -23,6 +24,9 @@ export function DashboardStats() {
         const maintsData  = maintenances.status === "fulfilled" && Array.isArray(maintenances.value) ? maintenances.value : []
         const matsData    = materials.status    === "fulfilled" && Array.isArray(materials.value)    ? materials.value    : []
 
+        const allFailed = [units, maintenances, materials].every(r => r.status === "rejected")
+        if (allFailed) { setError(true); return }
+
         const pending   = maintsData.filter(m => m.estado?.toUpperCase() === "PENDIENTE" || m.estado?.toUpperCase() === "EN_PROCESO").length
         const completed = maintsData.filter(m => m.estado?.toUpperCase() === "COMPLETADO").length
         const stock     = matsData.reduce((acc, m) => acc + (m.stock ?? 0), 0)
@@ -34,7 +38,7 @@ export function DashboardStats() {
           stock,
         })
       } catch {
-        setStats({ units: 0, pending: 0, completed: 0, stock: 0 })
+        setError(true)
       } finally {
         setLoading(false)
       }
@@ -48,6 +52,15 @@ export function DashboardStats() {
     { title: "Mantenimientos Realizados",  icon: Wrench,  value: stats?.completed, sub: "completados en total" },
     { title: "Materiales en Stock",        icon: Package, value: stats?.stock,     sub: "unidades totales en inventario" },
   ]
+
+  if (error) {
+    return (
+      <div className="col-span-4 rounded-lg border border-destructive/40 bg-destructive/10 p-4 flex items-center gap-2 text-destructive text-sm">
+        <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+        No se pudieron cargar las estadísticas del dashboard. Recarga la página o intenta más tarde.
+      </div>
+    )
+  }
 
   if (loading) {
     return (

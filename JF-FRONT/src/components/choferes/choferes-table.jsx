@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +26,7 @@ import { deleteChofer, createChofer, updateChofer, getChoferById } from "@/servi
 import { toast } from "sonner"
 import { ChoferForm } from "./chofer-form"
 
-export function ChoferesTable() {
+export function ChoferesTable({ externalCreateTrigger }) {
   const { data: choferes, isLoading, isError, mutate } = useChoferes()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedChofer, setSelectedChofer] = useState(null)
@@ -35,6 +35,12 @@ export function ChoferesTable() {
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [choferToEdit, setChoferToEdit] = useState(null)
+
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    if (externalCreateTrigger !== undefined) setIsCreating(true)
+  }, [externalCreateTrigger])
 
   // Filtrar choferes
   const filteredChoferes = useMemo(() => {

@@ -90,10 +90,13 @@ export function SidebarNav() {
 
   return (
     <div className="relative">
-      <Sidebar className={cn(
-        "h-screen bg-sidebar transition-all duration-300 ease-in-out",
-        isCollapsed ? "w-[80px]" : "w-[280px]"
-      )}>
+      <Sidebar
+        aria-label="Navegación principal"
+        className={cn(
+          "h-screen bg-sidebar transition-all duration-300 ease-in-out",
+          isCollapsed ? "w-[80px]" : "w-[280px]"
+        )}
+      >
         <SidebarHeader className="bg-sidebar border-none">
           <div className={cn(
             "flex items-center py-3",
@@ -172,20 +175,25 @@ export function SidebarNav() {
                       {user.nombre}
                     </p>
                     <p className="text-xs text-sidebar-foreground/70 mt-1">
-                      {user.rol}
+                      {user.rol === 'ADMIN' ? 'Administrador'
+                        : user.rol === 'ENCARGADO' ? 'Encargado'
+                        : user.rol === 'OWNER' ? 'Dueño'
+                        : user.rol === 'TECNICO' ? 'Técnico'
+                        : 'Chofer'}
                     </p>
                   </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="hover:bg-sidebar-accent/50" 
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="hover:bg-sidebar-accent/50"
                     title="Cerrar sesión"
+                    aria-label="Cerrar sesión"
                     onClick={handleLogout}
                   >
                     <LogOut className={cn(
                       "text-sidebar-foreground",
                       isCollapsed ? "h-5 w-5" : "h-4 w-4"
-                    )} />
+                    )} aria-hidden="true" />
                   </Button>
                 </>
               )}

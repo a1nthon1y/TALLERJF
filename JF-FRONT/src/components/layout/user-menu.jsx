@@ -13,7 +13,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
@@ -77,7 +76,11 @@ export function UserMenu() {
               @{user.username ?? user.correo}
             </p>
             <p className="text-xs leading-none text-muted-foreground mt-1">
-              {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : user.rol === 'OWNER' ? 'Dueño' : 'Chofer'}
+              {user.rol === 'ADMIN' ? 'Administrador'
+                : user.rol === 'ENCARGADO' ? 'Encargado'
+                : user.rol === 'OWNER' ? 'Dueño'
+                : user.rol === 'TECNICO' ? 'Técnico'
+                : 'Chofer'}
             </p>
           </div>
         </DropdownMenuLabel>
@@ -100,7 +103,6 @@ export function UserMenu() {
         >
           <LogOut className="mr-2 h-4 w-4" />
           <span>{isLoading ? "Cerrando sesión..." : "Cerrar sesión"}</span>
-          <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

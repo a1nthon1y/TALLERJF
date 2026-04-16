@@ -57,7 +57,7 @@ export default function UsersPage() {
         if (!current || current === form.formState.defaultValues?.username) {
           form.setValue("username", data.username, { shouldValidate: true })
         }
-      } catch { /* silencioso */ } finally {
+      } catch { toast.warning("No se pudo sugerir un nombre de usuario automáticamente") } finally {
         setSuggesting(false)
       }
     }, 600)

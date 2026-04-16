@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Trash2, MoreHorizontal, Package } from "lucide-react"
+import { Edit, Trash2, MoreHorizontal, Package, PackageX } from "lucide-react"
 // useMaterials moved to parent (materiales/page.jsx) to avoid double fetch
 import { materialService } from "@/services/materialService"
 import { toast } from "sonner"
@@ -180,6 +180,16 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {filteredMaterials.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-12 text-center">
+                  <PackageX className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" aria-hidden="true" />
+                  <p className="text-muted-foreground text-sm">
+                    {searchTerm ? "Sin resultados para esa búsqueda" : "No hay materiales registrados"}
+                  </p>
+                </TableCell>
+              </TableRow>
+            )}
             {filteredMaterials.map((material) => (
               <TableRow key={material.id}>
                 <TableCell>
@@ -194,7 +204,7 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
                     {material.stock}
                   </Badge>
                 </TableCell>
-                <TableCell>${parseFloat(material.precio).toFixed(2)}</TableCell>
+                <TableCell>S/. {parseFloat(material.precio).toFixed(2)}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -282,22 +292,15 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
                 name="precio"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Precio</FormLabel>
+                    <FormLabel>Precio (S/.)</FormLabel>
                     <FormControl>
-                      <Input 
-                        type="text"
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
                         {...field}
-                        onChange={(e) => {
-                          // Validar que solo contenga números y un punto decimal
-                          const value = e.target.value.replace(/[^0-9.]/g, '');
-                          // Asegurar que solo haya un punto decimal
-                          const parts = value.split('.');
-                          if (parts.length > 2) {
-                            field.onChange(parts[0] + '.' + parts.slice(1).join(''));
-                          } else {
-                            field.onChange(value);
-                          }
-                        }}
+                        onChange={(e) => field.onChange(e.target.value)}
                       />
                     </FormControl>
                     <FormMessage />

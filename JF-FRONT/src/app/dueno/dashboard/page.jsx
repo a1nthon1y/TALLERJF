@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bus, Wrench, AlertTriangle, DollarSign } from "lucide-react";
+import { Bus, Wrench, AlertTriangle, DollarSign, AlertCircle } from "lucide-react";
 import { getMyUnits } from "@/services/unitsService";
 import { getMyUnitsReport } from "@/services/ownersService";
 import { makeGetRequest } from "@/utils/api";
@@ -18,13 +18,14 @@ export default function DuenoDashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [unitsData, maintsData, alertsData] = await Promise.all([
+        const [unitsData, maintsData] = await Promise.all([
           getMyUnits(),
           getMyUnitsReport(),
-          makeGetRequest("/alerts").catch(() => []),
         ]);
         setUnits(Array.isArray(unitsData) ? unitsData : []);
         setMaintenances(Array.isArray(maintsData) ? maintsData : []);
+        const alertsData = await makeGetRequest("/alerts").catch(() => null);
+        if (alertsData === null) setError("No se pudieron cargar las alertas de mantenimiento.");
         setAlerts(Array.isArray(alertsData) ? alertsData : []);
       } catch (err) {
         setError(err.message);
@@ -52,20 +53,18 @@ export default function DuenoDashboardPage() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="rounded-lg border border-destructive p-4 text-destructive">
-        {error}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
         <p className="text-muted-foreground">Resumen de tus unidades y mantenimientos</p>
       </div>
+      {error && (
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-700 p-3 flex items-center gap-2 text-sm text-yellow-800 dark:text-yellow-400">
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {error}
+        </div>
+      )}
 
       {/* Métricas */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">

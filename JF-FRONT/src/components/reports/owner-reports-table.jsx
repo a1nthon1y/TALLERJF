@@ -1,81 +1,83 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { FileText } from "lucide-react"
-import Link from "next/link"
-
-// Datos de ejemplo para el reporte por dueño
-const ownerReportData = [
-  {
-    id: "1",
-    owner: "Transportes Rápidos S.A.",
-    totalUnits: 8,
-    activeUnits: 7,
-    totalMaintenances: 18,
-    preventiveMaintenances: 12,
-    correctiveMaintenances: 6,
-    totalCost: 4250.75,
-    averageCostPerUnit: 531.34,
-    lastMaintenance: "15/03/2025",
-  },
-  {
-    id: "2",
-    owner: "Autobuses del Norte",
-    totalUnits: 12,
-    activeUnits: 10,
-    totalMaintenances: 24,
-    preventiveMaintenances: 16,
-    correctiveMaintenances: 8,
-    totalCost: 6780.5,
-    averageCostPerUnit: 565.04,
-    lastMaintenance: "18/03/2025",
-  },
-  {
-    id: "3",
-    owner: "Transportes Urbanos S.A.",
-    totalUnits: 15,
-    activeUnits: 15,
-    totalMaintenances: 30,
-    preventiveMaintenances: 22,
-    correctiveMaintenances: 8,
-    totalCost: 8120.25,
-    averageCostPerUnit: 541.35,
-    lastMaintenance: "20/03/2025",
-  },
-  {
-    id: "4",
-    owner: "Líneas Express",
-    totalUnits: 6,
-    activeUnits: 5,
-    totalMaintenances: 12,
-    preventiveMaintenances: 8,
-    correctiveMaintenances: 4,
-    totalCost: 3450.8,
-    averageCostPerUnit: 575.13,
-    lastMaintenance: "12/03/2025",
-  },
-  {
-    id: "5",
-    owner: "Autotransportes del Sur",
-    totalUnits: 10,
-    activeUnits: 9,
-    totalMaintenances: 20,
-    preventiveMaintenances: 14,
-    correctiveMaintenances: 6,
-    totalCost: 5670.3,
-    averageCostPerUnit: 567.03,
-    lastMaintenance: "22/03/2025",
-  },
-]
+import { Skeleton } from "@/components/ui/skeleton"
+import { makeGetRequest } from "@/utils/api"
+import { FileX } from "lucide-react"
 
 export function OwnerReportsTable() {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
 
-  const filteredData = ownerReportData.filter((report) => report.owner.toLowerCase().includes(searchTerm.toLowerCase()))
+  useEffect(() => {
+    makeGetRequest("/reports/maintenances")
+      .then((data) => {
+        if (!Array.isArray(data)) { setRows([]); return }
+        // Aggregate per owner
+        const map = {}
+        data.forEach((r) => {
+          const key = r.dueno_nombre ?? "Sin dueño"
+          if (!map[key]) map[key] = { owner: key, total: 0, preventivo: 0, correctivo: 0, unidades: new Set() }
+          const tipo = r.tipo?.toUpperCase()
+          if (tipo === "PREVENTIVO") map[key].preventivo++
+          else if (tipo === "CORRECTIVO") map[key].correctivo++
+          map[key].total++
+          if (r.unidad) map[key].unidades.add(r.unidad)
+        })
+        setRows(
+          Object.values(map)
+            .map((v) => ({ ...v, unidades: v.unidades.size }))
+            .sort((a, b) => b.total - a.total)
+        )
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = rows.filter((r) =>
+    r.owner.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-64" />
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {["Dueño", "Unidades", "Total", "Preventivos", "Correctivos"].map((h) => (
+                  <TableHead key={h}>{h}</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Array(4).fill(0).map((_, i) => (
+                <TableRow key={i}>
+                  {Array(5).fill(0).map((__, j) => (
+                    <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+        No se pudo cargar el reporte por dueño.
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -85,6 +87,7 @@ export function OwnerReportsTable() {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
+          aria-label="Buscar dueño"
         />
       </div>
       <div className="rounded-md border">
@@ -92,64 +95,38 @@ export function OwnerReportsTable() {
           <TableHeader>
             <TableRow>
               <TableHead>Dueño</TableHead>
-              <TableHead>Unidades</TableHead>
-              <TableHead>Mantenimientos</TableHead>
+              <TableHead>Unidades distintas</TableHead>
+              <TableHead>Total mantenimientos</TableHead>
               <TableHead>Preventivos</TableHead>
               <TableHead>Correctivos</TableHead>
-              <TableHead className="text-right">Costo Total</TableHead>
-              <TableHead className="text-right">Costo Promedio</TableHead>
-              <TableHead>Último Mantenimiento</TableHead>
-              <TableHead className="w-[80px]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredData.map((report) => (
-              <TableRow key={report.id}>
-                <TableCell className="font-medium">
-                  <Link href={`/duenos/${report.id}`} className="hover:underline">
-                    {report.owner}
-                  </Link>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="py-12 text-center">
+                  <FileX className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" aria-hidden="true" />
+                  <p className="text-muted-foreground text-sm">
+                    {searchTerm ? "Sin resultados para esa búsqueda" : "No hay datos de mantenimientos registrados"}
+                  </p>
                 </TableCell>
+              </TableRow>
+            ) : filtered.map((r) => (
+              <TableRow key={r.owner}>
+                <TableCell className="font-medium">{r.owner}</TableCell>
                 <TableCell>
-                  <Badge variant="outline" className="font-mono">
-                    {report.activeUnits}/{report.totalUnits}
+                  <Badge variant="outline">{r.unidades}</Badge>
+                </TableCell>
+                <TableCell>{r.total}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className="border-blue-300 text-blue-600 dark:text-blue-400">
+                    {r.preventivo}
                   </Badge>
                 </TableCell>
-                <TableCell>{report.totalMaintenances}</TableCell>
                 <TableCell>
-                  <Badge
-                    variant="outline"
-                    className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800"
-                  >
-                    {report.preventiveMaintenances}
+                  <Badge variant="outline" className="border-red-300 text-red-600 dark:text-red-400">
+                    {r.correctivo}
                   </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800"
-                  >
-                    {report.correctiveMaintenances}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right font-mono">
-                  ${report.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </TableCell>
-                <TableCell className="text-right font-mono">
-                  $
-                  {report.averageCostPerUnit.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </TableCell>
-                <TableCell>{report.lastMaintenance}</TableCell>
-                <TableCell>
-                  <Button variant="outline" size="icon" asChild>
-                    <Link href={`/reportes/duenos/${report.id}`}>
-                      <FileText className="h-4 w-4" />
-                      <span className="sr-only">Ver reporte detallado</span>
-                    </Link>
-                  </Button>
                 </TableCell>
               </TableRow>
             ))}
@@ -159,4 +136,3 @@ export function OwnerReportsTable() {
     </div>
   )
 }
-

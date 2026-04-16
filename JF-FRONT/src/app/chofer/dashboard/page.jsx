@@ -31,6 +31,7 @@ export default function DriverDashboard() {
   const [maintenances, setMaintenances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [partialErrors, setPartialErrors] = useState([]);
 
   useEffect(() => {
     async function loadDriverData() {
@@ -42,6 +43,11 @@ export default function DriverDashboard() {
           getPartsStatus(unidad.id),
           maintenanceService.getMaintenancesByUnit(unidad.id),
         ]);
+
+        const errs = [];
+        if (partsData.status === "rejected") errs.push("No se pudo cargar el estado de componentes.");
+        if (maintenanceData.status === "rejected") errs.push("No se pudo cargar el historial de mantenimientos.");
+        setPartialErrors(errs);
 
         setParts(partsData.status === "fulfilled" && Array.isArray(partsData.value) ? partsData.value : []);
         setMaintenances(maintenanceData.status === "fulfilled" && Array.isArray(maintenanceData.value) ? maintenanceData.value : []);
@@ -77,6 +83,12 @@ export default function DriverDashboard() {
         <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
         <p className="text-muted-foreground">Información de tu unidad asignada</p>
       </div>
+      {partialErrors.length > 0 && (
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-700 p-3 flex items-start gap-2 text-sm text-yellow-800 dark:text-yellow-400">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+          <div>{partialErrors.map((e, i) => <p key={i}>{e}</p>)}</div>
+        </div>
+      )}
 
       {/* Info de la unidad */}
       <Card className="p-6">

@@ -8,7 +8,8 @@ import { makeGetRequest } from "@/utils/api"
 
 const estadoBadge = (estado) => {
   const e = estado?.toUpperCase()
-  if (e === "COMPLETADO") return <Badge variant="success">Completado</Badge>
+  if (e === "CERRADO")    return <Badge variant="secondary">Cerrado</Badge>
+  if (e === "COMPLETADO" || e === "REALIZADO") return <Badge variant="success">Completado</Badge>
   if (e === "EN_PROCESO") return <Badge variant="info">En Proceso</Badge>
   return <Badge variant="outline">Pendiente</Badge>
 }

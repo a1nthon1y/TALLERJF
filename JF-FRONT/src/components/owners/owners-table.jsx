@@ -15,10 +15,12 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Edit, MoreHorizontal, Trash, Loader2, Building2, AlertTriangle } from "lucide-react"
+import { Edit, MoreHorizontal, Trash, Loader2, Building2, AlertTriangle, ChevronDown } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { getAllOwners, deleteOwner, createOwner } from "@/services/ownersService"
 import { getAllUnits } from "@/services/unitsService"
+import { makeGetRequest } from "@/utils/api"
 
 export function OwnersTable() {
   const queryClient = useQueryClient()
@@ -35,6 +37,14 @@ export function OwnersTable() {
   const { data: allUnits = [] } = useQuery({
     queryKey: ["units"],
     queryFn: getAllUnits,
+  })
+
+  const { data: ownerUsers = [] } = useQuery({
+    queryKey: ["users-owner"],
+    queryFn: async () => {
+      const users = await makeGetRequest("/users")
+      return Array.isArray(users) ? users.filter((u) => u.rol === "OWNER" && u.activo !== false) : []
+    },
   })
 
   const deleteMutation = useMutation({
@@ -78,7 +88,7 @@ export function OwnersTable() {
 
   const handleCreate = (e) => {
     e.preventDefault()
-    if (!usuarioId) return toast.error("Ingresa el ID de usuario")
+    if (!usuarioId) return toast.error("Selecciona un usuario")
     createMutation.mutate({ usuario_id: parseInt(usuarioId) })
   }
 
@@ -207,19 +217,29 @@ export function OwnersTable() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Registrar Nuevo Dueño</DialogTitle>
+            <DialogDescription>
+              Selecciona un usuario con rol <strong>OWNER</strong> para vincularlo como dueño de unidades.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="usuario_id">ID de Usuario existente</Label>
-              <Input
-                id="usuario_id"
-                type="number"
-                placeholder="Ej. 7"
-                value={usuarioId}
-                onChange={(e) => setUsuarioId(e.target.value)}
-              />
+              <Label htmlFor="usuario_id">Usuario con rol OWNER</Label>
+              <Select value={usuarioId} onValueChange={setUsuarioId}>
+                <SelectTrigger id="usuario_id">
+                  <SelectValue placeholder="Seleccionar usuario..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {ownerUsers.length === 0 ? (
+                    <SelectItem value="" disabled>No hay usuarios con rol OWNER disponibles</SelectItem>
+                  ) : ownerUsers.map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {u.nombre} ({u.username || u.correo})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                El dueño debe tener un usuario registrado en el sistema con rol OWNER.
+                Solo aparecen usuarios activos con rol OWNER que aún no tienen perfil de dueño.
               </p>
             </div>
             <DialogFooter>

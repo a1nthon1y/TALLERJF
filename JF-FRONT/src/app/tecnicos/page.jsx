@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -46,10 +46,13 @@ export default function TecnicosPage() {
     queryFn: technicianService.getTechnicians.bind(technicianService),
   })
 
+  const [tecnicoUsersError, setTecnicoUsersError] = useState(false)
   useEffect(() => {
-    makeGetRequest("/users").then((users) => {
-      setTecnicoUsers(users.filter((u) => u.rol === "TECNICO" && u.activo !== false))
-    }).catch(() => {})
+    makeGetRequest("/users")
+      .then((users) => {
+        setTecnicoUsers(Array.isArray(users) ? users.filter((u) => u.rol === "TECNICO" && u.activo !== false) : [])
+      })
+      .catch(() => setTecnicoUsersError(true))
   }, [])
 
   const createMutation = useMutation({
@@ -229,6 +232,9 @@ export default function TecnicosPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editing ? "Editar Técnico" : "Agregar Técnico"}</DialogTitle>
+            <DialogDescription>
+              {editing ? "Modifica los datos del técnico." : "Completa los datos para registrar un nuevo técnico en el taller."}
+            </DialogDescription>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -266,7 +272,11 @@ export default function TecnicosPage() {
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="">Sin cuenta de usuario</SelectItem>
-                      {tecnicoUsers.map((u) => (
+                      {tecnicoUsersError ? (
+                        <SelectItem value="" disabled>Error al cargar usuarios</SelectItem>
+                      ) : tecnicoUsers.length === 0 ? (
+                        <SelectItem value="" disabled>No hay usuarios con rol Técnico</SelectItem>
+                      ) : tecnicoUsers.map((u) => (
                         <SelectItem key={u.id} value={String(u.id)}>
                           {u.nombre} ({u.username || u.correo})
                         </SelectItem>

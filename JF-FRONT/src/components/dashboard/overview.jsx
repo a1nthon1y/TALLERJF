@@ -30,16 +30,25 @@ function aggregateByMonth(maintenances) {
 export function Overview() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     makeGetRequest("/maintenances")
       .then(raw => setData(Array.isArray(raw) ? aggregateByMonth(raw) : []))
-      .catch(() => setData([]))
+      .catch(() => { setError(true); setData([]) })
       .finally(() => setLoading(false))
   }, [])
 
   if (loading) {
     return <Skeleton className="h-[350px] w-full" />
+  }
+
+  if (error) {
+    return (
+      <div className="flex h-[350px] items-center justify-center">
+        <p className="text-sm text-destructive">No se pudo cargar el gráfico de mantenimientos.</p>
+      </div>
+    )
   }
 
   if (data.length === 0) {

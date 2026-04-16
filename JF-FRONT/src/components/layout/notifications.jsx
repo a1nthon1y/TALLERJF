@@ -1,138 +1,59 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Bell, AlertTriangle, AlertCircle, CheckCircle, Info } from "lucide-react"
+import { Bell, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { getMaintenanceAlerts, getUpcomingMaintenanceAlerts } from "@/lib/maintenance-alerts"
-import { formatNumber } from "@/utils/formatting"
-
-// Datos de ejemplo para notificaciones
-const notificationsData = [
-  {
-    id: 1,
-    title: "Mantenimiento pendiente",
-    message: "Unidad ABC-123 tiene mantenimiento programado para mañana",
-    time: "Hace 10 minutos",
-    read: false,
-    type: "warning",
-  },
-  {
-    id: 2,
-    title: "Stock bajo",
-    message: "El nivel de stock de 'Filtro de aceite' está por debajo del mínimo",
-    time: "Hace 2 horas",
-    read: false,
-    type: "danger",
-  },
-  {
-    id: 3,
-    title: "Mantenimiento completado",
-    message: "Mantenimiento de la unidad XYZ-789 ha sido completado",
-    time: "Hace 5 horas",
-    read: true,
-    type: "success",
-  },
-  {
-    id: 4,
-    title: "Nueva unidad registrada",
-    message: "Se ha registrado la unidad JKL-202 en el sistema",
-    time: "Ayer",
-    read: true,
-    type: "info",
-  },
-]
+import { makeGetRequest } from "@/utils/api"
+import { Loader2 } from "lucide-react"
 
 export function Notifications() {
-  const [notifications, setNotifications] = useState(notificationsData)
+  const [alerts, setAlerts] = useState([])
+  const [read, setRead] = useState(new Set())
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // Obtener alertas de mantenimiento basadas en kilometraje
-  const maintenanceAlerts = getMaintenanceAlerts()
-  const upcomingMaintenanceAlerts = getUpcomingMaintenanceAlerts()
-
-  // Combinar notificaciones regulares con alertas de mantenimiento
   useEffect(() => {
-    const combinedNotifications = [...notificationsData]
-
-    // Agregar alertas críticas (partes que ya necesitan mantenimiento)
-    maintenanceAlerts.forEach((alert, index) => {
-      combinedNotifications.push({
-        id: 1000 + index,
-        title: `Mantenimiento requerido: ${alert.name}`,
-        message: `La unidad ${alert.unitPlate} requiere mantenimiento de ${alert.name.toLowerCase()} a los ${formatNumber(alert.maintenanceInterval)} km. Kilometraje actual: ${formatNumber(alert.unitCurrentKm)} km.`,
-        time: "Ahora",
-        read: false,
-        type: "danger",
-        partId: alert.id,
-      })
-    })
-
-    // Agregar alertas de advertencia (partes que pronto necesitarán mantenimiento)
-    upcomingMaintenanceAlerts.forEach((alert, index) => {
-      combinedNotifications.push({
-        id: 2000 + index,
-        title: `Mantenimiento próximo: ${alert.name}`,
-        message: `La unidad ${alert.unitPlate} requerirá mantenimiento de ${alert.name.toLowerCase()} pronto. Faltan ${(alert.lastMaintenanceKm + alert.maintenanceInterval - alert.unitCurrentKm).toLocaleString()} km.`,
-        time: "Ahora",
-        read: false,
-        type: "warning",
-        partId: alert.id,
-      })
-    })
-
-    setNotifications(combinedNotifications)
+    makeGetRequest("/alerts")
+      .then((data) => setAlerts(Array.isArray(data) ? data : []))
+      .catch(() => setAlerts([]))
+      .finally(() => setLoading(false))
   }, [])
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = alerts.filter((a) => !read.has(a.id)).length
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })))
+  const markAllAsRead = () => setRead(new Set(alerts.map((a) => a.id)))
+
+  const markAsRead = (id) => setRead((prev) => new Set([...prev, id]))
+
+  const getTypeStyles = (estado) => {
+    if (estado === "ACTIVO") return "border-l-4 border-red-500 bg-red-50 dark:bg-red-950/30"
+    return "border-l-4 border-green-500 bg-green-50 dark:bg-green-950/30"
   }
 
-  const markAsRead = (id) => {
-    setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
-  }
-
-  const getTypeStyles = (type) => {
-    switch (type) {
-      case "warning":
-        return "border-l-4 border-yellow-500 bg-amber-50 dark:bg-amber-950/30"
-      case "danger":
-        return "border-l-4 border-red-500 bg-red-50 dark:bg-red-950/30"
-      case "success":
-        return "border-l-4 border-green-500 bg-green-50 dark:bg-green-950/30"
-      case "info":
-        return "border-l-4 border-blue-500 bg-blue-50 dark:bg-blue-950/30"
-      default:
-        return "border-l-4 border-gray-300"
-    }
-  }
-
-  const getTypeIcon = (type) => {
-    switch (type) {
-      case "warning":
-        return <AlertTriangle className="h-4 w-4 text-yellow-500 mr-2 flex-shrink-0" />
-      case "danger":
-        return <AlertCircle className="h-4 w-4 text-red-500 mr-2 flex-shrink-0" />
-      case "success":
-        return <CheckCircle className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
-      case "info":
-        return <Info className="h-4 w-4 text-blue-500 mr-2 flex-shrink-0" />
-      default:
-        return null
-    }
+  const getTypeIcon = (estado) => {
+    if (estado === "ACTIVO")
+      return <AlertCircle className="h-4 w-4 text-red-500 mr-2 shrink-0" />
+    return <CheckCircle className="h-4 w-4 text-green-500 mr-2 shrink-0" />
   }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="icon" className="relative">
+        <Button
+          variant="outline"
+          size="icon"
+          className="relative"
+          aria-label={`Notificaciones${unreadCount > 0 ? `, ${unreadCount} sin leer` : ""}`}
+        >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white">
-              {unreadCount}
+            <span
+              aria-hidden="true"
+              className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white"
+            >
+              {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
         </Button>
@@ -147,47 +68,43 @@ export function Notifications() {
           )}
         </div>
         <div className="max-h-80 overflow-auto">
-          {notifications.length > 0 ? (
-            <div>
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={cn(
-                    "flex flex-col p-3 border-b last:border-0 cursor-pointer hover:bg-muted/50 transition-colors",
-                    !notification.read && "bg-muted/30",
-                    getTypeStyles(notification.type),
-                  )}
-                  onClick={() => markAsRead(notification.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <h5 className="font-medium text-sm flex items-center">
-                      {getTypeIcon(notification.type)}
-                      {notification.title}
-                    </h5>
-                    {!notification.read && <span className="h-2 w-2 rounded-full bg-blue-500"></span>}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">{notification.message}</p>
-                  <span className="text-xs text-muted-foreground mt-2">{notification.time}</span>
-
-                  {/* Botón para alertas de mantenimiento */}
-                  {"partId" in notification && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        window.location.href = `/mantenimientos/alertas`
-                      }}
-                    >
-                      Programar mantenimiento
-                    </Button>
-                  )}
-                </div>
-              ))}
+          {loading ? (
+            <div className="flex items-center justify-center p-6 gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" /> Cargando alertas...
+            </div>
+          ) : alerts.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground text-sm">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-30" />
+              No hay alertas activas
             </div>
           ) : (
-            <div className="p-4 text-center text-muted-foreground">No hay notificaciones</div>
+            alerts.map((alert) => {
+              const isUnread = !read.has(alert.id)
+              return (
+                <button
+                  key={alert.id}
+                  type="button"
+                  className={cn(
+                    "w-full text-left flex flex-col p-3 border-b last:border-0 hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    isUnread && "bg-muted/30",
+                    getTypeStyles(alert.estado),
+                  )}
+                  onClick={() => markAsRead(alert.id)}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm flex items-center">
+                      {getTypeIcon(alert.estado)}
+                      {alert.parte || "Alerta de mantenimiento"}
+                    </span>
+                    {isUnread && <span aria-hidden="true" className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 ml-6">{alert.mensaje}</p>
+                  {alert.placa && (
+                    <p className="text-xs text-muted-foreground mt-0.5 ml-6">Unidad: {alert.placa}</p>
+                  )}
+                </button>
+              )
+            })
           )}
         </div>
         <div className="border-t p-2 text-center">
@@ -199,4 +116,3 @@ export function Notifications() {
     </Popover>
   )
 }
-

@@ -36,6 +36,8 @@ function UnitPartsRow({ unit }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label={`${open ? "Colapsar" : "Expandir"} partes de ${unit.placa}`}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors rounded-lg text-left"
       >
         <div className="flex items-center gap-3">

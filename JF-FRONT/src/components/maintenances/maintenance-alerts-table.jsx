@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { AlertCircle, AlertTriangle, CheckCircle, Calendar, Wrench } from "lucide-react"
+import { AlertCircle, AlertTriangle, CheckCircle, Calendar, Wrench, BellOff } from "lucide-react"
 import { useAlerts } from "@/hooks/useAlerts"
 import { toast } from "sonner"
 
@@ -127,6 +127,18 @@ export function MaintenanceAlertsTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {filteredAlerts.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-12 text-center">
+                  <BellOff className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" aria-hidden="true" />
+                  <p className="text-muted-foreground text-sm">
+                    {searchTerm || statusFilter !== "all" || unitFilter !== "all"
+                      ? "Sin alertas para esos filtros"
+                      : "No hay alertas activas"}
+                  </p>
+                </TableCell>
+              </TableRow>
+            )}
             {filteredAlerts.map((alert) => (
               <TableRow key={alert.id}>
                 <TableCell className="font-medium">{alert.placa}</TableCell>

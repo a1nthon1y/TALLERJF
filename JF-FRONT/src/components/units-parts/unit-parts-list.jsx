@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { AlertCircle, AlertTriangle, CheckCircle, Wrench, Calendar } from "lucide-react"
+import { AlertCircle, AlertTriangle, CheckCircle, Wrench } from "lucide-react"
 import { formatNumber } from "@/utils/formatting"
 
 /**
@@ -185,7 +185,9 @@ export function UnitPartsList({ unitId }) {
       <Card>
         <CardContent className="pt-6 text-center">
           <p className="text-muted-foreground">No hay partes registradas para esta unidad.</p>
-          <Button className="mt-4">Agregar Primera Parte</Button>
+          <p className="text-xs text-muted-foreground mt-1">
+            Ve a <a href="/configuraciones" className="text-primary hover:underline">Configuraciones</a> para agregar reglas predictivas.
+          </p>
         </CardContent>
       </Card>
     )
@@ -266,14 +268,13 @@ export function UnitPartsList({ unitId }) {
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" className="w-full text-xs" size="sm">
-                    <Calendar className="h-3.5 w-3.5 mr-1" />
-                    Programar
-                  </Button>
-                  <Button variant="outline" className="w-full text-xs" size="sm">
-                    <Wrench className="h-3.5 w-3.5 mr-1" />
-                    Registrar
-                  </Button>
+                  <a
+                    href="/mantenimientos"
+                    className="flex-1 inline-flex items-center justify-center rounded-md border border-input bg-background px-3 py-1.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+                  >
+                    <Wrench className="h-3.5 w-3.5 mr-1" aria-hidden="true" />
+                    Ver mantenimientos
+                  </a>
                 </div>
               </div>
             </CardContent>
