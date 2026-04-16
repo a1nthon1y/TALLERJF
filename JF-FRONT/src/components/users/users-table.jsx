@@ -47,7 +47,7 @@ const formSchema = z.object({
 })
 
 const ROL_LABEL = { ADMIN: "Administrador", ENCARGADO: "Encargado", OWNER: "Dueño", CHOFER: "Chofer" }
-const ROL_BADGE = { ADMIN: "default", ENCARGADO: "outline", OWNER: "info", CHOFER: "secondary" }
+const ROL_BADGE = { ADMIN: "default", ENCARGADO: "outline", OWNER: "info", CHOFER: "secondary", TECNICO: "warning" }
 
 export function UsersTable({ users, isLoading, isError, mutate }) {
   const router    = useRouter()
@@ -264,6 +264,7 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
                       <SelectItem value="ENCARGADO">Encargado</SelectItem>
                       <SelectItem value="OWNER">Dueño</SelectItem>
                       <SelectItem value="CHOFER">Chofer</SelectItem>
+                      <SelectItem value="TECNICO">Técnico</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

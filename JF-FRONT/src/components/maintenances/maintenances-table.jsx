@@ -18,11 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
 import { maintenanceService } from "@/services/maintenanceService"
+import { authService } from "@/services/authService"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -30,7 +31,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -51,9 +54,13 @@ const formSchema = z.object({
 export function MaintenancesTable() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMaintenance, setSelectedMaintenance] = useState(null)
+  const [closingMaintenance, setClosingMaintenance] = useState(null)
+  const [closeObs, setCloseObs] = useState("")
+  const [isClosing, setIsClosing] = useState(false)
   const [partConfigs, setPartConfigs] = useState([])
   const { data: maintenances, isLoading: isLoadingMaintenances, isError: isErrorMaintenances, mutate } = useMaintenances()
   const { data: technicians, isLoading: isLoadingTechnicians, isError: isErrorTechnicians } = useTechnicians()
+  const currentUser = authService.getUser()
 
   useEffect(() => {
      configService.getConfigs().then(setPartConfigs).catch(() => {})
@@ -86,14 +93,36 @@ export function MaintenancesTable() {
     form.reset({ estado: maintenance.estado?.toLowerCase() || "pendiente", tecnico_id: maintenance.tecnico_id?.toString() || "", partes_reparadas: [] })
   }
 
+  const handleCloseMaintenance = async () => {
+    if (!closingMaintenance) return
+    setIsClosing(true)
+    try {
+      await maintenanceService.closeMaintenance(closingMaintenance.id, closeObs)
+      toast.success("Mantenimiento cerrado y aprobado")
+      setClosingMaintenance(null)
+      setCloseObs("")
+      await mutate()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setIsClosing(false)
+    }
+  }
+
   const getStatusBadge = (status) => {
+    const s = status?.toLowerCase()
     const variants = {
       pendiente: "warning",
       en_proceso: "info",
       completado: "success",
+      cerrado: "secondary",
+      realizado: "success",
     }
-    return <Badge variant={variants[status]}>{status}</Badge>
+    return <Badge variant={variants[s] ?? "outline"}>{status}</Badge>
   }
+
+  const canClose = (estado) =>
+    ["ADMIN", "ENCARGADO"].includes(currentUser?.rol) && estado?.toUpperCase() === "COMPLETADO"
 
   const getTechnicianName = (id) => {
     if (!technicians || !id) return "No asignado"
@@ -162,10 +191,21 @@ export function MaintenancesTable() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditClick(maintenance)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Actualizar Estado
-                      </DropdownMenuItem>
+                      {maintenance.estado?.toUpperCase() !== "CERRADO" && (
+                        <DropdownMenuItem onClick={() => handleEditClick(maintenance)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Actualizar Estado
+                        </DropdownMenuItem>
+                      )}
+                      {canClose(maintenance.estado) && (
+                        <DropdownMenuItem
+                          onClick={() => { setClosingMaintenance(maintenance); setCloseObs("") }}
+                          className="text-green-700 focus:text-green-700"
+                        >
+                          <CheckCheck className="mr-2 h-4 w-4" />
+                          Cerrar / Aprobar
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -174,6 +214,34 @@ export function MaintenancesTable() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Dialog: Cerrar / Aprobar mantenimiento */}
+      <Dialog open={!!closingMaintenance} onOpenChange={() => setClosingMaintenance(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cerrar / Aprobar Mantenimiento</DialogTitle>
+            <DialogDescription>
+              Confirma que el trabajo en la unidad <strong>{closingMaintenance?.placa ?? closingMaintenance?.unidad_id}</strong> fue revisado y está conforme. Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Observaciones del encargado (opcional)</label>
+            <Textarea
+              placeholder="Ej: Trabajo revisado y conforme. Se verificaron frenos y aceite."
+              value={closeObs}
+              onChange={(e) => setCloseObs(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClosingMaintenance(null)}>Cancelar</Button>
+            <Button onClick={handleCloseMaintenance} disabled={isClosing}>
+              {isClosing && <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />}
+              Cerrar y Aprobar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!selectedMaintenance} onOpenChange={() => setSelectedMaintenance(null)}>
         <DialogContent>
@@ -201,6 +269,7 @@ export function MaintenancesTable() {
                         <SelectItem value="pendiente">Pendiente</SelectItem>
                         <SelectItem value="en_proceso">En Proceso</SelectItem>
                         <SelectItem value="completado">Completado</SelectItem>
+                        <SelectItem value="cerrado" disabled>Cerrado (usar botón Cerrar/Aprobar)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

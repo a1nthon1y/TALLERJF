@@ -51,10 +51,15 @@ export function middleware(request) {
     return NextResponse.redirect(new URL("/dueno/dashboard", request.url));
   }
 
-  // ADMIN/ENCARGADO no pueden entrar a rutas de chofer o dueño
+  // TECNICO solo puede acceder a /tecnico/*
+  if (role === "TECNICO" && !pathname.startsWith("/tecnico/")) {
+    return NextResponse.redirect(new URL("/tecnico/dashboard", request.url));
+  }
+
+  // ADMIN/ENCARGADO no pueden entrar a rutas de chofer, dueño ni técnico
   if (
     (role === "ADMIN" || role === "ENCARGADO") &&
-    (pathname.startsWith("/chofer/") || pathname.startsWith("/dueno/"))
+    (pathname.startsWith("/chofer/") || pathname.startsWith("/dueno/") || pathname.startsWith("/tecnico/"))
   ) {
     return NextResponse.redirect(new URL("/", request.url));
   }

@@ -30,6 +30,8 @@ export function Providers({ children }) {
         router.push('/chofer/dashboard');
       } else if (user.rol === 'OWNER') {
         router.push('/dueno/dashboard');
+      } else if (user.rol === 'TECNICO') {
+        router.push('/tecnico/dashboard');
       } else {
         router.push('/');
       }
@@ -48,12 +50,22 @@ export function Providers({ children }) {
       return;
     }
 
-    // ADMIN/ENCARGADO no pueden acceder a rutas de chofer ni dueño
+    // TECNICO solo puede acceder a rutas /tecnico/*
+    if (user?.rol === 'TECNICO' && !pathname.startsWith('/tecnico/')) {
+      router.push('/tecnico/dashboard');
+      return;
+    }
+
+    // ADMIN/ENCARGADO no pueden acceder a rutas de chofer, dueño ni técnico
     if (['ADMIN', 'ENCARGADO'].includes(user?.rol) && pathname.startsWith('/chofer/')) {
       router.push('/');
       return;
     }
     if (['ADMIN', 'ENCARGADO'].includes(user?.rol) && pathname.startsWith('/dueno/')) {
+      router.push('/');
+      return;
+    }
+    if (['ADMIN', 'ENCARGADO'].includes(user?.rol) && pathname.startsWith('/tecnico/')) {
       router.push('/');
       return;
     }

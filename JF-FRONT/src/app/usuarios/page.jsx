@@ -166,6 +166,7 @@ export default function UsersPage() {
                         <SelectItem value="ENCARGADO">Encargado</SelectItem>
                         <SelectItem value="OWNER">Dueño</SelectItem>
                         <SelectItem value="CHOFER">Chofer</SelectItem>
+                        <SelectItem value="TECNICO">Técnico</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

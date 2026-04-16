@@ -26,7 +26,13 @@ const adminNavItems = [
 const choferNavItems = [
   { title: "Dashboard", href: "/chofer/dashboard", icon: BarChart3 },
   { title: "Mis Mantenimientos", href: "/chofer/mis-mantenimientos", icon: Wrench },
+  { title: "Solicitar Mantenimiento", href: "/chofer/solicitar-mantenimiento", icon: ClipboardList },
   { title: "Reportar Llegada", href: "/chofer/reportar-llegada", icon: MapPin },
+]
+
+const tecnicoNavItems = [
+  { title: "Dashboard", href: "/tecnico/dashboard", icon: BarChart3 },
+  { title: "Mis Trabajos", href: "/tecnico/mis-trabajos", icon: Wrench },
 ]
 
 const ownerNavItems = [
@@ -77,8 +83,9 @@ export function SidebarNav() {
 
   // Determinar qué items mostrar según el rol
   const navItems =
-    user.rol === 'CHOFER' ? choferNavItems :
-    user.rol === 'OWNER'  ? ownerNavItems  :
+    user.rol === 'CHOFER'  ? choferNavItems  :
+    user.rol === 'OWNER'   ? ownerNavItems   :
+    user.rol === 'TECNICO' ? tecnicoNavItems :
     adminNavItems
 
   return (
@@ -100,7 +107,7 @@ export function SidebarNav() {
               <div className="ml-3">
                 <div className="font-semibold text-lg text-sidebar-foreground">ExpresoJFTaller</div>
                 <div className="text-xs text-sidebar-foreground/70">
-                  {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : user.rol === 'OWNER' ? 'Dueño' : 'Chofer'}
+                  {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : user.rol === 'OWNER' ? 'Dueño' : user.rol === 'TECNICO' ? 'Técnico' : 'Chofer'}
                 </div>
               </div>
             )}

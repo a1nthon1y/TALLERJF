@@ -57,4 +57,28 @@ export const maintenanceService = {
       throw new Error(error.message || 'Error al asignar técnico');
     }
   },
+
+  async getMyJobs() {
+    try {
+      return await makeGetRequest('/maintenances/my-jobs');
+    } catch (error) {
+      throw new Error(error.message || 'Error al obtener trabajos asignados');
+    }
+  },
+
+  async updateMyJobStatus(maintenanceId, estado) {
+    try {
+      return await makePutRequest(`/maintenances/${maintenanceId}/my-status`, { estado });
+    } catch (error) {
+      throw new Error(error.message || 'Error al actualizar estado del trabajo');
+    }
+  },
+
+  async closeMaintenance(maintenanceId, observaciones_cierre = '') {
+    try {
+      return await makePutRequest(`/maintenances/${maintenanceId}/close`, { observaciones_cierre });
+    } catch (error) {
+      throw new Error(error.message || 'Error al cerrar el mantenimiento');
+    }
+  },
 };

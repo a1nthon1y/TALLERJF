@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { technicianService } from "@/services/technicianService"
-import { makePutRequest } from "@/utils/api"
+import { makePutRequest, makeGetRequest } from "@/utils/api"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +22,8 @@ import {
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form"
-import { PlusCircle, MoreHorizontal, Edit, Loader2, Hammer } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PlusCircle, MoreHorizontal, Edit, Loader2, Hammer, Link2 } from "lucide-react"
 import { toast } from "sonner"
 
 const formSchema = z.object({
@@ -30,6 +31,7 @@ const formSchema = z.object({
   dni: z.string().min(8, "DNI debe tener al menos 8 caracteres").max(20),
   especialidad: z.string().min(2, "Especialidad requerida"),
   activo: z.boolean().default(true),
+  usuario_id: z.string().optional(),
 })
 
 export default function TecnicosPage() {
@@ -37,11 +39,18 @@ export default function TecnicosPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isOpen, setIsOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [tecnicoUsers, setTecnicoUsers] = useState([])
 
   const { data: tecnicos = [], isLoading } = useQuery({
     queryKey: ["tecnicos"],
     queryFn: technicianService.getTechnicians.bind(technicianService),
   })
+
+  useEffect(() => {
+    makeGetRequest("/users").then((users) => {
+      setTecnicoUsers(users.filter((u) => u.rol === "TECNICO" && u.activo !== false))
+    }).catch(() => {})
+  }, [])
 
   const createMutation = useMutation({
     mutationFn: (data) => technicianService.createTechnician(data),
@@ -74,18 +83,18 @@ export default function TecnicosPage() {
 
   const form = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: { nombre: "", dni: "", especialidad: "", activo: true },
+    defaultValues: { nombre: "", dni: "", especialidad: "", activo: true, usuario_id: "" },
   })
 
   const openCreate = () => {
     setEditing(null)
-    form.reset({ nombre: "", dni: "", especialidad: "", activo: true })
+    form.reset({ nombre: "", dni: "", especialidad: "", activo: true, usuario_id: "" })
     setIsOpen(true)
   }
 
   const openEdit = (t) => {
     setEditing(t)
-    form.reset({ nombre: t.nombre, dni: t.dni, especialidad: t.especialidad, activo: t.activo })
+    form.reset({ nombre: t.nombre, dni: t.dni, especialidad: t.especialidad, activo: t.activo, usuario_id: t.usuario_id ? String(t.usuario_id) : "" })
     setIsOpen(true)
   }
 
@@ -96,10 +105,17 @@ export default function TecnicosPage() {
   }
 
   const onSubmit = (values) => {
+    const payload = {
+      nombre: values.nombre,
+      dni: values.dni,
+      especialidad: values.especialidad,
+      activo: values.activo,
+      usuario_id: values.usuario_id ? parseInt(values.usuario_id) : null,
+    }
     if (editing) {
-      updateMutation.mutate({ id: editing.id, nombre: values.nombre, dni: values.dni, especialidad: values.especialidad })
+      updateMutation.mutate({ id: editing.id, ...payload })
     } else {
-      createMutation.mutate(values)
+      createMutation.mutate(payload)
     }
   }
 
@@ -146,6 +162,7 @@ export default function TecnicosPage() {
                 <TableHead>Nombre</TableHead>
                 <TableHead>DNI</TableHead>
                 <TableHead>Especialidad</TableHead>
+                <TableHead>Cuenta</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead className="w-[80px]">Acciones</TableHead>
               </TableRow>
@@ -153,7 +170,7 @@ export default function TecnicosPage() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
                     No se encontraron técnicos
                   </TableCell>
                 </TableRow>
@@ -162,6 +179,16 @@ export default function TecnicosPage() {
                   <TableCell className="font-medium">{t.nombre}</TableCell>
                   <TableCell className="font-mono text-sm">{t.dni}</TableCell>
                   <TableCell>{t.especialidad}</TableCell>
+                  <TableCell>
+                    {t.usuario_id ? (
+                      <Badge variant="outline" className="border-blue-400 text-blue-600 gap-1">
+                        <Link2 className="h-3 w-3" />
+                        {tecnicoUsers.find((u) => u.id === t.usuario_id)?.username || `#${t.usuario_id}`}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Sin cuenta</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Switch
@@ -224,6 +251,32 @@ export default function TecnicosPage() {
                   <FormLabel>Especialidad</FormLabel>
                   <FormControl><Input placeholder="Ej. Motor y transmisión" {...field} /></FormControl>
                   <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="usuario_id" render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-1.5">
+                    <Link2 className="h-3.5 w-3.5" /> Cuenta de usuario (opcional)
+                  </FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sin cuenta de usuario" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">Sin cuenta de usuario</SelectItem>
+                      {tecnicoUsers.map((u) => (
+                        <SelectItem key={u.id} value={String(u.id)}>
+                          {u.nombre} ({u.username || u.correo})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                  <p className="text-xs text-muted-foreground">
+                    Vincula este técnico a una cuenta con rol Técnico para que pueda iniciar sesión y ver sus trabajos
+                  </p>
                 </FormItem>
               )} />
               <DialogFooter>

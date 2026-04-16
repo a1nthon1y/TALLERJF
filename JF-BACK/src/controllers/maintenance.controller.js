@@ -126,10 +126,113 @@ const getMaintenancesByUnit = async (req, res) => {
   }
 };
 
+// Técnico ve sus trabajos asignados (solo los de su registro en tecnicos)
+const getMyJobs = async (req, res) => {
+  try {
+    const tecnicoResult = await pool.query(
+      "SELECT id FROM tecnicos WHERE usuario_id = $1",
+      [req.user.id]
+    );
+    if (tecnicoResult.rows.length === 0) {
+      return res.status(404).json({ message: "No tienes un registro de técnico asociado a tu usuario" });
+    }
+    const tecnicoId = tecnicoResult.rows[0].id;
+
+    const result = await pool.query(
+      `SELECT m.*, u.placa, u.modelo, u.kilometraje AS kilometraje_unidad,
+              c.nombre AS chofer_nombre
+       FROM mantenimientos m
+       JOIN unidades u ON m.unidad_id = u.id
+       LEFT JOIN choferes ch ON u.id = ch.unidad_id
+       LEFT JOIN usuarios c ON ch.usuario_id = c.id
+       WHERE m.tecnico_id = $1
+       ORDER BY m.fecha_solicitud DESC`,
+      [tecnicoId]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Técnico actualiza el estado de su propio trabajo (solo EN_PROCESO o COMPLETADO)
+const updateMyJobStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body;
+    const estadoNorm = estado?.toUpperCase();
+
+    if (!["EN_PROCESO", "COMPLETADO"].includes(estadoNorm)) {
+      return res.status(400).json({ message: "Solo puedes cambiar el estado a EN_PROCESO o COMPLETADO" });
+    }
+
+    // Verificar que el mantenimiento pertenece al técnico logueado
+    const tecnicoResult = await pool.query(
+      "SELECT id FROM tecnicos WHERE usuario_id = $1",
+      [req.user.id]
+    );
+    if (tecnicoResult.rows.length === 0) {
+      return res.status(403).json({ message: "No tienes un registro de técnico asociado" });
+    }
+    const tecnicoId = tecnicoResult.rows[0].id;
+
+    const mantResult = await pool.query("SELECT * FROM mantenimientos WHERE id = $1", [id]);
+    if (mantResult.rows.length === 0) {
+      return res.status(404).json({ message: "Mantenimiento no encontrado" });
+    }
+    if (mantResult.rows[0].tecnico_id !== tecnicoId) {
+      return res.status(403).json({ message: "Este mantenimiento no está asignado a ti" });
+    }
+    if (mantResult.rows[0].estado === "CERRADO") {
+      return res.status(400).json({ message: "No puedes modificar un mantenimiento ya cerrado" });
+    }
+
+    const result = await pool.query(
+      "UPDATE mantenimientos SET estado = $1, fecha_realizacion = CASE WHEN $1 = 'COMPLETADO' THEN NOW() ELSE fecha_realizacion END WHERE id = $2 RETURNING *",
+      [estadoNorm, id]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Encargado/Admin cierra/aprueba el mantenimiento (COMPLETADO → CERRADO)
+const closeMaintenance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { observaciones_cierre } = req.body;
+
+    const mantResult = await pool.query("SELECT * FROM mantenimientos WHERE id = $1", [id]);
+    if (mantResult.rows.length === 0) {
+      return res.status(404).json({ message: "Mantenimiento no encontrado" });
+    }
+    if (mantResult.rows[0].estado !== "COMPLETADO") {
+      return res.status(400).json({ message: "Solo se puede cerrar un mantenimiento en estado COMPLETADO" });
+    }
+
+    const obsActual = mantResult.rows[0].observaciones || "";
+    const obsNueva = observaciones_cierre
+      ? `${obsActual}\n\n--- CIERRE DEL ENCARGADO ---\n${observaciones_cierre}`
+      : obsActual;
+
+    const result = await pool.query(
+      "UPDATE mantenimientos SET estado = 'CERRADO', observaciones = $1 WHERE id = $2 RETURNING *",
+      [obsNueva, id]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createMaintenance,
   getAllMaintenances,
   getMaintenanceById,
   updateMaintenanceStatus,
   getMaintenancesByUnit,
+  getMyJobs,
+  updateMyJobStatus,
+  closeMaintenance,
 };
