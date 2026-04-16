@@ -19,10 +19,10 @@ const getPartsStatus = async (req, res) => {
          COALESCE(epu.ultimo_mantenimiento_km, 0) AS ultimo_mantenimiento_km,
          COALESCE(epu.ultimo_mantenimiento_fecha, NULL) AS ultimo_mantenimiento_fecha,
          u.kilometraje AS km_actual,
-         (u.kilometraje - COALESCE(epu.ultimo_mantenimiento_km, 0)) AS km_recorridos,
+         GREATEST(0, u.kilometraje - COALESCE(epu.ultimo_mantenimiento_km, 0)) AS km_recorridos,
          ROUND(
            LEAST(
-             ((u.kilometraje - COALESCE(epu.ultimo_mantenimiento_km, 0))::float / cp.umbral_km * 100),
+             (GREATEST(0, u.kilometraje - COALESCE(epu.ultimo_mantenimiento_km, 0))::float / cp.umbral_km * 100),
              100
            )::numeric,
            1

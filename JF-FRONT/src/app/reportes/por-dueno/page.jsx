@@ -1,9 +1,14 @@
+import dynamic from "next/dynamic"
 import { OwnerReportsTable } from "@/components/reports/owner-reports-table"
 import { OwnerReportsFilters } from "@/components/reports/owner-reports-filters"
-import { OwnerReportsSummary } from "@/components/reports/owner-reports-summary"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
+const OwnerReportsSummary = dynamic(
+  () => import("@/components/reports/owner-reports-summary").then(m => ({ default: m.OwnerReportsSummary })),
+  { loading: () => <Skeleton className="h-40 w-full mt-4" /> }
+)
 
 export default function OwnerReportsPage() {
   return (

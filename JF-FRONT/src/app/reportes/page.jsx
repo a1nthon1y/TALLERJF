@@ -1,8 +1,13 @@
+import dynamic from "next/dynamic"
 import { ReportsFilters } from "@/components/reports/reports-filters"
 import { ReportsTable } from "@/components/reports/reports-table"
 import { ReportsSummary } from "@/components/reports/reports-summary"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { OwnerReportsSummary } from "@/components/reports/owner-reports-summary"
+import { Skeleton } from "@/components/ui/skeleton"
+const OwnerReportsSummary = dynamic(
+  () => import("@/components/reports/owner-reports-summary").then(m => ({ default: m.OwnerReportsSummary })),
+  { loading: () => <Skeleton className="h-40 w-full mt-4" /> }
+)
 
 export default function ReportsPage() {
   return (

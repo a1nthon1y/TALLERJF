@@ -1,13 +1,24 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Overview } from "@/components/dashboard/overview"
+import { Skeleton } from "@/components/ui/skeleton"
+const Overview = dynamic(() => import("@/components/dashboard/overview").then(m => ({ default: m.Overview })), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[350px] w-full" />,
+})
 import { RecentMaintenances } from "@/components/dashboard/recent-maintenances"
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
-import { ActivityFeed } from "@/components/dashboard/activity-feed"
-import { MaintenanceCalendar } from "@/components/dashboard/maintenance-calendar"
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
 import { MaintenancePartAlerts } from "@/components/dashboard/maintenance-part-alerts"
+const ActivityFeed = dynamic(() => import("@/components/dashboard/activity-feed").then(m => ({ default: m.ActivityFeed })), {
+  ssr: false,
+  loading: () => <Skeleton className="h-64 w-full" />,
+})
+const MaintenanceCalendar = dynamic(() => import("@/components/dashboard/maintenance-calendar").then(m => ({ default: m.MaintenanceCalendar })), {
+  ssr: false,
+  loading: () => <Skeleton className="h-64 w-full" />,
+})
 import { CalendarDays, Clock, Wrench } from "lucide-react"
 import { formatDate } from "@/utils/formatting"
 import { useEffect, useState } from "react"

@@ -154,7 +154,7 @@ const getMyJobs = async (req, res) => {
               c.nombre AS chofer_nombre
        FROM mantenimientos m
        JOIN unidades u ON m.unidad_id = u.id
-       LEFT JOIN choferes ch ON u.id = ch.unidad_id
+       LEFT JOIN choferes ch ON ch.id = u.chofer_id
        LEFT JOIN usuarios c ON ch.usuario_id = c.id
        WHERE m.tecnico_id = $1
        ORDER BY m.fecha_solicitud DESC`,
@@ -199,8 +199,8 @@ const updateMyJobStatus = async (req, res) => {
     }
 
     const result = await pool.query(
-      "UPDATE mantenimientos SET estado = $1, fecha_realizacion = CASE WHEN $1 = 'COMPLETADO' THEN NOW() ELSE fecha_realizacion END WHERE id = $2 RETURNING *",
-      [estadoNorm, id]
+      "UPDATE mantenimientos SET estado = $1, fecha_realizacion = CASE WHEN $2 = 'COMPLETADO' THEN NOW() ELSE fecha_realizacion END WHERE id = $3 RETURNING *",
+      [estadoNorm, estadoNorm, id]
     );
     res.json(result.rows[0]);
   } catch (error) {
