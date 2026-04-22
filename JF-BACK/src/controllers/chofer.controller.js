@@ -161,7 +161,7 @@ const deleteDriver = async (req, res) => {
 
 
 // ===============================================================
-//  🔍 Obtener la unidad asignada al chofer autenticado
+//  🔍 Obtener las unidades asignadas al chofer autenticado
 // ===============================================================
 const getMiUnidad = async (req, res) => {
   try {
@@ -175,15 +175,15 @@ const getMiUnidad = async (req, res) => {
     }
     const chofer_id = choferQuery.rows[0].id;
     const unidadQuery = await pool.query(
-      "SELECT id, placa, modelo, año, tipo, kilometraje FROM unidades WHERE chofer_id = $1",
+      "SELECT id, placa, modelo, año, tipo, kilometraje FROM unidades WHERE chofer_id = $1 ORDER BY id ASC",
       [chofer_id]
     );
     if (unidadQuery.rows.length === 0) {
       return res.status(404).json({ message: "No tienes una unidad asignada actualmente" });
     }
-    res.json({ unidad: unidadQuery.rows[0] });
+    res.json({ unidades: unidadQuery.rows });
   } catch (error) {
-    console.error("Error al obtener unidad del chofer:", error);
+    console.error("Error al obtener unidades del chofer:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 };

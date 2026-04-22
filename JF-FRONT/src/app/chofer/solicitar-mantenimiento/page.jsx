@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getMiUnidad } from "@/services/choferesService";
+import { useMiUnidad } from "@/hooks/useMiUnidad";
 import { maintenanceService } from "@/services/maintenanceService";
 import { authService } from "@/services/authService";
 import { Card } from "@/components/ui/card";
@@ -10,17 +10,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AlertCircle, Bus, ClipboardList, Plus, Trash2, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SolicitarMantenimientoPage() {
   const router = useRouter();
-  const [unit, setUnit] = useState(null);
+  const { unidades, unidad: unit, setUnidad, loading, error } = useMiUnidad();
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(null);
 
   const [procedencia, setProcedencia] = useState("");
   const [kilometraje, setKilometraje] = useState("");
@@ -28,17 +33,14 @@ export default function SolicitarMantenimientoPage() {
   const [observaciones, setObservaciones] = useState("");
 
   useEffect(() => {
-    const currentUser = authService.getUser();
-    setUser(currentUser);
-
-    getMiUnidad()
-      .then(({ unidad }) => {
-        setUnit(unidad);
-        setKilometraje(unidad.kilometraje ?? "");
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    setUser(authService.getUser());
   }, []);
+
+  useEffect(() => {
+    if (unit) {
+      setKilometraje(unit.kilometraje ?? "");
+    }
+  }, [unit]);
 
   const addRequerimiento = () => setRequerimientos((prev) => [...prev, ""]);
 
@@ -99,7 +101,7 @@ export default function SolicitarMantenimientoPage() {
     );
   }
 
-  if (error || !unit) {
+  if (!loading && (error || !unit)) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-destructive p-8 gap-3">
         <AlertCircle className="h-8 w-8 text-destructive" />
@@ -157,9 +159,31 @@ export default function SolicitarMantenimientoPage() {
 
       {/* Info de unidad y piloto */}
       <Card className="p-4 bg-muted/40">
-        <div className="flex items-center gap-3 mb-3">
-          <Bus className="h-5 w-5 text-primary" />
-          <span className="font-semibold">Datos de la unidad</span>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-3">
+            <Bus className="h-5 w-5 text-primary" />
+            <span className="font-semibold">Datos de la unidad</span>
+          </div>
+          {unidades.length > 1 && (
+            <Select
+              value={String(unit.id)}
+              onValueChange={(val) => {
+                const u = unidades.find((u) => String(u.id) === val);
+                if (u) setUnidad(u);
+              }}
+            >
+              <SelectTrigger className="w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {unidades.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.placa} — {u.modelo}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
           <div>

@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { maintenanceService } from "@/services/maintenanceService";
-import { getMiUnidad } from "@/services/choferesService";
+import { useMiUnidad } from "@/hooks/useMiUnidad";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Wrench, Package } from "lucide-react";
 
@@ -16,40 +23,63 @@ const estadoBadge = (estado) => {
 };
 
 export default function MisMantenimientosPage() {
+  const { unidades, unidad, setUnidad, loading: loadingUnidad, error: unidadError } = useMiUnidad();
   const [mantenimientos, setMantenimientos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingMant, setLoadingMant] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const { unidad } = await getMiUnidad();
-        const data = await maintenanceService.getMaintenancesByUnit(unidad.id);
-        setMantenimientos(Array.isArray(data) ? data : []);
-      } catch (e) {
-        setError(e.message || "Error al cargar mantenimientos");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+    if (!unidad) return;
+    setLoadingMant(true);
+    maintenanceService
+      .getMaintenancesByUnit(unidad.id)
+      .then((data) => setMantenimientos(Array.isArray(data) ? data : []))
+      .catch((e) => setError(e.message || "Error al cargar mantenimientos"))
+      .finally(() => setLoadingMant(false));
+  }, [unidad]);
+
+  const loading = loadingUnidad || loadingMant;
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Wrench className="h-6 w-6" /> Mis Mantenimientos
-        </h1>
-        <p className="text-muted-foreground">Historial de mantenimientos de tu unidad asignada</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Wrench className="h-6 w-6" /> Mis Mantenimientos
+          </h1>
+          <p className="text-muted-foreground">Historial de mantenimientos de tu unidad asignada</p>
+        </div>
+        {unidades.length > 1 && unidad && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">Unidad:</span>
+            <Select
+              value={String(unidad.id)}
+              onValueChange={(val) => {
+                const u = unidades.find((u) => String(u.id) === val);
+                if (u) setUnidad(u);
+              }}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {unidades.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.placa} — {u.modelo}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
           <Loader2 className="h-5 w-5 animate-spin" /> Cargando...
         </div>
-      ) : error ? (
-        <Card className="p-6 text-destructive">{error}</Card>
+      ) : unidadError || error ? (
+        <Card className="p-6 text-destructive">{unidadError || error}</Card>
       ) : (
         <div className="rounded-md border">
           <Table>

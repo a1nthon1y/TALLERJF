@@ -7,7 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { registrarLlegada, getMiUnidad } from "@/services/choferesService";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useMiUnidad } from "@/hooks/useMiUnidad";
+import { registrarLlegada } from "@/services/choferesService";
 import { maintenanceService } from "@/services/maintenanceService";
 import { getPartsStatus } from "@/services/unitsService";
 
@@ -17,9 +25,7 @@ const STEP_CONFIRM = "confirm";
 const STEP_DONE = "done";
 
 export default function ReportarLlegadaPage() {
-  const [unidad, setUnidad] = useState(null);
-  const [unidadError, setUnidadError] = useState(null);
-  const [loadingUnidad, setLoadingUnidad] = useState(true);
+  const { unidades, unidad, setUnidad, loading: loadingUnidad, error: unidadError } = useMiUnidad();
   const [partsStatus, setPartsStatus] = useState([]);
 
   // Formulario
@@ -40,21 +46,14 @@ export default function ReportarLlegadaPage() {
   const [resultado, setResultado] = useState(null);
 
   useEffect(() => {
-    const fetchUnidad = async () => {
-      try {
-        const data = await getMiUnidad();
-        setUnidad(data.unidad);
-        setKilometraje(String(data.unidad?.kilometraje || 0));
-        const parts = await getPartsStatus(data.unidad.id).catch(() => []);
-        setPartsStatus(Array.isArray(parts) ? parts : []);
-      } catch (error) {
-        setUnidadError(error.message || "No tienes una unidad asignada");
-      } finally {
-        setLoadingUnidad(false);
-      }
-    };
-    fetchUnidad();
-  }, []);
+    if (!unidad) return;
+    setKilometraje(String(unidad.kilometraje || 0));
+    setStep(STEP_FORM);
+    setResultado(null);
+    getPartsStatus(unidad.id)
+      .then((parts) => setPartsStatus(Array.isArray(parts) ? parts : []))
+      .catch(() => setPartsStatus([]));
+  }, [unidad]);
 
   // Calcular qué alertas dispararía el kilometraje ingresado (preview)
   function calcAlertasPreview(kmNuevo) {
@@ -141,6 +140,7 @@ export default function ReportarLlegadaPage() {
     setObsMant("");
     setStep(STEP_FORM);
     setResultado(null);
+    setAlertasPreview([]);
   };
 
   // ─── LOADING ────────────────────────────────────────────────────────────────
@@ -250,16 +250,43 @@ export default function ReportarLlegadaPage() {
       {/* Unidad */}
       <div className="bg-card p-4 rounded-xl border shadow-sm">
         <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Tu Unidad</p>
-        <div className="flex items-center gap-3">
-          <Bus className="h-5 w-5 text-primary" />
-          <div>
-            <span className="font-bold text-lg">{unidad.placa}</span>
-            <span className="text-muted-foreground ml-2 text-sm">{unidad.modelo} {unidad.año}</span>
+        {unidades.length > 1 ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Bus className="h-5 w-5 text-primary shrink-0" />
+            <Select
+              value={String(unidad.id)}
+              onValueChange={(val) => {
+                const u = unidades.find((u) => String(u.id) === val);
+                if (u) setUnidad(u);
+              }}
+            >
+              <SelectTrigger className="w-full sm:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {unidades.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.placa} — {u.modelo} {u.año}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm font-semibold text-muted-foreground ml-auto">
+              {(unidad.kilometraje || 0).toLocaleString()} km en sistema
+            </span>
           </div>
-          <span className="ml-auto text-sm font-semibold text-muted-foreground">
-            {(unidad.kilometraje || 0).toLocaleString()} km en sistema
-          </span>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <Bus className="h-5 w-5 text-primary" />
+            <div>
+              <span className="font-bold text-lg">{unidad.placa}</span>
+              <span className="text-muted-foreground ml-2 text-sm">{unidad.modelo} {unidad.año}</span>
+            </div>
+            <span className="ml-auto text-sm font-semibold text-muted-foreground">
+              {(unidad.kilometraje || 0).toLocaleString()} km en sistema
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Partes en estado crítico */}

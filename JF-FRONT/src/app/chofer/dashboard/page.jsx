@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getMiUnidad } from "@/services/choferesService";
+import { useMiUnidad } from "@/hooks/useMiUnidad";
 import { maintenanceService } from "@/services/maintenanceService";
 import { getPartsStatus } from "@/services/unitsService";
 import { Card } from "@/components/ui/card";
@@ -14,7 +14,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { AlertCircle, Bus, Wrench, Gauge, CheckCircle2, AlertTriangle } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AlertCircle, Bus, Loader2, Gauge, CheckCircle2, AlertTriangle } from "lucide-react";
 
 const estadoBadge = (estado) => {
   const e = estado?.toLowerCase();
@@ -26,39 +33,32 @@ const estadoBadge = (estado) => {
 };
 
 export default function DriverDashboard() {
-  const [unit, setUnit] = useState(null);
+  const { unidades, unidad: selectedUnidad, setUnidad, loading, error } = useMiUnidad();
   const [parts, setParts] = useState([]);
   const [maintenances, setMaintenances] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [partialErrors, setPartialErrors] = useState([]);
+  const [dataLoading, setDataLoading] = useState(false);
 
   useEffect(() => {
-    async function loadDriverData() {
-      try {
-        const { unidad } = await getMiUnidad();
-        setUnit(unidad);
+    if (!selectedUnidad) return;
+    async function loadUnitData() {
+      setDataLoading(true);
+      const [partsData, maintenanceData] = await Promise.allSettled([
+        getPartsStatus(selectedUnidad.id),
+        maintenanceService.getMaintenancesByUnit(selectedUnidad.id),
+      ]);
 
-        const [partsData, maintenanceData] = await Promise.allSettled([
-          getPartsStatus(unidad.id),
-          maintenanceService.getMaintenancesByUnit(unidad.id),
-        ]);
+      const errs = [];
+      if (partsData.status === "rejected") errs.push("No se pudo cargar el estado de componentes.");
+      if (maintenanceData.status === "rejected") errs.push("No se pudo cargar el historial de mantenimientos.");
+      setPartialErrors(errs);
 
-        const errs = [];
-        if (partsData.status === "rejected") errs.push("No se pudo cargar el estado de componentes.");
-        if (maintenanceData.status === "rejected") errs.push("No se pudo cargar el historial de mantenimientos.");
-        setPartialErrors(errs);
-
-        setParts(partsData.status === "fulfilled" && Array.isArray(partsData.value) ? partsData.value : []);
-        setMaintenances(maintenanceData.status === "fulfilled" && Array.isArray(maintenanceData.value) ? maintenanceData.value : []);
-      } catch (err) {
-        setError(err.message || "No se pudo cargar la información del chofer");
-      } finally {
-        setLoading(false);
-      }
+      setParts(partsData.status === "fulfilled" && Array.isArray(partsData.value) ? partsData.value : []);
+      setMaintenances(maintenanceData.status === "fulfilled" && Array.isArray(maintenanceData.value) ? maintenanceData.value : []);
+      setDataLoading(false);
     }
-    loadDriverData();
-  }, []);
+    loadUnitData();
+  }, [selectedUnidad]);
 
   if (loading) {
     return (
@@ -68,7 +68,7 @@ export default function DriverDashboard() {
     );
   }
 
-  if (error || !unit) {
+  if (error || !selectedUnidad) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-destructive p-8 gap-3">
         <AlertCircle className="h-8 w-8 text-destructive" />
@@ -79,10 +79,36 @@ export default function DriverDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
-        <p className="text-muted-foreground">Información de tu unidad asignada</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
+          <p className="text-muted-foreground">Información de tu unidad asignada</p>
+        </div>
+        {unidades.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">Unidad activa:</span>
+            <Select
+              value={String(selectedUnidad.id)}
+              onValueChange={(val) => {
+                const u = unidades.find((u) => String(u.id) === val);
+                if (u) setUnidad(u);
+              }}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {unidades.map((u) => (
+                  <SelectItem key={u.id} value={String(u.id)}>
+                    {u.placa} — {u.modelo}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
+
       {partialErrors.length > 0 && (
         <div className="rounded-md border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-700 p-3 flex items-start gap-2 text-sm text-yellow-800 dark:text-yellow-400">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
@@ -98,10 +124,10 @@ export default function DriverDashboard() {
         </div>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {[
-            { label: "Placa", value: unit.placa },
-            { label: "Modelo", value: unit.modelo },
-            { label: "Año", value: unit.año },
-            { label: "Kilometraje", value: `${unit.kilometraje?.toLocaleString() ?? "—"} km` },
+            { label: "Placa", value: selectedUnidad.placa },
+            { label: "Modelo", value: selectedUnidad.modelo },
+            { label: "Año", value: selectedUnidad.año },
+            { label: "Kilometraje", value: `${selectedUnidad.kilometraje?.toLocaleString() ?? "—"} km` },
           ].map(({ label, value }) => (
             <div key={label}>
               <p className="text-sm text-muted-foreground">{label}</p>
@@ -116,9 +142,17 @@ export default function DriverDashboard() {
         <div className="flex items-center gap-3 mb-4">
           <Gauge className="h-6 w-6 text-primary" />
           <h2 className="text-xl font-bold">Estado de Componentes</h2>
-          <span className="text-xs text-muted-foreground ml-auto">km recorridos desde último mantenimiento</span>
+          {dataLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-auto" />
+          ) : (
+            <span className="text-xs text-muted-foreground ml-auto">km recorridos desde último mantenimiento</span>
+          )}
         </div>
-        {parts.length === 0 ? (
+        {dataLoading ? (
+          <div className="flex items-center justify-center h-16 text-muted-foreground gap-2 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Cargando componentes...
+          </div>
+        ) : parts.length === 0 ? (
           <p className="text-sm text-muted-foreground">Sin reglas predictivas configuradas.</p>
         ) : (
           <div className="space-y-4">
@@ -163,7 +197,11 @@ export default function DriverDashboard() {
       {/* Historial de mantenimientos */}
       <Card className="p-6">
         <h2 className="text-xl font-bold mb-4">Historial de Mantenimientos</h2>
-        {maintenances.length === 0 ? (
+        {dataLoading ? (
+          <div className="flex items-center justify-center h-16 text-muted-foreground gap-2 text-sm">
+            <Loader2 className="h-4 w-4 animate-spin" /> Cargando historial...
+          </div>
+        ) : maintenances.length === 0 ? (
           <p className="text-muted-foreground text-sm">No hay mantenimientos registrados.</p>
         ) : (
           <div className="rounded-md border">
