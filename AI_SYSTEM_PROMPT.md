@@ -8,54 +8,73 @@ Tu objetivo principal al interactuar con el usuario es mantener la rigidez de es
 
 ## 🏗️ ARQUITECTURA DEL SISTEMA Y STACK TECNOLÓGICO
 
-1. **Frontend (`/JF-FRONT`)**: 
+1. **Frontend (`/JF-FRONT`)**:
    - Framework: **Next.js 15 (App Router)**
    - UI/Estilos: **Tailwind CSS + Shadcn UI** + **React Hook Form (con Zod para validaciones estandarizadas)**.
-   - Estado/Data-fetching: Llamadas manejadas por servicios modulares en `/src/services` vía Axios interceptors o utilidades wrapper.
+   - Estado/Data-fetching: Servicios modulares en `/src/services`. Hooks personalizados en `/src/hooks`.
+   - Autenticación cliente: `authService.js` guarda token y user en `localStorage`. El middleware de Next.js (`middleware.js`) valida cookies auxiliares (`auth_token`, `auth_role`) para proteger rutas en el servidor.
+   - Proveedores globales: `Providers.jsx` gestiona auth, tema y sidebar. **Cada rama del `useEffect` de Providers debe llamar `setIsLoading(false)` antes de retornar** para evitar que el spinner quede congelado.
 
 2. **Backend (`/JF-BACK`)**:
    - Framework: **Node.js + Express.js**
-   - Base de Datos: **PostgreSQL (Neon Cloud)** usando la librería `pg` nativa (sin ORM de momento, consultas SQL crudas enfocadas en alto rendimiento).
-   - Autenticación y Autorización: **JWT**. Accesos protegidos por middleware de base (`auth.middleware.js`) y por roles (`role.middleware.js`).
+   - Base de Datos: **PostgreSQL (Neon Cloud)** usando la librería `pg` nativa (sin ORM, consultas SQL parametrizadas).
+   - Autenticación y Autorización: **JWT**. Accesos protegidos por `auth.middleware.js` y `role.middleware.js`.
 
 ---
 
 ## ⚙️ REGLAS DE NEGOCIO Y WORKFLOW PRINCIPAL
 
 ### 1. Actores del Sistema (RBAC)
-- **CHOFER (`CHOFER`)**: Solo puede interactuar con **su** unidad asignada. Reporta kilometrajes a la llegada e incidencias menores para dar aviso.
-- **ENCARGADO / ADMIN (`ENCARGADO`, `ADMIN`)**: Tiene control total. Puede gestionar técnicos, añadir/quitar piezas al catálogo predictivo, despachar consumibles, vincular a choferes con unidades y cerrar "tickets" de mantenimiento confirmando los cambios físicos.
-- **TÉCNICO / MECÁNICO**: No ingresa al sistema directamente (por ahora). Existe como entidad (`tecnico_id`) para que el Encargado pueda asignarle intervenciones y medir su productividad/gasto.
+
+| Rol | Rutas frontend | Descripción |
+|---|---|---|
+| `CHOFER` | `/chofer/*` | Ve y opera **sus** unidades asignadas. |
+| `OWNER` (Dueño) | `/dueno/*` | Visibilidad de flota: unidades, mantenimientos y costos. Sin edición directa. |
+| `TECNICO` | `/tecnico/*` | Ve sus trabajos asignados, marca avances y cierra órdenes de trabajo. |
+| `ENCARGADO` / `ADMIN` | `/` y rutas de gestión | Control total: técnicos, partes, choferes, unidades, mantenimientos. |
+
+> **Nota CHOFER**: Un chofer **puede tener múltiples unidades asignadas** (`unidades.chofer_id`). El endpoint `GET /api/choferes/mi-unidad` devuelve `{ unidades: [...] }` (array). El hook `useMiUnidad` (en `/src/hooks/useMiUnidad.js`) gestiona la lista y la unidad activa seleccionada. Todas las pantallas del chofer usan este hook y muestran un `<Select>` para cambiar de unidad cuando hay más de una.
 
 ### 2. Flujo Automático Predictivo (Core Engine)
 El sistema abandona el mantenimiento correctivo reactivo a favor de un **motor de reglas de kilometraje**:
-1. **Configuración**: El encargado define en `configuracion_partes` que el `Cambio de Aceite` toca cada `5,000 km` y las `Balatas` cada `10,000 km`.
-2. **Reporte de Llegada**: El chofer, al arribar de una ruta (ej. desde Lima a Hyo), utiliza `/api/choferes/llegada` para declarar el kilometraje del tablero del camión.
-3. **Disparador Matemático**: El backend toma el `kilometraje_actual` devuelto y lo resta del `ultimo_mantenimiento_km` en la tabla intermedia `estado_partes_unidad`. Si esa diferencia supera el umbral configurado por el administrador, se crea silenciosamente una **Alerta Preventiva Urgente** (`alertas_mantenimiento`).
-4. **Cierre de Ciclo**: Cuando el camión entra a taller y el Encargado marca el Mantenimiento como `"COMPLETADO"`, el frontend dispara un Modal de Cierre donde exige indicar al **Técnico responsable** y seleccionar mediante casillas (checkboxes) qué piezas fueron cambiadas. 
-5. **Reinicio de Vida Útil**: El backend hace un `UPSERT` (On Conflict UPDATE) sobre `estado_partes_unidad`, reiniciando el `ultimo_mantenimiento_km` al valor actual del odómetro, apagando automáticamente las alertas asociadas para que los siguientes 5,000 km de viajes estén limpios de penalizaciones.
+1. **Configuración**: El encargado define en `configuracion_partes` que el `Cambio de Aceite` toca cada `5,000 km` y las `Balatas` cada `10,000 km` (configurable por unidad).
+2. **Reporte de Llegada**: El chofer, al arribar de una ruta, usa `/api/choferes/llegada` para declarar el kilometraje del tacómetro. El kilometraje **no puede ser menor** al valor ya registrado en la unidad.
+3. **Disparador Matemático**: El backend resta `kilometraje_actual` menos `ultimo_mantenimiento_km` de `estado_partes_unidad`. Si supera el umbral, crea una **Alerta Preventiva** en `alertas_mantenimiento`.
+4. **Cierre de Ciclo**: El Encargado marca el mantenimiento como `COMPLETADO` → el frontend muestra un Modal de Cierre donde se indica el **Técnico responsable** y se seleccionan (checkboxes) las piezas cambiadas.
+5. **Reinicio de Vida Útil**: El backend hace `UPSERT` en `estado_partes_unidad`, reiniciando `ultimo_mantenimiento_km` al odómetro actual y apagando las alertas asociadas.
+
+### 3. Flujo del Chofer (pantallas)
+- **Dashboard** (`/chofer/dashboard`): Estado de componentes de la unidad con banner de "listo para viaje" o alertas críticas. Historial reciente de mantenimientos.
+- **Llegada al Taller** (`/chofer/reportar-llegada`): Ingresa kilometraje del tacómetro y ruta/origen. Puede adjuntar opcionalmente una solicitud de mantenimiento correctivo en el mismo paso. **Este es el único lugar donde se actualiza el odómetro de la unidad.**
+- **Solicitar Mantenimiento** (`/chofer/solicitar-mantenimiento`): Registra una solicitud correctiva con procedencia y requerimientos. **No pide kilometraje** — usa automáticamente el valor almacenado en la unidad (se muestra como dato informativo, no editable).
+- **Mis Mantenimientos** (`/chofer/mis-mantenimientos`): Historial expandible con técnico asignado, materiales usados (nombre + cantidad) y observaciones.
 
 ---
 
 ## 💾 MODELO DE DATOS PRINCIPAL (PostgreSQL)
 
 - `usuarios`: Autenticación y roles.
-- `choferes` / `duenos` / `tecnicos`: Identidades de personal atadas a usuarios (o independientes en el caso del mecánico).
-- `unidades`: Tienen `placa`, `modelo`, un `chofer_id` asignado y el estado/distancia (`kilometraje` actual).
-- `mantenimientos`: Cada registro de reparación (preventiva o correctiva). Contiene el `kilometraje_actual` en el que llegó el vehículo y el `tecnico_id`.
-- `detalles_mantenimiento`: Materiales, costos y consumibles quemados en el *Mantenimiento X*.
-- `reportes_llegada`: Bitácora histórica inmutable de lo que declaró el chofer (ruta, incidencias de texto y km) para respaldar la actualización de la tabla unitaria de `unidades`.
-- `configuracion_partes`: El catálogo maestro de piezas preventivas con sus umbrales variables (`umbral_km`).
-- `estado_partes_unidad`: Relación NxN entre la Configuración y la Unidad, registrando cuándo y a qué kilometraje se le reemplazó por última vez esa pieza a ese camión.
+- `choferes` / `duenos` / `tecnicos`: Identidades de personal atadas a usuarios.
+- `unidades`: `placa`, `modelo`, `año`, `tipo`, `kilometraje` actual, `chofer_id` (un chofer puede tener N unidades).
+- `mantenimientos`: Registro de reparación (preventiva o correctiva). Contiene `kilometraje_actual`, `tecnico_id`, `estado` (`PENDIENTE`, `EN_PROCESO`, `COMPLETADO`).
+- `detalles_mantenimiento`: Materiales, cantidades y costos usados en cada mantenimiento. El endpoint de historial expone `materiales_detalle` como JSON (`nombre` + `cantidad`) **sin exponer costos al chofer**.
+- `reportes_llegada`: Bitácora histórica inmutable (ruta, km, comentarios) por cada llegada declarada por el chofer.
+- `configuracion_partes`: Catálogo maestro de piezas preventivas con `umbral_km` configurable.
+- `estado_partes_unidad`: Relación NxN entre Configuración y Unidad. Registra `ultimo_mantenimiento_km` y `porcentaje` de desgaste calculado.
+- `alertas_mantenimiento`: Alertas generadas automáticamente cuando el recorrido supera el umbral de una parte.
 
 ---
 
 ## 🚀 INSTRUCCIONES PARA EL PRÓXIMO AGENTE (O LLM)
 
-1. **Lee Siempre el Modelo Relacional**: Antes de proponer nuevas características (Inventario Avanzado, Reportes PDF, etc.), consulta y entiende el esquema cruzado entre `estado_partes_unidad`, `configuracion_partes` y `mantenimientos`.
-2. **Usa SQL Preciso**: El backend utiliza consultas parametrizadas como `pool.query('SELECT * FROM unidades WHERE id = $1', [id])`. Evita inyecciones de SQL.
-3. **Mantén la Seguridad de Roles**: Toda nueva ruta del backend debe estar protegida. Nunca permitas que una consulta abierta (ej. `GET /api/reports/maintenances`) la pueda disparar un token cuyo rol sea `CHOFER`. El chofer **siempre** debe limitarse a rutas de auto-lectura basadas en la unidad atada a su `req.user.id`.
-4. **Alerta y Discrepancias Humanas**: Todo flujo que modifique el `kilometraje` o modifique inventario de partes DEBE tener verificaciones estrictas (ej: que el kilometraje entrante no sea menor que el que ya estaba en la base temporalmente).
-5. No rompas la UI: Si creas pantallas nuevas, importa las librerías base de `shadcn/ui` que ya residen en `@/components/ui/` utilizando Tailwind para las grillas (`className="grid grid-cols-2 gap-4"`).
+1. **Lee siempre este archivo antes de tocar código.** Si algo cambia en la lógica de negocio, actualiza este archivo al final.
+2. **Lee el modelo relacional**: Antes de proponer nuevas características, entiende el esquema cruzado entre `estado_partes_unidad`, `configuracion_partes` y `mantenimientos`.
+3. **Usa SQL preciso**: Consultas parametrizadas (`pool.query('...WHERE id = $1', [id])`). Sin ORM, sin hardcodeo de datos.
+4. **Seguridad de roles**: Toda ruta nueva del backend debe estar protegida. El chofer **solo** puede leer datos de sus propias unidades (`req.user.id`). Nunca exponer costos de materiales al rol `CHOFER`.
+5. **Kilometraje es sagrado**: Cualquier flujo que modifique `kilometraje` debe validar que el nuevo valor ≥ al valor actual en BD.
+6. **No dupliques campos**: Si un dato ya existe en la unidad (ej. `kilometraje`), no lo pidas de nuevo en formularios posteriores. Reutiliza el valor almacenado.
+7. **UI consistente**: Usa siempre los componentes de `@/components/ui/` (Shadcn). Tailwind para grillas. No crear nuevos sistemas de diseño.
+8. **Hook `useMiUnidad`**: Es el hook canónico para obtener las unidades del chofer. No volver a hacer fetch directo de unidades en páginas del chofer.
+9. **`Providers.jsx`**: Toda rama del `useEffect` que llame `return` debe llamar `setIsLoading(false)` antes. El `if (!pathname) return` al inicio es obligatorio para manejar la hidratación de Next.js 15.
 
 ¡Usa esta fundación para expandir Taller JF a la mejor plataforma de gestión del país!
