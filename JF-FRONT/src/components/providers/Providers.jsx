@@ -16,58 +16,63 @@ export function Providers({ children }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const user = authService.getUser();
-    
-    // Si no hay usuario y no estamos en la página de login, redirigir al login
-    if (!user && pathname !== '/login') {
-      router.push('/login');
-      return;
-    }
+    // pathname puede ser null durante la primera hidratación en Next.js 15
+    if (!pathname) return;
 
-    // Si hay usuario y estamos en la página de login, redirigir según el rol
-    if (user && pathname === '/login') {
-      if (user.rol === 'CHOFER') {
-        router.push('/chofer/dashboard');
-      } else if (user.rol === 'OWNER') {
-        router.push('/dueno/dashboard');
-      } else if (user.rol === 'TECNICO') {
-        router.push('/tecnico/dashboard');
-      } else {
-        router.push('/');
+    try {
+      const user = authService.getUser();
+
+      if (!user && pathname !== '/login') {
+        router.push('/login');
+        setIsLoading(false);
+        return;
       }
-      return;
-    }
 
-    // CHOFER solo puede acceder a rutas /chofer/*
-    if (user?.rol === 'CHOFER' && !pathname.startsWith('/chofer/')) {
-      router.push('/chofer/dashboard');
-      return;
-    }
+      if (user && pathname === '/login') {
+        if (user.rol === 'CHOFER') {
+          router.push('/chofer/dashboard');
+        } else if (user.rol === 'OWNER') {
+          router.push('/dueno/dashboard');
+        } else if (user.rol === 'TECNICO') {
+          router.push('/tecnico/dashboard');
+        } else {
+          router.push('/');
+        }
+        setIsLoading(false);
+        return;
+      }
 
-    // OWNER solo puede acceder a rutas /dueno/*
-    if (user?.rol === 'OWNER' && !pathname.startsWith('/dueno/')) {
-      router.push('/dueno/dashboard');
-      return;
-    }
+      if (user?.rol === 'CHOFER' && !pathname.startsWith('/chofer/')) {
+        router.push('/chofer/dashboard');
+        setIsLoading(false);
+        return;
+      }
 
-    // TECNICO solo puede acceder a rutas /tecnico/*
-    if (user?.rol === 'TECNICO' && !pathname.startsWith('/tecnico/')) {
-      router.push('/tecnico/dashboard');
-      return;
-    }
+      if (user?.rol === 'OWNER' && !pathname.startsWith('/dueno/')) {
+        router.push('/dueno/dashboard');
+        setIsLoading(false);
+        return;
+      }
 
-    // ADMIN/ENCARGADO no pueden acceder a rutas de chofer, dueño ni técnico
-    if (['ADMIN', 'ENCARGADO'].includes(user?.rol) && pathname.startsWith('/chofer/')) {
-      router.push('/');
-      return;
-    }
-    if (['ADMIN', 'ENCARGADO'].includes(user?.rol) && pathname.startsWith('/dueno/')) {
-      router.push('/');
-      return;
-    }
-    if (['ADMIN', 'ENCARGADO'].includes(user?.rol) && pathname.startsWith('/tecnico/')) {
-      router.push('/');
-      return;
+      if (user?.rol === 'TECNICO' && !pathname.startsWith('/tecnico/')) {
+        router.push('/tecnico/dashboard');
+        setIsLoading(false);
+        return;
+      }
+
+      if (['ADMIN', 'ENCARGADO'].includes(user?.rol) &&
+        (pathname.startsWith('/chofer/') || pathname.startsWith('/dueno/') || pathname.startsWith('/tecnico/'))) {
+        router.push('/');
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      // Si hay error leyendo localStorage (datos corruptos, etc.), limpiar sesión
+      authService.removeToken();
+      authService.removeUser();
+      if (pathname !== '/login') {
+        router.push('/login');
+      }
     }
 
     setIsLoading(false);
