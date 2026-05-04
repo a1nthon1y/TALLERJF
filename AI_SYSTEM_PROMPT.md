@@ -76,5 +76,10 @@ El sistema abandona el mantenimiento correctivo reactivo a favor de un **motor d
 7. **UI consistente**: Usa siempre los componentes de `@/components/ui/` (Shadcn). Tailwind para grillas. No crear nuevos sistemas de diseño.
 8. **Hook `useMiUnidad`**: Es el hook canónico para obtener las unidades del chofer. No volver a hacer fetch directo de unidades en páginas del chofer.
 9. **`Providers.jsx`**: Toda rama del `useEffect` que llame `return` debe llamar `setIsLoading(false)` antes. El `if (!pathname) return` al inicio es obligatorio para manejar la hidratación de Next.js 15.
+10. **SIEMPRE verifica antes de crear**: Antes de añadir cualquier componente, spinner, animación o utilidad, revisa primero `@/components/ui/` y `@/hooks/`. Ya existen:
+    - `Skeleton` — bloque de carga genérico (`@/components/ui/skeleton.jsx`)
+    - `PageSkeleton` — skeleton de página completa con variantes `table`, `grid`, `list` y props `rowCount`, `columnCount`, `title`, `action` (`@/components/ui/page-skeleton.jsx`)
+    - Animaciones de ruta: `tailwindcss-animate` ya está configurado en `tailwind.config.js`. Usar clases `animate-in fade-in-0 slide-in-from-bottom-2 duration-200` directamente. No instalar librerías de animación externas.
+    - Para estados de carga de página usa `PageSkeleton`, NO spinners `Loader2` aislados.
 
 ¡Usa esta fundación para expandir Taller JF a la mejor plataforma de gestión del país!
