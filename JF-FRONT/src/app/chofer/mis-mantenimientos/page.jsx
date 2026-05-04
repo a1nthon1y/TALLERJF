@@ -10,9 +10,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Loader2, Wrench, Package, ChevronDown, ChevronUp,
+  Wrench, Package, ChevronDown, ChevronUp,
   User, Gauge, Calendar, ClipboardList,
 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 const estadoBadge = (estado) => {
   const e = estado?.toUpperCase();
@@ -189,9 +190,7 @@ export default function MisMantenimientosPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
-          <Loader2 className="h-5 w-5 animate-spin" /> Cargando...
-        </div>
+        <PageSkeleton variant="list" rowCount={4} title={false} action={false} />
       ) : unidadError || error ? (
         <Card className="p-6 text-destructive">{unidadError || error}</Card>
       ) : mantenimientos.length === 0 ? (

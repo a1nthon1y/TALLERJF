@@ -13,9 +13,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertCircle, Bus, Loader2, Gauge, CheckCircle2, AlertTriangle,
+  AlertCircle, Bus, Gauge, CheckCircle2, AlertTriangle,
   ShieldCheck, XCircle,
 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 const estadoBadge = (estado) => {
   const e = estado?.toLowerCase();
@@ -162,11 +163,7 @@ export default function DriverDashboard() {
   }, [selectedUnidad]);
 
   if (loading) {
-    return (
-      <div className="flex h-64 w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <PageSkeleton variant="grid" rowCount={3} action={false} />;
   }
 
   if (error || !selectedUnidad) {

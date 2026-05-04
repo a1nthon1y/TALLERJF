@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Bus, AlertTriangle, Gauge, Plus, Trash2, ClipboardCheck, CheckCircle2, Loader2 } from "lucide-react";
+import { Bus, AlertTriangle, Gauge, Plus, Trash2, ClipboardCheck, CheckCircle2 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -145,11 +146,7 @@ export default function ReportarLlegadaPage() {
 
   // ─── LOADING ────────────────────────────────────────────────────────────────
   if (loadingUnidad) {
-    return (
-      <div className="flex h-64 w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <PageSkeleton variant="list" rowCount={4} action={false} />;
   }
 
   if (unidadError) {
