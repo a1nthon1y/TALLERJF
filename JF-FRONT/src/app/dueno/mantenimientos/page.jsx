@@ -12,15 +12,22 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Search, ChevronDown, ChevronUp, Package, DollarSign } from "lucide-react";
+import { ClipboardList, Search, ChevronDown, ChevronUp, Package, DollarSign, Gauge, User, Calendar } from "lucide-react";
 import { getMyUnitsReport } from "@/services/ownersService";
 
-const ESTADO_COLORS = {
-  COMPLETADO: "default",
-  CERRADO: "secondary",
-  EN_PROCESO: "outline",
-  PENDIENTE: "secondary",
-};
+function estadoBadge(estado) {
+  const e = estado?.toUpperCase();
+  if (e === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">Completado</Badge>;
+  if (e === "CERRADO") return <Badge variant="secondary" className="text-xs">Cerrado</Badge>;
+  if (e === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-xs">En Proceso</Badge>;
+  return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">Pendiente</Badge>;
+}
+
+function tipoBadge(tipo) {
+  const t = tipo?.toUpperCase();
+  if (t === "PREVENTIVO") return <Badge className="bg-orange-100 text-orange-700 border-orange-300 text-xs">Preventivo</Badge>;
+  return <Badge variant="outline" className="text-xs">Correctivo</Badge>;
+}
 
 function formatDate(dateStr) {
   if (!dateStr) return "—";
@@ -31,22 +38,26 @@ function MaterialesDetalle({ materiales, costoTotal }) {
   const mats = Array.isArray(materiales) ? materiales : [];
   if (mats.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground italic">Sin materiales registrados</p>
+      <p className="text-xs text-muted-foreground italic">Sin materiales registrados para este mantenimiento.</p>
     );
   }
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 text-xs font-medium text-muted-foreground border-b pb-1 mb-1">
+        <span>Material</span>
+        <span className="text-right">Cant.</span>
+        <span className="text-right">Subtotal</span>
+      </div>
       {mats.map((m, i) => (
-        <div key={i} className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">
-            {m.nombre} × {m.cantidad}
-          </span>
-          <span className="font-medium tabular-nums">S/. {Number(m.costo_total).toFixed(2)}</span>
+        <div key={i} className="grid grid-cols-[1fr_auto_auto] gap-x-4 text-xs items-center">
+          <span className="font-medium">{m.nombre}</span>
+          <span className="text-right text-muted-foreground">× {m.cantidad}</span>
+          <span className="text-right font-semibold tabular-nums">S/. {Number(m.costo_total).toFixed(2)}</span>
         </div>
       ))}
-      <div className="flex items-center justify-between text-sm font-semibold border-t pt-1 mt-1">
-        <span>Total gastado</span>
-        <span className="text-primary">S/. {Number(costoTotal).toFixed(2)}</span>
+      <div className="flex items-center justify-between text-sm font-bold border-t pt-1.5 mt-1">
+        <span className="text-muted-foreground">Total gastado</span>
+        <span className="text-primary tabular-nums">S/. {Number(costoTotal).toFixed(2)}</span>
       </div>
     </div>
   );
@@ -164,43 +175,50 @@ export default function DuenoMantenimientosPage() {
               <Card key={m.mantenimiento_id}>
                 <CardContent className="p-4">
                   {/* Header row */}
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-0.5 flex-1">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1 flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold">{m.unidad}</span>
                         {m.modelo && (
                           <span className="text-muted-foreground text-xs">{m.modelo}</span>
                         )}
-                        <span className="text-muted-foreground text-xs">·</span>
-                        <span className="text-sm capitalize text-muted-foreground">
-                          {m.tipo?.toLowerCase()}
-                        </span>
+                        {tipoBadge(m.tipo)}
+                        {estadoBadge(m.estado)}
                       </div>
                       {m.observaciones && (
                         <p className="text-xs text-muted-foreground line-clamp-2">
                           {m.observaciones}
                         </p>
                       )}
-                      {m.tecnico_nombre && (
-                        <p className="text-xs text-muted-foreground">
-                          Técnico: {m.tecnico_nombre}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 sm:flex-col sm:items-end shrink-0">
-                      <Badge variant={ESTADO_COLORS[m.estado] ?? "secondary"} className="text-xs">
-                        {m.estado}
-                      </Badge>
-                      <div className="text-xs text-muted-foreground text-right">
-                        <div>{formatDate(m.fecha_solicitud)}</div>
-                        {m.fecha_realizacion && (
-                          <div>Realizado: {formatDate(m.fecha_realizacion)}</div>
+                      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                        {m.fecha_solicitud && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {formatDate(m.fecha_solicitud)}
+                          </span>
+                        )}
+                        {m.kilometraje_actual != null && (
+                          <span className="flex items-center gap-1">
+                            <Gauge className="h-3.5 w-3.5" />
+                            {Number(m.kilometraje_actual).toLocaleString()} km
+                          </span>
+                        )}
+                        {m.tecnico_nombre && (
+                          <span className="flex items-center gap-1">
+                            <User className="h-3.5 w-3.5" />
+                            {m.tecnico_nombre}
+                          </span>
                         )}
                       </div>
-                      {costo > 0 && (
-                        <span className="text-sm font-semibold text-primary">
-                          S/. {costo.toFixed(2)}
-                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 sm:flex-col sm:items-end shrink-0">
+                      <div className={`text-lg font-bold tabular-nums ${costo > 0 ? "text-primary" : "text-muted-foreground"}`}>
+                        S/. {costo.toFixed(2)}
+                      </div>
+                      {m.fecha_realizacion && (
+                        <div className="text-xs text-muted-foreground text-right whitespace-nowrap">
+                          Realizado: {formatDate(m.fecha_realizacion)}
+                        </div>
                       )}
                     </div>
                   </div>
