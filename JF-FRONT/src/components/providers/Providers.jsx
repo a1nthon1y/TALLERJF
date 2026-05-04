@@ -94,7 +94,9 @@ export function Providers({ children }) {
             {pathname !== '/login' && <SidebarNav />}
             <div className="flex-1 flex flex-col min-h-screen overflow-auto">
               {pathname !== '/login' && <Header className="sticky top-0 z-10 border-b bg-background" />}
-              <main className="flex-grow p-6">{children}</main>
+              <main key={pathname} className="flex-grow p-6 animate-in fade-in-0 slide-in-from-bottom-2 duration-200">
+                {children}
+              </main>
               {pathname !== '/login' && (
                 <footer className="border-t py-4 text-center text-sm text-muted-foreground">
                   <p>© {new Date().getFullYear()} ExpresoJFTaller. Todos los derechos reservados.</p>
