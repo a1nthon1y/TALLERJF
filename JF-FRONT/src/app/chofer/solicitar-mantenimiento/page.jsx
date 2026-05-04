@@ -28,19 +28,12 @@ export default function SolicitarMantenimientoPage() {
   const [submitted, setSubmitted] = useState(false);
 
   const [procedencia, setProcedencia] = useState("");
-  const [kilometraje, setKilometraje] = useState("");
   const [requerimientos, setRequerimientos] = useState([""]);
   const [observaciones, setObservaciones] = useState("");
 
   useEffect(() => {
     setUser(authService.getUser());
   }, []);
-
-  useEffect(() => {
-    if (unit) {
-      setKilometraje(unit.kilometraje ?? "");
-    }
-  }, [unit]);
 
   const addRequerimiento = () => setRequerimientos((prev) => [...prev, ""]);
 
@@ -61,10 +54,6 @@ export default function SolicitarMantenimientoPage() {
       toast.error("Indica la procedencia");
       return;
     }
-    if (!kilometraje || Number(kilometraje) < 0) {
-      toast.error("Ingresa un kilometraje válido");
-      return;
-    }
 
     const obs = [
       `PROCEDENCIA: ${procedencia.trim()}`,
@@ -81,7 +70,7 @@ export default function SolicitarMantenimientoPage() {
       await maintenanceService.createMaintenance({
         unidad_id: unit.id,
         tipo: "CORRECTIVO",
-        kilometraje_actual: Number(kilometraje),
+        kilometraje_actual: unit.kilometraje ?? 0,
         observaciones: obs,
       });
       setSubmitted(true);
@@ -128,7 +117,6 @@ export default function SolicitarMantenimientoPage() {
             onClick={() => {
               setSubmitted(false);
               setProcedencia("");
-              setKilometraje(unit.kilometraje ?? "");
               setRequerimientos([""]);
               setObservaciones("");
             }}
@@ -185,7 +173,7 @@ export default function SolicitarMantenimientoPage() {
             </Select>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
           <div>
             <p className="text-muted-foreground">Fecha</p>
             <p className="font-medium">{today}</p>
@@ -197,6 +185,10 @@ export default function SolicitarMantenimientoPage() {
           <div>
             <p className="text-muted-foreground">Modelo</p>
             <p className="font-medium">{unit.modelo || "—"}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Kilometraje</p>
+            <p className="font-medium">{(unit.kilometraje ?? 0).toLocaleString()} km</p>
           </div>
           <div>
             <p className="text-muted-foreground">Piloto</p>
@@ -220,21 +212,6 @@ export default function SolicitarMantenimientoPage() {
             placeholder="Ej: Pucallpa, Huancayo, Terminal Norte..."
             value={procedencia}
             onChange={(e) => setProcedencia(e.target.value)}
-            required
-          />
-        </div>
-
-        {/* Kilometraje */}
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">
-            Kilometraje actual <span className="text-destructive">*</span>
-          </label>
-          <Input
-            type="number"
-            min={0}
-            placeholder="Ej: 125400"
-            value={kilometraje}
-            onChange={(e) => setKilometraje(e.target.value)}
             required
           />
         </div>
