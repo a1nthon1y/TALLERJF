@@ -10,9 +10,6 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   AlertCircle, Bus, Gauge, CheckCircle2, AlertTriangle,
   ShieldCheck, XCircle, Loader2,
 } from "lucide-react";
@@ -132,12 +129,83 @@ function PartRow({ p }) {
   );
 }
 
+// Chip de selección de unidad con semáforo de salud
+function UnitChip({ unidad, isActive, health, onClick }) {
+  const isCritica = health?.criticas > 0;
+  const isAtencion = !isCritica && health?.atencion > 0;
+  const isOk = !isCritica && !isAtencion;
+
+  return (
+    <button
+      onClick={onClick}
+      className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-sm font-medium
+        transition-all duration-150 text-left
+        ${isActive
+          ? "border-primary bg-primary/10 shadow-sm"
+          : isCritica
+          ? "border-red-300 bg-red-50/60 hover:bg-red-50 dark:bg-red-950/20 dark:border-red-800"
+          : isAtencion
+          ? "border-orange-300 bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800"
+          : "border-border bg-card hover:bg-muted"
+        }
+      `}
+    >
+      {/* Dot semáforo */}
+      <span
+        className={`h-2.5 w-2.5 rounded-full shrink-0
+          ${isCritica ? "bg-red-500 animate-pulse" : isAtencion ? "bg-orange-400 animate-pulse" : "bg-green-500"}
+        `}
+      />
+
+      <div className="leading-tight">
+        <p className="font-semibold">{unidad.placa}</p>
+        <p className="text-xs text-muted-foreground truncate max-w-[96px]">{unidad.modelo}</p>
+      </div>
+
+      {/* Badge de alertas en unidades no activas */}
+      {!isActive && isCritica && (
+        <Badge className="bg-red-500 text-white text-xs py-0 h-4.5 px-1.5 ml-auto">
+          {health.criticas} crítica{health.criticas > 1 ? "s" : ""}
+        </Badge>
+      )}
+      {!isActive && isAtencion && (
+        <Badge className="bg-orange-400 text-white text-xs py-0 h-4.5 px-1.5 ml-auto">
+          {health.atencion} atención
+        </Badge>
+      )}
+    </button>
+  );
+}
+
 export default function DriverDashboard() {
   const { unidades, unidad: selectedUnidad, setUnidad, loading, error } = useMiUnidad();
   const [parts, setParts] = useState([]);
   const [maintenances, setMaintenances] = useState([]);
   const [partialErrors, setPartialErrors] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
+
+  // Salud de TODAS las unidades (para semáforo en chips)
+  const [unidadesHealth, setUnidadesHealth] = useState({});
+
+  // Cargar salud de todas las unidades en paralelo (solo cuando hay más de 1)
+  useEffect(() => {
+    if (unidades.length <= 1) return;
+    Promise.all(
+      unidades.map((u) =>
+        getPartsStatus(u.id)
+          .then((partes) => ({
+            id: u.id,
+            criticas: partes.filter((p) => Number(p.porcentaje) >= 100).length,
+            atencion: partes.filter((p) => Number(p.porcentaje) >= 80 && Number(p.porcentaje) < 100).length,
+          }))
+          .catch(() => ({ id: u.id, criticas: 0, atencion: 0 }))
+      )
+    ).then((results) => {
+      const map = {};
+      results.forEach((r) => { map[r.id] = r; });
+      setUnidadesHealth(map);
+    });
+  }, [unidades]);
 
   useEffect(() => {
     if (!selectedUnidad) return;
@@ -179,40 +247,55 @@ export default function DriverDashboard() {
   const atencion = parts.filter((p) => Number(p.porcentaje) >= 80 && Number(p.porcentaje) < 100);
   const ok = parts.filter((p) => Number(p.porcentaje) < 80);
 
+  // Unidades con alertas que NO son la activa
+  const otrasConAlertas = unidades.filter(
+    (u) =>
+      String(u.id) !== String(selectedUnidad.id) &&
+      (unidadesHealth[u.id]?.criticas > 0 || unidadesHealth[u.id]?.atencion > 0)
+  );
+
   return (
     <div className="space-y-6">
-      {/* Encabezado + selector de unidad */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
-          <p className="text-muted-foreground">Información de tu unidad asignada</p>
-        </div>
-        {unidades.length > 1 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">Unidad activa:</span>
-            <Select
-              value={String(selectedUnidad.id)}
-              onValueChange={(val) => {
-                const u = unidades.find((u) => String(u.id) === val);
-                if (u) setUnidad(u);
-              }}
-            >
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {unidades.map((u) => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    {u.placa} — {u.modelo}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+      {/* Encabezado */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
+        <p className="text-muted-foreground text-sm">Estado de tus unidades asignadas</p>
       </div>
 
-      {/* Banner de estado de viaje */}
+      {/* Selector de unidad — chips con semáforo (solo si tiene >1 unidad) */}
+      {unidades.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {unidades.map((u) => (
+            <UnitChip
+              key={u.id}
+              unidad={u}
+              isActive={String(u.id) === String(selectedUnidad.id)}
+              health={unidadesHealth[u.id]}
+              onClick={() => setUnidad(u)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Banner de alerta urgente para OTRAS unidades con problemas */}
+      {otrasConAlertas.length > 0 && (
+        <div className="rounded-xl border border-red-300 bg-red-50 dark:bg-red-950/30 dark:border-red-800 p-3 flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-red-500 shrink-0" />
+          <p className="text-sm text-red-700 dark:text-red-400 flex-1">
+            {otrasConAlertas.length === 1
+              ? <>La unidad <strong>{otrasConAlertas[0].placa}</strong> tiene alertas pendientes — revísala.</>
+              : <>Hay alertas en {otrasConAlertas.length} unidades: <strong>{otrasConAlertas.map((u) => u.placa).join(", ")}</strong>.</>}
+          </p>
+          <button
+            className="text-xs font-semibold text-red-600 underline whitespace-nowrap"
+            onClick={() => setUnidad(otrasConAlertas[0])}
+          >
+            Ver ahora →
+          </button>
+        </div>
+      )}
+
+      {/* Banner de estado de viaje para la unidad activa */}
       <BannerEstado parts={parts} loading={dataLoading} />
 
       {partialErrors.length > 0 && (
@@ -222,11 +305,11 @@ export default function DriverDashboard() {
         </div>
       )}
 
-      {/* Info de la unidad */}
+      {/* Info de la unidad activa */}
       <Card className="p-6">
         <div className="flex items-center gap-3 mb-4">
           <Bus className="h-6 w-6 text-primary" />
-          <h2 className="text-xl font-bold">Mi Unidad</h2>
+          <h2 className="text-xl font-bold">Unidad activa</h2>
           {!dataLoading && parts.length > 0 && (
             <Badge
               className={`ml-auto ${

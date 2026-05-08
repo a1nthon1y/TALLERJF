@@ -55,10 +55,13 @@ El sistema abandona el mantenimiento correctivo reactivo a favor de un **motor d
 Los trabajos `REALIZADO` se crean en `crearReporteLlegada` cuando el chofer reporta `partes_campo`. No requieren técnico del taller. Si hay costo, se registra en `detalles_mantenimiento` usando el material especial **"Servicio en Ruta"** (se crea automáticamente si no existe). Así el dueño los ve en sus reportes de costo.
 
 ### 4. Flujo del Chofer (pantallas)
-- **Dashboard** (`/chofer/dashboard`): Estado de componentes de la unidad con banner de "listo para viaje" o alertas críticas. Historial reciente de mantenimientos.
+- **Dashboard** (`/chofer/dashboard`): Estado de componentes de la unidad con banner de "listo para viaje" o alertas críticas. Historial reciente de mantenimientos. Si el chofer tiene >1 unidad, el `<Select>` se reemplaza con **chips de unidad** (botones visibles) que muestran un punto de color pulsante (rojo/naranja/verde) con el conteo de alertas. Además, si una unidad NO activa tiene alertas, se muestra un **banner rojo urgente** con enlace directo a esa unidad. El estado de salud de todas las unidades se carga en paralelo (`Promise.all + getPartsStatus`) al montar el dashboard.
 - **Llegada al Taller** (`/chofer/reportar-llegada`): Ingresa kilometraje del tacómetro y ruta/origen. Tiene dos secciones opcionales: (1) **Trabajos en ruta** — el chofer marca qué partes se atendieron en campo (con costo estimado), el backend las registra como `REALIZADO` y resetea sus contadores ANTES de correr el motor predictivo, evitando alertas falsas; (2) Solicitud de mantenimiento pendiente para el encargado. **Este es el único lugar donde se actualiza el odómetro de la unidad.**
 - **Solicitar Mantenimiento** (`/chofer/solicitar-mantenimiento`): Registra una solicitud correctiva con procedencia y requerimientos. **No pide kilometraje** — usa automáticamente el valor almacenado en la unidad (se muestra como dato informativo, no editable).
-- **Mis Mantenimientos** (`/chofer/mis-mantenimientos`): Historial expandible con técnico asignado, materiales usados (nombre + cantidad) y observaciones.
+- **Mis Mantenimientos** (`/chofer/mis-mantenimientos`): Historial expandible con técnico asignado, materiales usados (nombre + cantidad) y observaciones. Reglas de display:
+  - El campo `observaciones` se parsea con la función `parseObservaciones()` para extraer las secciones estructuradas (`PROCEDENCIA`, `REQUERIMIENTOS`, `OBSERVACIONES`). No se muestra como texto crudo.
+  - El material especial **"Servicio en Ruta"** se filtra y **nunca** se muestra al chofer (es un contenedor contable para el dueño).
+  - El botón expandir cambia de etiqueta según el estado: `COMPLETADO` → "X piezas usadas"; `PENDIENTE/EN_PROCESO` → "Ver solicitud"; sin materiales → "Ver detalles".
 
 ---
 
