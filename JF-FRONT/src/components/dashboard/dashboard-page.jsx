@@ -9,12 +9,7 @@ const Overview = dynamic(() => import("@/components/dashboard/overview").then(m 
 })
 import { RecentMaintenances } from "@/components/dashboard/recent-maintenances"
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
-import { DashboardFilters } from "@/components/dashboard/dashboard-filters"
 import { MaintenancePartAlerts } from "@/components/dashboard/maintenance-part-alerts"
-const ActivityFeed = dynamic(() => import("@/components/dashboard/activity-feed").then(m => ({ default: m.ActivityFeed })), {
-  ssr: false,
-  loading: () => <Skeleton className="h-64 w-full" />,
-})
 const MaintenanceCalendar = dynamic(() => import("@/components/dashboard/maintenance-calendar").then(m => ({ default: m.MaintenanceCalendar })), {
   ssr: false,
   loading: () => <Skeleton className="h-64 w-full" />,
@@ -27,7 +22,6 @@ export function DashboardPage() {
   const [formattedDate, setFormattedDate] = useState("")
 
   useEffect(() => {
-    // Mover la formatación de fecha al lado del cliente
     const today = new Date()
     const formatted = formatDate(today)
     setFormattedDate(formatted.charAt(0).toUpperCase() + formatted.slice(1))
@@ -35,21 +29,16 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Encabezado del Dashboard */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground flex items-center mt-1">
-            <CalendarDays className="mr-1 h-4 w-4" />
-            {formattedDate}
-          </p>
-        </div>
-        <div className="mt-2 md:mt-0">
-          <DashboardFilters />
-        </div>
+      {/* Encabezado */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground flex items-center mt-1">
+          <CalendarDays className="mr-1 h-4 w-4" />
+          {formattedDate}
+        </p>
       </div>
 
-      {/* Alertas de mantenimiento por kilometraje */}
+      {/* Alertas de mantenimiento por kilometraje (datos reales) */}
       <MaintenancePartAlerts />
 
       {/* Tarjetas de estadísticas */}
@@ -57,7 +46,7 @@ export function DashboardPage() {
         <DashboardStats />
       </div>
 
-      {/* Gráficos y mantenimientos recientes */}
+      {/* Gráfico + mantenimientos recientes */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
         <Card className="col-span-4 shadow-sm hover:shadow-md transition-shadow">
           <CardHeader>
@@ -90,12 +79,8 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Calendario y Actividad */}
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-        <MaintenanceCalendar />
-        <ActivityFeed />
-      </div>
+      {/* Calendario — ancho completo */}
+      <MaintenanceCalendar />
     </div>
   )
 }
-

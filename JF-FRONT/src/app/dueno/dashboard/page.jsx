@@ -1,80 +1,150 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Bus, Wrench, AlertTriangle, DollarSign, CheckCircle2,
-  XCircle, ShieldCheck, Gauge, ChevronRight,
-} from "lucide-react";
 import { getMyUnits, getPartsStatus } from "@/services/unitsService";
 import { getMyUnitsReport } from "@/services/ownersService";
-import { makeGetRequest } from "@/utils/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
+import {
+  ShieldCheck, XCircle, AlertTriangle, AlertCircle,
+  DollarSign, ChevronRight,
+} from "lucide-react";
 import Link from "next/link";
 
-function fleetHealth(partsMap) {
-  let totalCriticas = 0;
-  let totalAtencion = 0;
-  let totalUnidades = Object.keys(partsMap).length;
-
-  for (const parts of Object.values(partsMap)) {
-    const criticas = parts.filter((p) => Number(p.porcentaje) >= 100).length;
-    const atencion = parts.filter((p) => Number(p.porcentaje) >= 80 && Number(p.porcentaje) < 100).length;
-    totalCriticas += criticas;
-    totalAtencion += atencion;
-  }
-
-  return { totalCriticas, totalAtencion, totalUnidades };
-}
-
-function unitHealthBadge(parts) {
-  if (!parts) return null;
+function calcHealth(parts) {
   const criticas = parts.filter((p) => Number(p.porcentaje) >= 100).length;
   const atencion = parts.filter((p) => Number(p.porcentaje) >= 80 && Number(p.porcentaje) < 100).length;
-  if (criticas > 0)
-    return (
-      <Badge variant="destructive" className="text-xs flex items-center gap-1">
-        <XCircle className="h-3 w-3" /> {criticas} vencida{criticas > 1 ? "s" : ""}
-      </Badge>
-    );
-  if (atencion > 0)
-    return (
-      <Badge className="text-xs bg-orange-100 text-orange-700 border-orange-300 flex items-center gap-1">
-        <AlertTriangle className="h-3 w-3" /> {atencion} en atención
-      </Badge>
-    );
+  return { criticas, atencion };
+}
+
+function UnitChip({ unidad, health }) {
+  const isCritica = health?.criticas > 0;
+  const isAtencion = !isCritica && health?.atencion > 0;
+
   return (
-    <Badge className="text-xs bg-green-100 text-green-700 border-green-300 flex items-center gap-1">
-      <CheckCircle2 className="h-3 w-3" /> OK
-    </Badge>
+    <Link
+      href="/dueno/mis-unidades"
+      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-sm transition-colors
+        ${isCritica
+          ? "border-red-300 bg-red-50/60 hover:bg-red-50 dark:bg-red-950/20 dark:border-red-800"
+          : isAtencion
+          ? "border-orange-300 bg-orange-50/60 hover:bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800"
+          : "border-border bg-card hover:bg-muted"
+        }`}
+    >
+      <span
+        className={`h-2.5 w-2.5 rounded-full shrink-0
+          ${isCritica ? "bg-red-500 animate-pulse" : isAtencion ? "bg-orange-400 animate-pulse" : "bg-green-500"}`}
+      />
+      <div className="leading-tight min-w-0">
+        <p className="font-semibold">{unidad.placa}</p>
+        <p className="text-xs text-muted-foreground truncate max-w-[100px]">{unidad.modelo}</p>
+      </div>
+      {isCritica && (
+        <Badge className="bg-red-500 text-white text-xs py-0 px-1.5 ml-auto shrink-0">
+          {health.criticas} crítica{health.criticas > 1 ? "s" : ""}
+        </Badge>
+      )}
+      {isAtencion && (
+        <Badge className="bg-orange-400 text-white text-xs py-0 px-1.5 ml-auto shrink-0">
+          {health.atencion} atención
+        </Badge>
+      )}
+    </Link>
+  );
+}
+
+function FleetBanner({ units, partsMap }) {
+  if (units.length === 0 || Object.keys(partsMap).length === 0) return null;
+
+  let totalCriticas = 0;
+  let totalAtencion = 0;
+  for (const parts of Object.values(partsMap)) {
+    totalCriticas += parts.filter((p) => Number(p.porcentaje) >= 100).length;
+    totalAtencion += parts.filter((p) => Number(p.porcentaje) >= 80 && Number(p.porcentaje) < 100).length;
+  }
+
+  const esCritico = totalCriticas > 0;
+  const esAtencion = !esCritico && totalAtencion > 0;
+
+  const config = esCritico
+    ? {
+        bg: "bg-red-50 border-red-300 dark:bg-red-950/30 dark:border-red-800",
+        iconBg: "bg-red-100 dark:bg-red-900/60",
+        Icon: XCircle,
+        iconClass: "text-red-600 dark:text-red-400",
+        title: `Flota con mantenimiento urgente — ${totalCriticas} parte${totalCriticas > 1 ? "s" : ""} vencida${totalCriticas > 1 ? "s" : ""}`,
+        titleClass: "text-red-700 dark:text-red-400",
+        desc: "Algunas unidades requieren atención inmediata antes de salir a ruta.",
+      }
+    : esAtencion
+    ? {
+        bg: "bg-orange-50 border-orange-300 dark:bg-orange-950/30 dark:border-orange-800",
+        iconBg: "bg-orange-100 dark:bg-orange-900/60",
+        Icon: AlertTriangle,
+        iconClass: "text-orange-500 dark:text-orange-400",
+        title: `Flota en atención — ${totalAtencion} parte${totalAtencion > 1 ? "s" : ""} próxima${totalAtencion > 1 ? "s" : ""} a vencer`,
+        titleClass: "text-orange-700 dark:text-orange-400",
+        desc: "Programa mantenimiento preventivo para evitar fallas en ruta.",
+      }
+    : {
+        bg: "bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-800",
+        iconBg: "bg-green-100 dark:bg-green-900/60",
+        Icon: ShieldCheck,
+        iconClass: "text-green-600 dark:text-green-400",
+        title: "Flota operativa — Todos los componentes en buen estado",
+        titleClass: "text-green-700 dark:text-green-400",
+        desc: `${units.length} unidad${units.length !== 1 ? "es" : ""} monitoreada${units.length !== 1 ? "s" : ""} sin alertas activas.`,
+      };
+
+  return (
+    <div className={`rounded-xl border p-4 flex items-center gap-4 ${config.bg}`}>
+      <div className={`rounded-full p-3 shrink-0 ${config.iconBg}`}>
+        <config.Icon className={`h-7 w-7 ${config.iconClass}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`font-bold text-base leading-tight ${config.titleClass}`}>{config.title}</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{config.desc}</p>
+      </div>
+      <Button variant="ghost" size="sm" asChild className="shrink-0">
+        <Link href="/dueno/mis-unidades">
+          Ver detalle <ChevronRight className="h-4 w-4 ml-1" />
+        </Link>
+      </Button>
+    </div>
   );
 }
 
 export default function DuenoDashboardPage() {
   const [units, setUnits] = useState([]);
-  const [maintenances, setMaintenances] = useState([]);
-  const [alerts, setAlerts] = useState([]);
   const [partsMap, setPartsMap] = useState({});
+  const [totalInvertido, setTotalInvertido] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const [unitsData, maintsData] = await Promise.all([
+        const [unitsData, maintsData] = await Promise.allSettled([
           getMyUnits(),
           getMyUnitsReport(),
         ]);
-        const unitsList = Array.isArray(unitsData) ? unitsData : [];
+
+        const unitsList =
+          unitsData.status === "fulfilled" && Array.isArray(unitsData.value)
+            ? unitsData.value
+            : [];
         setUnits(unitsList);
-        setMaintenances(Array.isArray(maintsData) ? maintsData : []);
 
-        const alertsData = await makeGetRequest("/alerts").catch(() => null);
-        if (alertsData === null) setError("No se pudieron cargar las alertas de mantenimiento.");
-        setAlerts(Array.isArray(alertsData) ? alertsData : []);
+        if (maintsData.status === "fulfilled" && Array.isArray(maintsData.value)) {
+          const total = maintsData.value.reduce(
+            (sum, m) => sum + Number(m.costo_total || 0),
+            0
+          );
+          setTotalInvertido(total);
+        }
 
-        // Cargar estado de componentes de todas las unidades
         const entries = await Promise.allSettled(
           unitsList.map((u) => getPartsStatus(u.id).then((parts) => [u.id, parts]))
         );
@@ -95,19 +165,15 @@ export default function DuenoDashboardPage() {
     load();
   }, []);
 
-  const pendingMaints = maintenances.filter(
-    (m) => m.estado === "PENDIENTE" || m.estado === "EN_PROCESO"
-  );
-  const totalInvertido = maintenances.reduce(
-    (sum, m) => sum + Number(m.costo_total || 0),
-    0
-  );
-  const { totalCriticas, totalAtencion } = fleetHealth(partsMap);
-
   if (loading) {
+    return <PageSkeleton variant="grid" rowCount={3} action={false} />;
+  }
+
+  if (error) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="flex flex-col items-center justify-center rounded-lg border border-destructive p-8 gap-3">
+        <AlertCircle className="h-8 w-8 text-destructive" />
+        <p className="font-semibold text-destructive">{error}</p>
       </div>
     );
   }
@@ -116,194 +182,54 @@ export default function DuenoDashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
-        <p className="text-muted-foreground">Resumen de tus unidades y mantenimientos</p>
+        <p className="text-muted-foreground text-sm">Estado de tus unidades</p>
       </div>
-
-      {error && (
-        <div className="rounded-md border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 dark:border-yellow-700 p-3 flex items-center gap-2 text-sm text-yellow-800 dark:text-yellow-400">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
-        </div>
-      )}
 
       {/* Banner de salud de flota */}
-      {Object.keys(partsMap).length > 0 && (
-        <div className={`rounded-xl border p-4 flex items-center gap-4 ${
-          totalCriticas > 0
-            ? "bg-red-50 border-red-300 dark:bg-red-950/30 dark:border-red-800"
-            : totalAtencion > 0
-            ? "bg-orange-50 border-orange-300 dark:bg-orange-950/30 dark:border-orange-800"
-            : "bg-green-50 border-green-300 dark:bg-green-950/30 dark:border-green-800"
-        }`}>
-          <div className={`rounded-full p-3 shrink-0 ${
-            totalCriticas > 0 ? "bg-red-100 dark:bg-red-900/60" :
-            totalAtencion > 0 ? "bg-orange-100 dark:bg-orange-900/60" :
-            "bg-green-100 dark:bg-green-900/60"
-          }`}>
-            {totalCriticas > 0
-              ? <XCircle className="h-7 w-7 text-red-600 dark:text-red-400" />
-              : totalAtencion > 0
-              ? <AlertTriangle className="h-7 w-7 text-orange-500 dark:text-orange-400" />
-              : <ShieldCheck className="h-7 w-7 text-green-600 dark:text-green-400" />}
-          </div>
-          <div className="flex-1">
-            <p className={`font-bold text-base ${
-              totalCriticas > 0 ? "text-red-700 dark:text-red-400" :
-              totalAtencion > 0 ? "text-orange-700 dark:text-orange-400" :
-              "text-green-700 dark:text-green-400"
-            }`}>
-              {totalCriticas > 0
-                ? `Flota con mantenimiento urgente — ${totalCriticas} parte${totalCriticas > 1 ? "s" : ""} vencida${totalCriticas > 1 ? "s" : ""}`
-                : totalAtencion > 0
-                ? `Flota en atención — ${totalAtencion} parte${totalAtencion > 1 ? "s" : ""} próxima${totalAtencion > 1 ? "s" : ""} a vencer`
-                : "Flota operativa — Todos los componentes en buen estado"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {units.length} unidad{units.length !== 1 ? "es" : ""} monitoreada{units.length !== 1 ? "s" : ""}
+      <FleetBanner units={units} partsMap={partsMap} />
+
+      {/* 2 stats clave */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border bg-card p-4">
+          <p className="text-sm text-muted-foreground mb-1">Mis Unidades</p>
+          <p className="text-3xl font-bold">{units.length}</p>
+        </div>
+        <div className="rounded-xl border bg-card p-4 flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-muted-foreground mb-1">Total Invertido</p>
+            <p className="text-3xl font-bold truncate">
+              {totalInvertido > 0 ? `S/. ${totalInvertido.toFixed(0)}` : "S/. 0"}
             </p>
           </div>
-          <Button variant="ghost" size="sm" asChild className="shrink-0">
-            <Link href="/dueno/mis-unidades">
-              Ver detalle <ChevronRight className="h-4 w-4 ml-1" />
+          <DollarSign className="h-5 w-5 text-muted-foreground mt-1 shrink-0" />
+        </div>
+      </div>
+
+      {/* Chips de unidades con semáforo */}
+      {units.length === 0 ? (
+        <div className="rounded-xl border p-6 text-center text-sm text-muted-foreground">
+          No tienes unidades asignadas.
+        </div>
+      ) : (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+              Mis unidades
+            </h2>
+            <Link
+              href="/dueno/mis-unidades"
+              className="text-xs text-primary hover:underline flex items-center gap-0.5"
+            >
+              Ver detalle <ChevronRight className="h-3.5 w-3.5" />
             </Link>
-          </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {units.map((u) => (
+              <UnitChip key={u.id} unidad={u} health={calcHealth(partsMap[u.id] ?? [])} />
+            ))}
+          </div>
         </div>
       )}
-
-      {/* Métricas */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Mis Unidades</CardTitle>
-            <Bus className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{units.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Mantenimientos</CardTitle>
-            <Wrench className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{maintenances.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">En Proceso</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pendingMaints.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Partes Vencidas</CardTitle>
-            <XCircle className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${totalCriticas > 0 ? "text-destructive" : ""}`}>
-              {totalCriticas}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Invertido</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {totalInvertido > 0 ? `S/. ${totalInvertido.toFixed(2)}` : "S/. 0.00"}
-            </div>
-            <p className="text-xs text-muted-foreground">en materiales</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Mis unidades con salud */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Gauge className="h-4 w-4 text-primary" /> Salud de Mis Unidades
-            </CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href="/dueno/mis-unidades" className="text-xs text-muted-foreground">
-                Ver todas <ChevronRight className="h-3.5 w-3.5 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {units.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No tienes unidades asignadas.</p>
-            ) : (
-              <div className="space-y-3">
-                {units.map((u) => (
-                  <div key={u.id} className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <p className="font-semibold">{u.placa}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {u.modelo} — {u.kilometraje?.toLocaleString()} km
-                      </p>
-                      {u.chofer_nombre ? (
-                        <p className="text-xs text-muted-foreground">Chofer: {u.chofer_nombre}</p>
-                      ) : (
-                        <p className="text-xs text-yellow-600">Sin chofer asignado</p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      {unitHealthBadge(partsMap[u.id])}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Últimos mantenimientos */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Últimos Mantenimientos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {maintenances.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No hay mantenimientos registrados.</p>
-            ) : (
-              <div className="space-y-3">
-                {maintenances.slice(0, 5).map((m) => (
-                  <div key={m.mantenimiento_id} className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <p className="font-semibold">{m.unidad}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{m.tipo?.toLowerCase()}</p>
-                    </div>
-                    <Badge
-                      variant={
-                        m.estado === "COMPLETADO" || m.estado === "CERRADO"
-                          ? "default"
-                          : m.estado === "EN_PROCESO"
-                          ? "outline"
-                          : "secondary"
-                      }
-                      className="text-xs"
-                    >
-                      {m.estado}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
