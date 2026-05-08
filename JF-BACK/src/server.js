@@ -15,6 +15,7 @@ const userRoutes = require("./routes/user.routes");
 const technicianRoutes = require("./routes/technician.routes");
 const materialRoutes = require("./routes/material.routes");
 const configRoutes = require("./routes/config.routes");
+const rutasRoutes = require("./routes/rutas.routes");
 
 // Inicializar servidor
 const app = express();
@@ -34,6 +35,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/technicians", technicianRoutes);
 app.use("/api/materials", materialRoutes);
 app.use("/api/config", configRoutes);
+app.use("/api/rutas", rutasRoutes);
 
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;
