@@ -7,14 +7,16 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Wrench, Clock, CheckCircle2, AlertCircle, Loader2,
+  Wrench, Clock, CheckCircle2, AlertCircle,
   AlertTriangle, ChevronRight, Zap,
 } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import Link from "next/link";
 
 const estadoBadge = (estado) => {
   const e = estado?.toUpperCase();
   if (e === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border-green-300">Completado</Badge>;
+  if (e === "REALIZADO") return <Badge className="bg-purple-100 text-purple-700 border-purple-300">En Campo</Badge>;
   if (e === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border-blue-300">En Proceso</Badge>;
   if (e === "CERRADO") return <Badge variant="secondary">Cerrado</Badge>;
   return <Badge variant="outline">Pendiente</Badge>;
@@ -50,11 +52,7 @@ export default function TecnicoDashboard() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex h-64 w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <PageSkeleton variant="grid" rowCount={3} action={false} />;
   }
 
   if (error) {

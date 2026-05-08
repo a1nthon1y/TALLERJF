@@ -194,18 +194,18 @@ const getMiUnidad = async (req, res) => {
 // ===============================================================
 const crearReporteLlegada = async (req, res) => {
   try {
-    const { unidad_id, kilometraje, origen, comentarios } = req.body;
-    const usuario_id = req.user.id; 
+    // partes_campo: [{configuracion_parte_id, km_realizado, costo_estimado, descripcion}]
+    const { unidad_id, kilometraje, origen, comentarios, partes_campo } = req.body;
+    const usuario_id = req.user.id;
 
     // 1. Obtener el chofer asociado al usuario
     const choferQuery = await pool.query("SELECT id FROM choferes WHERE usuario_id = $1", [usuario_id]);
     if (choferQuery.rows.length === 0) return res.status(403).json({ message: "Rol inválido o chofer no encontrado" });
     const chofer_id = choferQuery.rows[0].id;
 
-    // 2. Verificar unidad y validar error humano en kilometraje (CASUÍSTICA 1)
+    // 2. Verificar unidad y validar kilometraje
     const unidadQuery = await pool.query("SELECT kilometraje FROM unidades WHERE id = $1", [unidad_id]);
     if (unidadQuery.rows.length === 0) return res.status(404).json({ message: "Unidad no encontrada" });
-    
     const kilometrajeActual = unidadQuery.rows[0].kilometraje;
     if (kilometraje < kilometrajeActual) {
       return res.status(400).json({ error: "El kilometraje ingresado no puede ser menor al actual registrado (" + kilometrajeActual + " km)." });
@@ -221,7 +221,75 @@ const crearReporteLlegada = async (req, res) => {
     // 4. Actualizar kilometraje de la unidad
     await pool.query("UPDATE unidades SET kilometraje = $1 WHERE id = $2", [kilometraje, unidad_id]);
 
-    // 5. MOTOR DE LÓGICA PREDICTIVA
+    // 5. TRABAJOS REALIZADOS EN RUTA (campo) — se procesan ANTES del motor predictivo
+    //    para que los contadores ya estén resetados cuando se evalúen las alertas
+    let trabajosCampo = 0;
+    if (Array.isArray(partes_campo) && partes_campo.length > 0) {
+      // Obtener o crear material especial "Servicio en Ruta"
+      let materialCampoId;
+      const matExistente = await pool.query("SELECT id FROM materiales WHERE nombre = 'Servicio en Ruta' LIMIT 1");
+      if (matExistente.rows.length > 0) {
+        materialCampoId = matExistente.rows[0].id;
+      } else {
+        const matNuevo = await pool.query(
+          "INSERT INTO materiales (nombre, precio_unitario) VALUES ('Servicio en Ruta', 1) RETURNING id"
+        );
+        materialCampoId = matNuevo.rows[0].id;
+      }
+
+      for (const p of partes_campo) {
+        const { configuracion_parte_id, km_realizado, costo_estimado, descripcion } = p;
+        const kmIntervencion = km_realizado || kilometraje;
+        const costo = Number(costo_estimado) || 0;
+
+        // Obtener nombre de la parte para la observación
+        const parteInfo = await pool.query("SELECT nombre FROM configuracion_partes WHERE id = $1", [configuracion_parte_id]);
+        const partNombre = parteInfo.rows[0]?.nombre || "Parte desconocida";
+
+        // Crear mantenimiento REALIZADO (ya hecho en campo, sin técnico del taller)
+        const obsText = [
+          `TRABAJO EN RUTA — ${partNombre}`,
+          `Descripción: ${descripcion || "Sin descripción"}`,
+          `Km de intervención: ${Number(kmIntervencion).toLocaleString()}`,
+          costo > 0 ? `Costo estimado: S/. ${costo.toFixed(2)}` : null,
+        ].filter(Boolean).join("\n");
+
+        const mantResult = await pool.query(
+          `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, estado, fecha_realizacion)
+           VALUES ($1, 'CORRECTIVO', $2, $3, 'REALIZADO', NOW()) RETURNING id`,
+          [unidad_id, obsText, kmIntervencion]
+        );
+        const mantId = mantResult.rows[0].id;
+
+        // Si hay costo, registrar en detalles_mantenimiento para que aparezca en reportes del dueño
+        if (costo > 0) {
+          await pool.query(
+            `INSERT INTO detalles_mantenimiento (mantenimiento_id, material_id, cantidad, costo_total)
+             VALUES ($1, $2, 1, $3)`,
+            [mantId, materialCampoId, costo]
+          );
+        }
+
+        // Resetear contador de esta parte en estado_partes_unidad
+        await pool.query(
+          `INSERT INTO estado_partes_unidad (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (unidad_id, configuracion_parte_id)
+           DO UPDATE SET ultimo_mantenimiento_km = EXCLUDED.ultimo_mantenimiento_km, ultimo_mantenimiento_fecha = NOW()`,
+          [unidad_id, configuracion_parte_id, kmIntervencion]
+        );
+
+        // Resolver alertas activas de esta parte
+        await pool.query(
+          `UPDATE alertas_mantenimiento SET estado = 'RESUELTO' WHERE unidad_id = $1 AND parte_id = $2`,
+          [unidad_id, configuracion_parte_id]
+        );
+
+        trabajosCampo++;
+      }
+    }
+
+    // 6. MOTOR DE LÓGICA PREDICTIVA (corre con contadores ya actualizados)
     const configs = await pool.query("SELECT * FROM configuracion_partes WHERE activo = TRUE");
     let alertasGeneradas = 0;
 
@@ -237,28 +305,24 @@ const crearReporteLlegada = async (req, res) => {
       } else {
         await pool.query(
           "INSERT INTO estado_partes_unidad (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km) VALUES ($1, $2, $3)",
-          [unidad_id, c.id, kilometrajeActual] 
+          [unidad_id, c.id, kilometrajeActual]
         );
         continue;
       }
 
       const kmRecorridos = kilometraje - ultimoMantenimientoKm;
-      
-      if (kmRecorridos >= c.umbral_km) {
-        // Validar si existe alerta previa NO RESUELTA para evitar SPAM (CASUÍSTICA 2)
-        const alertaExistente = await pool.query(
-           `SELECT 1 FROM alertas_mantenimiento 
-            WHERE unidad_id = $1 AND parte_id = $2 AND estado != 'RESUELTO' LIMIT 1`,
-           [unidad_id, c.id]
-        );
 
+      if (kmRecorridos >= c.umbral_km) {
+        const alertaExistente = await pool.query(
+          `SELECT 1 FROM alertas_mantenimiento WHERE unidad_id = $1 AND parte_id = $2 AND estado != 'RESUELTO' LIMIT 1`,
+          [unidad_id, c.id]
+        );
         if (alertaExistente.rows.length === 0) {
-           await pool.query(
-              `INSERT INTO alertas_mantenimiento (unidad_id, parte_id, mensaje, estado)
-               VALUES ($1, $2, $3, 'ACTIVO')`,
-              [unidad_id, c.id, `URGENTE Predictivo: [${c.nombre}] requiere mantenimiento inmediato. Límite superado.`]
-           );
-           alertasGeneradas++;
+          await pool.query(
+            `INSERT INTO alertas_mantenimiento (unidad_id, parte_id, mensaje, estado) VALUES ($1, $2, $3, 'ACTIVO')`,
+            [unidad_id, c.id, `URGENTE Predictivo: [${c.nombre}] requiere mantenimiento inmediato. Límite superado.`]
+          );
+          alertasGeneradas++;
         }
       }
     }
@@ -266,7 +330,8 @@ const crearReporteLlegada = async (req, res) => {
     res.status(201).json({
       message: "Llegada registrada exitosamente",
       reporte: reporte.rows[0],
-      alertasNuevas: alertasGeneradas
+      alertasNuevas: alertasGeneradas,
+      trabajosCampo,
     });
 
   } catch (error) {

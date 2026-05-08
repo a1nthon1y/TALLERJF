@@ -12,12 +12,14 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Search, ChevronDown, ChevronUp, Package, DollarSign, Gauge, User, Calendar } from "lucide-react";
+import { ClipboardList, Search, ChevronDown, ChevronUp, Package, DollarSign, Gauge, User, Calendar, MapPin } from "lucide-react";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { getMyUnitsReport } from "@/services/ownersService";
 
 function estadoBadge(estado) {
   const e = estado?.toUpperCase();
   if (e === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">Completado</Badge>;
+  if (e === "REALIZADO") return <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-xs">En Campo</Badge>;
   if (e === "CERRADO") return <Badge variant="secondary" className="text-xs">Cerrado</Badge>;
   if (e === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-xs">En Proceso</Badge>;
   return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">Pendiente</Badge>;
@@ -96,11 +98,7 @@ export default function DuenoMantenimientosPage() {
   );
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <PageSkeleton variant="list" rowCount={5} />;
   }
 
   if (error) {
@@ -150,6 +148,7 @@ export default function DuenoMantenimientosPage() {
             <SelectItem value="PENDIENTE">Pendiente</SelectItem>
             <SelectItem value="EN_PROCESO">En proceso</SelectItem>
             <SelectItem value="COMPLETADO">Completado</SelectItem>
+            <SelectItem value="REALIZADO">En Campo</SelectItem>
             <SelectItem value="CERRADO">Cerrado</SelectItem>
           </SelectContent>
         </Select>
@@ -184,6 +183,11 @@ export default function DuenoMantenimientosPage() {
                         )}
                         {tipoBadge(m.tipo)}
                         {estadoBadge(m.estado)}
+                        {m.estado?.toUpperCase() === "REALIZADO" && (
+                          <span className="flex items-center gap-1 text-xs text-purple-600">
+                            <MapPin className="h-3 w-3" /> Ruta
+                          </span>
+                        )}
                       </div>
                       {m.observaciones && (
                         <p className="text-xs text-muted-foreground line-clamp-2">

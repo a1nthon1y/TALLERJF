@@ -18,6 +18,7 @@ import { PageSkeleton } from "@/components/ui/page-skeleton";
 const estadoBadge = (estado) => {
   const e = estado?.toUpperCase();
   if (e === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border-green-300">Completado</Badge>;
+  if (e === "REALIZADO") return <Badge className="bg-purple-100 text-purple-700 border-purple-300">En Campo</Badge>;
   if (e === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border-blue-300">En Proceso</Badge>;
   if (e === "CERRADO") return <Badge variant="secondary">Cerrado</Badge>;
   return <Badge variant="outline">Pendiente</Badge>;

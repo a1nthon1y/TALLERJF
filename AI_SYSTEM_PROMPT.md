@@ -43,9 +43,20 @@ El sistema abandona el mantenimiento correctivo reactivo a favor de un **motor d
 4. **Cierre de Ciclo**: El Encargado marca el mantenimiento como `COMPLETADO` → el frontend muestra un Modal de Cierre donde se indica el **Técnico responsable** y se seleccionan (checkboxes) las piezas cambiadas.
 5. **Reinicio de Vida Útil**: El backend hace `UPSERT` en `estado_partes_unidad`, reiniciando `ultimo_mantenimiento_km` al odómetro actual y apagando las alertas asociadas.
 
-### 3. Flujo del Chofer (pantallas)
+### 3. Estado de Mantenimiento: valores posibles
+| `estado` | Significado | Badge |
+|---|---|---|
+| `PENDIENTE` | Creado, esperando atención | Gris outline |
+| `EN_PROCESO` | Técnico trabajando en ello | Azul |
+| `COMPLETADO` | Cerrado en taller, contadores reseteados | Verde |
+| `REALIZADO` | Realizado en ruta/campo (chofer o tercero) — contadores ya reseteados automáticamente en llegada | Morado "En Campo" |
+| `CERRADO` | Archivado | Gris secondary |
+
+Los trabajos `REALIZADO` se crean en `crearReporteLlegada` cuando el chofer reporta `partes_campo`. No requieren técnico del taller. Si hay costo, se registra en `detalles_mantenimiento` usando el material especial **"Servicio en Ruta"** (se crea automáticamente si no existe). Así el dueño los ve en sus reportes de costo.
+
+### 4. Flujo del Chofer (pantallas)
 - **Dashboard** (`/chofer/dashboard`): Estado de componentes de la unidad con banner de "listo para viaje" o alertas críticas. Historial reciente de mantenimientos.
-- **Llegada al Taller** (`/chofer/reportar-llegada`): Ingresa kilometraje del tacómetro y ruta/origen. Puede adjuntar opcionalmente una solicitud de mantenimiento correctivo en el mismo paso. **Este es el único lugar donde se actualiza el odómetro de la unidad.**
+- **Llegada al Taller** (`/chofer/reportar-llegada`): Ingresa kilometraje del tacómetro y ruta/origen. Tiene dos secciones opcionales: (1) **Trabajos en ruta** — el chofer marca qué partes se atendieron en campo (con costo estimado), el backend las registra como `REALIZADO` y resetea sus contadores ANTES de correr el motor predictivo, evitando alertas falsas; (2) Solicitud de mantenimiento pendiente para el encargado. **Este es el único lugar donde se actualiza el odómetro de la unidad.**
 - **Solicitar Mantenimiento** (`/chofer/solicitar-mantenimiento`): Registra una solicitud correctiva con procedencia y requerimientos. **No pide kilometraje** — usa automáticamente el valor almacenado en la unidad (se muestra como dato informativo, no editable).
 - **Mis Mantenimientos** (`/chofer/mis-mantenimientos`): Historial expandible con técnico asignado, materiales usados (nombre + cantidad) y observaciones.
 
