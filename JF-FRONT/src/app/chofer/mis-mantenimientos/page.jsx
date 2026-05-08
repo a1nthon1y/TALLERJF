@@ -285,7 +285,7 @@ export default function MisMantenimientosPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Wrench className="h-6 w-6" /> Mis Mantenimientos
+            <Wrench className="h-6 w-6" /> Mis Solicitudes
           </h1>
           <p className="text-muted-foreground text-sm">Estado de solicitudes y trabajos de tu unidad</p>
         </div>

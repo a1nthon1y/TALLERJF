@@ -13,10 +13,10 @@ import { cn } from "@/lib/utils"
 
 const navByRole = {
   CHOFER: [
-    { title: "Inicio",      href: "/chofer/dashboard",              icon: LayoutDashboard },
-    { title: "Solicitudes", href: "/chofer/mis-mantenimientos",     icon: Wrench },
-    { title: "Reportar",    href: "/chofer/solicitar-mantenimiento",icon: ClipboardList },
-    { title: "Llegada",     href: "/chofer/reportar-llegada",       icon: MapPin },
+    { title: "Inicio",    href: "/chofer/dashboard",               icon: LayoutDashboard },
+    { title: "Llegada",   href: "/chofer/reportar-llegada",        icon: MapPin },
+    { title: "Falla",     href: "/chofer/solicitar-mantenimiento", icon: ClipboardList },
+    { title: "Historial", href: "/chofer/mis-mantenimientos",      icon: Wrench },
   ],
   TECNICO: [
     { title: "Inicio",      href: "/tecnico/dashboard",             icon: LayoutDashboard },

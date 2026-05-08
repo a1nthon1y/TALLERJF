@@ -25,10 +25,10 @@ const adminNavItems = [
 ]
 
 const choferNavItems = [
-  { title: "Dashboard", href: "/chofer/dashboard", icon: BarChart3 },
-  { title: "Mis Mantenimientos", href: "/chofer/mis-mantenimientos", icon: Wrench },
-  { title: "Solicitar Mantenimiento", href: "/chofer/solicitar-mantenimiento", icon: ClipboardList },
-  { title: "Llegada al Taller", href: "/chofer/reportar-llegada", icon: MapPin },
+  { title: "Inicio",            href: "/chofer/dashboard",               icon: BarChart3 },
+  { title: "Registrar Llegada", href: "/chofer/reportar-llegada",        icon: MapPin },
+  { title: "Reportar Falla",    href: "/chofer/solicitar-mantenimiento", icon: ClipboardList },
+  { title: "Mis Solicitudes",   href: "/chofer/mis-mantenimientos",      icon: Wrench },
 ]
 
 const tecnicoNavItems = [

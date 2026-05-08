@@ -79,7 +79,7 @@ export default function SolicitarMantenimientoPage() {
     <div className="max-w-lg mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Wrench className="h-6 w-6" /> Reportar una falla
+          <Wrench className="h-6 w-6" /> Reportar Falla
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
           Avisa al encargado si tu unidad necesita revisión.
