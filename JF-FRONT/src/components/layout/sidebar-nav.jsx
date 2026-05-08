@@ -89,7 +89,7 @@ export function SidebarNav() {
     adminNavItems
 
   return (
-    <div className="relative">
+    <div className="relative hidden md:block">
       <Sidebar
         aria-label="Navegación principal"
         className={cn(
