@@ -70,3 +70,13 @@ export async function registrarLlegada(llegadaData) {
   }
 }
 
+// Obtener rutas disponibles
+export async function getRutas() {
+  try {
+    const data = await makeGetRequest("/choferes/rutas");
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+

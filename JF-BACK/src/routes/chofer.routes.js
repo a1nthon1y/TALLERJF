@@ -6,6 +6,7 @@ const checkRole = require("../middlewares/role.middleware");
 
 // Rutas del chofer autenticado (deben ir ANTES de /:id para evitar conflictos)
 router.get("/mi-unidad", authenticate, checkRole(["CHOFER"]), controller.getMiUnidad);
+router.get("/rutas", authenticate, checkRole(["CHOFER"]), controller.getRutas);
 router.post("/llegada", authenticate, checkRole(["CHOFER"]), controller.crearReporteLlegada);
 
 // CRUD de choferes — solo ADMIN o ENCARGADO

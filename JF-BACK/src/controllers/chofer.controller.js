@@ -340,6 +340,58 @@ const crearReporteLlegada = async (req, res) => {
   }
 };
 
+// ===============================================================
+//  ✅ Obtener rutas disponibles
+// ===============================================================
+const getRutas = async (req, res) => {
+  try {
+    // Crear tabla si no existe y sembrar datos iniciales
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS rutas (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(120) NOT NULL,
+        activa BOOLEAN DEFAULT true,
+        orden INT DEFAULT 0
+      )
+    `);
+
+    const count = await pool.query("SELECT COUNT(*) FROM rutas");
+    if (parseInt(count.rows[0].count) === 0) {
+      await pool.query(`
+        INSERT INTO rutas (nombre, orden) VALUES
+          ('Lima - Arequipa', 1),
+          ('Lima - Cusco', 2),
+          ('Lima - Trujillo', 3),
+          ('Lima - Chiclayo', 4),
+          ('Lima - Piura', 5),
+          ('Lima - Puno', 6),
+          ('Lima - Tacna', 7),
+          ('Lima - Ica', 8),
+          ('Lima - Nazca', 9),
+          ('Lima - Huancayo', 10),
+          ('Lima - Huánuco', 11),
+          ('Lima - Pucallpa', 12),
+          ('Lima - Tarapoto', 13),
+          ('Lima - Chimbote', 14),
+          ('Lima - Cajamarca', 15),
+          ('Arequipa - Cusco', 16),
+          ('Arequipa - Puno', 17),
+          ('Arequipa - Tacna', 18),
+          ('Cusco - Puno', 19),
+          ('Trujillo - Chiclayo', 20)
+      `);
+    }
+
+    const result = await pool.query(
+      "SELECT id, nombre FROM rutas WHERE activa = true ORDER BY orden ASC, nombre ASC"
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error al obtener rutas:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 module.exports = {
   createDriver,
   getAllDrivers,
@@ -348,5 +400,6 @@ module.exports = {
   deleteDriver,
   getMiUnidad,
   crearReporteLlegada,
+  getRutas,
 };
     

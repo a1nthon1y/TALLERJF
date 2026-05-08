@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useMiUnidad } from "@/hooks/useMiUnidad";
-import { registrarLlegada } from "@/services/choferesService";
+import { registrarLlegada, getRutas } from "@/services/choferesService";
 import { getPartsStatus } from "@/services/unitsService";
 
 const STEP_FORM = "form";
@@ -115,7 +115,10 @@ export default function ReportarLlegadaPage() {
   // Form principal
   const [kilometraje, setKilometraje] = useState("");
   const [origen, setOrigen] = useState("");
+  const [origenCustom, setOrigenCustom] = useState("");
   const [comentarios, setComentarios] = useState("");
+  const [rutas, setRutas] = useState([]);
+  const [kmError, setKmError] = useState("");
 
   // Campo: partes críticas (≥60%) como checkboxes + filas custom
   const [mostrarCampo, setMostrarCampo] = useState(false);
@@ -129,9 +132,15 @@ export default function ReportarLlegadaPage() {
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState(null);
 
+  // Cargar rutas disponibles una sola vez
+  useEffect(() => {
+    getRutas().then(setRutas);
+  }, []);
+
   useEffect(() => {
     if (!unidad) return;
     setKilometraje(String(unidad.kilometraje || 0));
+    setKmError("");
     setStep(STEP_FORM);
     setResultado(null);
     setPartesCriticas([]);
@@ -182,17 +191,43 @@ export default function ReportarLlegadaPage() {
   const removeCustom = (uid) =>
     setPartesCustom((prev) => prev.filter((r) => r.uid !== uid));
 
+  const origenFinal = origen === "__custom__" ? origenCustom.trim() : origen;
+
+  const handleKmChange = (val) => {
+    setKilometraje(val);
+    const km = Number(val);
+    const actual = unidad?.kilometraje || 0;
+    if (!val || isNaN(km) || km < 0) {
+      setKmError("Ingresa un número válido.");
+    } else if (km < actual) {
+      setKmError(`No puede ser menor al actual (${actual.toLocaleString()} km).`);
+    } else if (km === actual) {
+      setKmError("El km es igual al registrado. ¿El bus no salió?");
+    } else if (km > actual + 10000) {
+      setKmError(`Diferencia de ${(km - actual).toLocaleString()} km — verifica el tacómetro.`);
+    } else {
+      setKmError("");
+    }
+  };
+
   const handleContinue = () => {
-    if (!kilometraje || isNaN(Number(kilometraje)) || Number(kilometraje) < 0) {
+    const km = Number(kilometraje);
+    const actual = unidad?.kilometraje || 0;
+
+    if (!kilometraje || isNaN(km) || km < 0) {
       toast.error("Ingresa un kilometraje válido");
       return;
     }
-    if (!origen.trim()) {
-      toast.error("Ingresa la ruta de origen");
+    if (km < actual) {
+      toast.error(`El km no puede ser menor al registrado (${actual.toLocaleString()} km)`);
       return;
     }
-    if (Number(kilometraje) < (unidad?.kilometraje || 0)) {
-      toast.error(`El km (${Number(kilometraje).toLocaleString()}) no puede ser menor al actual (${(unidad?.kilometraje || 0).toLocaleString()} km)`);
+    if (!origenFinal) {
+      toast.error("Selecciona la ruta de este viaje");
+      return;
+    }
+    if (origen === "__custom__" && !origenCustom.trim()) {
+      toast.error("Escribe el nombre de la ruta personalizada");
       return;
     }
     setAlertasPreview(calcAlertasPreview(kilometraje));
@@ -219,7 +254,7 @@ export default function ReportarLlegadaPage() {
 
       const res = await registrarLlegada({
         kilometraje: Number(kilometraje),
-        origen: origen.trim(),
+        origen: origenFinal,
         comentarios: comentarios.trim() || undefined,
         unidad_id: unidad.id,
         partes_campo: partesCampoPayload.length > 0 ? partesCampoPayload : undefined,
@@ -245,7 +280,7 @@ export default function ReportarLlegadaPage() {
 
   const handleReset = () => {
     setKilometraje(String(unidad?.kilometraje || 0));
-    setOrigen(""); setComentarios("");
+    setOrigen(""); setOrigenCustom(""); setComentarios(""); setKmError("");
     setMostrarCampo(false);
     setStep(STEP_FORM); setResultado(null); setAlertasPreview([]);
     setPartesCustom([]);
@@ -309,7 +344,7 @@ export default function ReportarLlegadaPage() {
         <div className="rounded-xl border bg-card p-5 space-y-3 text-sm">
           <div className="flex justify-between"><span className="text-muted-foreground">Unidad</span><span className="font-semibold">{unidad.placa}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Kilometraje</span><span className="font-semibold">{Number(kilometraje).toLocaleString()} km</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Ruta / Origen</span><span className="font-semibold">{origen}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Ruta / Origen</span><span className="font-semibold">{origenFinal}</span></div>
           {comentarios && <div className="flex justify-between"><span className="text-muted-foreground">Comentarios</span><span className="font-semibold max-w-[60%] text-right">{comentarios}</span></div>}
 
           {campoSeleccionadas.length > 0 && (
@@ -394,20 +429,59 @@ export default function ReportarLlegadaPage() {
 
       {/* Datos del viaje */}
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Km del tacómetro *</label>
-            <Input
-              type="number" min={unidad?.kilometraje || 0}
-              placeholder={String((unidad?.kilometraje || 0) + 50)}
-              value={kilometraje} onChange={(e) => setKilometraje(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Ruta / Origen *</label>
-            <Input placeholder="Ej. Lima - Arequipa" value={origen} onChange={(e) => setOrigen(e.target.value)} />
-          </div>
+        {/* Km */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Km del tacómetro *</label>
+          <Input
+            type="number"
+            min={unidad?.kilometraje || 0}
+            placeholder={String((unidad?.kilometraje || 0) + 50)}
+            value={kilometraje}
+            onChange={(e) => handleKmChange(e.target.value)}
+            className={kmError && Number(kilometraje) < (unidad?.kilometraje || 0) ? "border-destructive" : ""}
+          />
+          {kmError && (
+            <p className={`text-xs flex items-center gap-1 ${
+              Number(kilometraje) < (unidad?.kilometraje || 0)
+                ? "text-destructive"
+                : "text-orange-500"
+            }`}>
+              <AlertTriangle className="h-3 w-3 shrink-0" />{kmError}
+            </p>
+          )}
+          {!kmError && kilometraje && Number(kilometraje) > (unidad?.kilometraje || 0) && (
+            <p className="text-xs text-muted-foreground">
+              +{(Number(kilometraje) - (unidad?.kilometraje || 0)).toLocaleString()} km en este viaje
+            </p>
+          )}
         </div>
+
+        {/* Ruta (select desde backend) */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Ruta *</label>
+          <Select value={origen} onValueChange={setOrigen}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecciona la ruta de este viaje..." />
+            </SelectTrigger>
+            <SelectContent>
+              {rutas.map((r) => (
+                <SelectItem key={r.id} value={r.nombre}>{r.nombre}</SelectItem>
+              ))}
+              <SelectItem value="__custom__">✏️ Otra ruta...</SelectItem>
+            </SelectContent>
+          </Select>
+          {origen === "__custom__" && (
+            <Input
+              placeholder="Ej. Lima - Huaraz, Arequipa - Moquegua..."
+              value={origenCustom}
+              onChange={(e) => setOrigenCustom(e.target.value)}
+              className="mt-2"
+              autoFocus
+            />
+          )}
+        </div>
+
+        {/* Comentarios */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-muted-foreground">Comentarios / Incidencias (opcional)</label>
           <Textarea
