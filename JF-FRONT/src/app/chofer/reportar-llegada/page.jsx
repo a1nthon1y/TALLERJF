@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
-  Bus, AlertTriangle, Gauge, Plus, Trash2, ClipboardCheck,
+  Bus, AlertTriangle, Plus, Trash2,
   CheckCircle2, Wrench, MapPin, DollarSign, Loader2, X,
 } from "lucide-react";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import { useMiUnidad } from "@/hooks/useMiUnidad";
 import { registrarLlegada } from "@/services/choferesService";
-import { maintenanceService } from "@/services/maintenanceService";
 import { getPartsStatus } from "@/services/unitsService";
 
 const STEP_FORM = "form";
@@ -123,11 +122,6 @@ export default function ReportarLlegadaPage() {
   const [partesCriticas, setPartesCriticas] = useState([]); // {id, nombre, checked, descripcion, costo_estimado}
   const [partesCustom, setPartesCustom] = useState([]);    // {uid, configuracion_parte_id, descripcion, costo_estimado}
 
-  // Solicitar mantenimiento pendiente
-  const [solicitarMant, setSolicitarMant] = useState(false);
-  const [reqs, setReqs] = useState([""]);
-  const [procedencia, setProcedencia] = useState("");
-  const [obsMant, setObsMant] = useState("");
 
   // Flujo
   const [step, setStep] = useState(STEP_FORM);
@@ -188,10 +182,6 @@ export default function ReportarLlegadaPage() {
   const removeCustom = (uid) =>
     setPartesCustom((prev) => prev.filter((r) => r.uid !== uid));
 
-  const addReq = () => setReqs((r) => [...r, ""]);
-  const removeReq = (i) => setReqs((r) => r.filter((_, idx) => idx !== i));
-  const updateReq = (i, val) => setReqs((r) => r.map((v, idx) => (idx === i ? val : v)));
-
   const handleContinue = () => {
     if (!kilometraje || isNaN(Number(kilometraje)) || Number(kilometraje) < 0) {
       toast.error("Ingresa un kilometraje válido");
@@ -235,24 +225,6 @@ export default function ReportarLlegadaPage() {
         partes_campo: partesCampoPayload.length > 0 ? partesCampoPayload : undefined,
       });
 
-      let mantCreado = false;
-      if (solicitarMant) {
-        const filledReqs = reqs.filter((r) => r.trim());
-        const obs = [
-          `PROCEDENCIA: ${(procedencia || origen).trim()}`,
-          "", "REQUERIMIENTOS:",
-          ...filledReqs.map((r) => `- ${r}`),
-          "", "OBSERVACIONES:", obsMant.trim() || "Ninguna",
-        ].join("\n");
-        await maintenanceService.createMaintenance({
-          unidad_id: String(unidad.id),
-          tipo: "correctivo",
-          observaciones: obs,
-          kilometraje_actual: Number(kilometraje),
-        });
-        mantCreado = true;
-      }
-
       const nombresResultado = partesCampoPayload.map((p) => {
         const found = partsStatus.find((ps) => ps.id === p.configuracion_parte_id);
         return p.descripcion || found?.nombre || "Parte";
@@ -261,7 +233,6 @@ export default function ReportarLlegadaPage() {
       setResultado({
         alertasNuevas: res.alertasNuevas || 0,
         trabajosCampo: res.trabajosCampo || partesCampoPayload.length,
-        mantCreado,
         partesCampoNombres: nombresResultado,
       });
       setStep(STEP_DONE);
@@ -275,8 +246,7 @@ export default function ReportarLlegadaPage() {
   const handleReset = () => {
     setKilometraje(String(unidad?.kilometraje || 0));
     setOrigen(""); setComentarios("");
-    setSolicitarMant(false); setMostrarCampo(false);
-    setReqs([""]); setProcedencia(""); setObsMant("");
+    setMostrarCampo(false);
     setStep(STEP_FORM); setResultado(null); setAlertasPreview([]);
     setPartesCustom([]);
     setPartesCriticas((prev) => prev.map((p) => ({ ...p, checked: false, descripcion: "", costo_estimado: "" })));
@@ -312,9 +282,6 @@ export default function ReportarLlegadaPage() {
                 {resultado.partesCampoNombres.map((n, i) => <li key={i}>{n}</li>)}
               </ul>
             </div>
-          )}
-          {resultado.mantCreado && (
-            <p className="text-sm text-green-600">Solicitud de mantenimiento enviada al encargado.</p>
           )}
           {resultado.alertasNuevas > 0 && (
             <div className="rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 p-3 w-full">
@@ -368,14 +335,6 @@ export default function ReportarLlegadaPage() {
             </div>
           )}
 
-          {solicitarMant && (
-            <div className="border-t pt-3">
-              <p className="font-semibold text-primary flex items-center gap-1 mb-1"><ClipboardCheck className="h-4 w-4" /> Solicitud al encargado</p>
-              <ul className="ml-4 text-muted-foreground list-disc space-y-0.5 text-xs">
-                {reqs.filter((r) => r.trim()).map((r, i) => <li key={i}>{r}</li>)}
-              </ul>
-            </div>
-          )}
         </div>
 
         {alertasPreview.length > 0 && (
@@ -520,50 +479,6 @@ export default function ReportarLlegadaPage() {
                 <span className="text-sm font-bold text-purple-700">S/. {costoCampoTotal.toFixed(2)}</span>
               </div>
             )}
-          </div>
-        )}
-      </div>
-
-      {/* ── SOLICITAR MANTENIMIENTO (pendiente al encargado) ─────────────────────── */}
-      <div className="rounded-xl border overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setSolicitarMant((v) => !v)}
-          className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-muted/40 transition-colors text-left"
-        >
-          <div className="flex items-center gap-2.5">
-            <ClipboardCheck className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-sm font-medium">¿Necesitas reportar algo al encargado?</span>
-          </div>
-          <Badge className={`ml-3 shrink-0 text-xs ${solicitarMant ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-            {solicitarMant ? "Sí" : "No"}
-          </Badge>
-        </button>
-
-        {solicitarMant && (
-          <div className="border-t px-5 py-4 space-y-3 bg-muted/10">
-            {reqs.map((req, i) => (
-              <div key={i} className="flex gap-2">
-                <Input
-                  placeholder={`Ej. Fuga de aceite, ruido en motor...`}
-                  value={req} onChange={(e) => updateReq(i, e.target.value)}
-                  className="h-9"
-                />
-                {reqs.length > 1 && (
-                  <Button type="button" variant="ghost" size="icon" className="shrink-0 h-9 w-9" onClick={() => removeReq(i)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button type="button" variant="outline" size="sm" onClick={addReq} className="w-full h-8 text-xs border-dashed">
-              <Plus className="h-3.5 w-3.5 mr-1" /> Agregar otro
-            </Button>
-            <Textarea
-              placeholder="Observaciones adicionales (opcional)..."
-              value={obsMant} onChange={(e) => setObsMant(e.target.value)} rows={2}
-              className="text-sm"
-            />
           </div>
         )}
       </div>

@@ -2,27 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useMiUnidad } from "@/hooks/useMiUnidad";
-import { maintenanceService } from "@/services/maintenanceService";
 import { getPartsStatus } from "@/services/unitsService";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
 import {
   AlertCircle, Bus, Gauge, CheckCircle2, AlertTriangle,
   ShieldCheck, XCircle, Loader2,
 } from "lucide-react";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 
-const estadoBadge = (estado) => {
-  const e = estado?.toLowerCase();
-  if (e === "completado")
-    return <Badge className="bg-green-100 text-green-700 border-green-300">Completado</Badge>;
-  if (e === "en_proceso")
-    return <Badge className="bg-blue-100 text-blue-700 border-blue-300">En Proceso</Badge>;
-  return <Badge variant="outline">Pendiente</Badge>;
-};
 
 function BannerEstado({ parts, loading }) {
   if (loading || parts.length === 0) return null;
@@ -180,7 +168,6 @@ function UnitChip({ unidad, isActive, health, onClick }) {
 export default function DriverDashboard() {
   const { unidades, unidad: selectedUnidad, setUnidad, loading, error } = useMiUnidad();
   const [parts, setParts] = useState([]);
-  const [maintenances, setMaintenances] = useState([]);
   const [partialErrors, setPartialErrors] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
 
@@ -212,19 +199,12 @@ export default function DriverDashboard() {
     async function loadUnitData() {
       setDataLoading(true);
       setParts([]);
-      setMaintenances([]);
-      const [partsData, maintenanceData] = await Promise.allSettled([
-        getPartsStatus(selectedUnidad.id),
-        maintenanceService.getMaintenancesByUnit(selectedUnidad.id),
-      ]);
+      const partsData = await getPartsStatus(selectedUnidad.id).catch(() => null);
 
-      const errs = [];
-      if (partsData.status === "rejected") errs.push("No se pudo cargar el estado de componentes.");
-      if (maintenanceData.status === "rejected") errs.push("No se pudo cargar el historial de mantenimientos.");
-      setPartialErrors(errs);
+      if (!partsData) setPartialErrors(["No se pudo cargar el estado de componentes."]);
+      else setPartialErrors([]);
 
-      setParts(partsData.status === "fulfilled" && Array.isArray(partsData.value) ? partsData.value : []);
-      setMaintenances(maintenanceData.status === "fulfilled" && Array.isArray(maintenanceData.value) ? maintenanceData.value : []);
+      setParts(Array.isArray(partsData) ? partsData : []);
       setDataLoading(false);
     }
     loadUnitData();
@@ -384,52 +364,6 @@ export default function DriverDashboard() {
         )}
       </Card>
 
-      {/* Historial de mantenimientos */}
-      <Card className="p-6">
-        <h2 className="text-xl font-bold mb-4">Historial de Mantenimientos</h2>
-        {dataLoading ? (
-          <div className="flex items-center justify-center h-16 text-muted-foreground gap-2 text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" /> Cargando historial...
-          </div>
-        ) : maintenances.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No hay mantenimientos registrados.</p>
-        ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Observaciones</TableHead>
-                  <TableHead>Kilometraje</TableHead>
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {maintenances.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {m.fecha_solicitud
-                        ? new Date(m.fecha_solicitud).toLocaleDateString("es-PE")
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="capitalize">{m.tipo?.toLowerCase() ?? "—"}</TableCell>
-                    <TableCell className="max-w-[240px]">
-                      <p className="text-sm line-clamp-2">{m.observaciones || "—"}</p>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {m.kilometraje_actual != null
-                        ? `${m.kilometraje_actual.toLocaleString()} km`
-                        : "—"}
-                    </TableCell>
-                    <TableCell>{estadoBadge(m.estado)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </Card>
     </div>
   );
 }
