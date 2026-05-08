@@ -121,15 +121,12 @@ export function MaintenancesTable() {
   }
 
   const getStatusBadge = (status) => {
-    const s = status?.toLowerCase()
-    const variants = {
-      pendiente: "warning",
-      en_proceso: "info",
-      completado: "success",
-      cerrado: "secondary",
-      realizado: "success",
-    }
-    return <Badge variant={variants[s] ?? "outline"}>{status}</Badge>
+    const s = status?.toUpperCase()
+    if (s === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">Completado</Badge>
+    if (s === "REALIZADO")  return <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-xs">En Campo</Badge>
+    if (s === "CERRADO")    return <Badge variant="secondary" className="text-xs">Cerrado</Badge>
+    if (s === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-xs">En Proceso</Badge>
+    return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">Pendiente</Badge>
   }
 
   const canClose = (estado) =>
@@ -257,8 +254,12 @@ export function MaintenancesTable() {
                 <TableCell className="capitalize">{maintenance.tipo?.toLowerCase()}</TableCell>
                 <TableCell>{getStatusBadge(maintenance.estado)}</TableCell>
                 <TableCell>{getTechnicianName(maintenance.tecnico_id ?? maintenance.id_tecnico)}</TableCell>
-                <TableCell>{maintenance.observaciones}</TableCell>
-                <TableCell>{maintenance.kilometraje_actual}</TableCell>
+                <TableCell className="max-w-[180px]">
+                  <p className="text-xs text-muted-foreground line-clamp-2" title={maintenance.observaciones}>
+                    {maintenance.observaciones || "—"}
+                  </p>
+                </TableCell>
+                <TableCell>{maintenance.kilometraje_actual?.toLocaleString() ?? "—"}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -267,7 +268,8 @@ export function MaintenancesTable() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {maintenance.estado?.toUpperCase() !== "CERRADO" && (
+                      {maintenance.estado?.toUpperCase() !== "CERRADO" &&
+                       maintenance.estado?.toUpperCase() !== "REALIZADO" && (
                         <DropdownMenuItem onClick={() => handleEditClick(maintenance)}>
                           <Edit className="mr-2 h-4 w-4" />
                           Actualizar Estado

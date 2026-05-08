@@ -10,6 +10,7 @@ import {
   AlertTriangle, XCircle, Loader2, Gauge,
 } from "lucide-react";
 import { getMyUnits, getPartsStatus } from "@/services/unitsService";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 function healthConfig(parts) {
   const criticas = parts.filter((p) => Number(p.porcentaje) >= 100);
@@ -178,11 +179,7 @@ export default function DuenoMisUnidadesPage() {
   );
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <PageSkeleton variant="grid" rowCount={4} />;
   }
 
   if (error) {

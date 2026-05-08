@@ -16,6 +16,45 @@ import { ClipboardList, Search, ChevronDown, ChevronUp, Package, DollarSign, Gau
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { getMyUnitsReport } from "@/services/ownersService";
 
+function parseObservaciones(text) {
+  if (!text) return { procedencia: null, requerimientos: [], observaciones: null, raw: null };
+  const isStructured =
+    text.includes("PROCEDENCIA:") ||
+    text.includes("REQUERIMIENTOS:") ||
+    text.includes("OBSERVACIONES:");
+  if (!isStructured) {
+    const isRuta = text.startsWith("TRABAJO EN RUTA");
+    return { procedencia: null, requerimientos: [], observaciones: isRuta ? null : text, raw: isRuta ? text : null };
+  }
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  let procedencia = null, requerimientos = [], observaciones = null;
+  let section = null;
+  for (const line of lines) {
+    if (line.startsWith("PROCEDENCIA:")) { section = "proc"; procedencia = line.replace("PROCEDENCIA:", "").trim(); }
+    else if (line.startsWith("REQUERIMIENTOS:")) { section = "req"; }
+    else if (line.startsWith("OBSERVACIONES:")) { section = "obs"; observaciones = line.replace("OBSERVACIONES:", "").trim(); }
+    else if (section === "req" && line.startsWith("- ")) requerimientos.push(line.slice(2));
+    else if (section === "obs") observaciones = (observaciones ? observaciones + " " : "") + line;
+  }
+  return { procedencia, requerimientos, observaciones, raw: null };
+}
+
+function ObservacionesView({ observaciones }) {
+  const parsed = parseObservaciones(observaciones);
+  if (parsed.raw) {
+    return <p className="text-xs text-muted-foreground italic">{parsed.raw}</p>;
+  }
+  return (
+    <div className="space-y-0.5 text-xs text-muted-foreground">
+      {parsed.procedencia && <p><span className="font-medium text-foreground/70">Ruta:</span> {parsed.procedencia}</p>}
+      {parsed.requerimientos.length > 0 && (
+        <p><span className="font-medium text-foreground/70">Solicitud:</span> {parsed.requerimientos.join(", ")}</p>
+      )}
+      {parsed.observaciones && <p className="line-clamp-2">{parsed.observaciones}</p>}
+    </div>
+  );
+}
+
 function estadoBadge(estado) {
   const e = estado?.toUpperCase();
   if (e === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">Completado</Badge>;
@@ -169,6 +208,12 @@ export default function DuenoMantenimientosPage() {
             const isOpen = expanded[m.mantenimiento_id];
             const hasMaterials = Array.isArray(m.materiales) && m.materiales.length > 0;
             const costo = Number(m.costo_total || 0);
+            const estado = m.estado?.toUpperCase();
+            const expandLabel = hasMaterials
+              ? `${m.materiales.length} material${m.materiales.length > 1 ? "es" : ""} usado${m.materiales.length > 1 ? "s" : ""}`
+              : (estado === "PENDIENTE" || estado === "EN_PROCESO")
+              ? "Ver solicitud"
+              : "Ver detalles";
 
             return (
               <Card key={m.mantenimiento_id}>
@@ -190,9 +235,7 @@ export default function DuenoMantenimientosPage() {
                         )}
                       </div>
                       {m.observaciones && (
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {m.observaciones}
-                        </p>
+                        <ObservacionesView observaciones={m.observaciones} />
                       )}
                       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                         {m.fecha_solicitud && (
@@ -236,9 +279,7 @@ export default function DuenoMantenimientosPage() {
                       onClick={() => toggleExpand(m.mantenimiento_id)}
                     >
                       <Package className="h-3.5 w-3.5" />
-                      {hasMaterials
-                        ? `${m.materiales.length} material${m.materiales.length > 1 ? "es" : ""} usado${m.materiales.length > 1 ? "s" : ""}`
-                        : "Sin materiales"}
+                      {expandLabel}
                       {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                     </Button>
 

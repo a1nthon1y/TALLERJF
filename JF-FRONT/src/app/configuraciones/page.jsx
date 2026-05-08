@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Switch } from "@/components/ui/switch";
 import { PlusCircle, Edit, Loader2, Settings, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 const ruleSchema = z.object({
   nombre: z.string().min(2, "Nombre requerido (mín. 2 caracteres)"),
@@ -114,9 +115,7 @@ export default function ConfiguracionesPage() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
-          <Loader2 className="h-5 w-5 animate-spin" /> Cargando configuraciones...
-        </div>
+        <PageSkeleton variant="table" rowCount={5} title={false} action={false} />
       ) : (
         <div className="border rounded-md">
           <Table>

@@ -10,6 +10,21 @@ import {
   Wrench, Clock, CheckCircle2, AlertCircle,
   AlertTriangle, ChevronRight, Zap,
 } from "lucide-react";
+
+function getResumenJob(observaciones) {
+  if (!observaciones) return "Sin descripción";
+  const isStructured =
+    observaciones.includes("PROCEDENCIA:") ||
+    observaciones.includes("REQUERIMIENTOS:") ||
+    observaciones.includes("OBSERVACIONES:");
+  if (!isStructured) return observaciones.split("\n")[0];
+  const lines = observaciones.split("\n").map((l) => l.trim()).filter(Boolean);
+  const reqs = lines.filter((l) => l.startsWith("- ")).map((l) => l.slice(2));
+  if (reqs.length > 0) return reqs.join(" · ");
+  const obs = lines.find((l) => l.startsWith("OBSERVACIONES:"));
+  if (obs) return obs.replace("OBSERVACIONES:", "").trim();
+  return "Sin descripción";
+}
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import Link from "next/link";
 
@@ -169,7 +184,7 @@ export default function TecnicoDashboard() {
                       {tipoBadge(job.tipo)}
                     </div>
                     <p className="text-xs text-muted-foreground line-clamp-1">
-                      {job.observaciones?.split("\n")[0] ?? "Sin observaciones"}
+                      {getResumenJob(job.observaciones)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {job.fecha_solicitud

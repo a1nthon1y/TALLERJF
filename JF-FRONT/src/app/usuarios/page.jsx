@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { UsersTable } from "@/components/users/users-table"
 import { Button } from "@/components/ui/button"
 import { Plus, RefreshCw } from "lucide-react"
