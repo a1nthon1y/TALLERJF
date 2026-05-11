@@ -331,18 +331,18 @@ const editMaintenance = async (req, res) => {
       ? (observaciones?.trim() || m.observaciones)
       : m.observaciones;
 
+    // Calcular fecha_realizacion en JS para evitar ambigüedad de tipos en la query
+    const setFecha = ['COMPLETADO', 'EN_PROCESO'].includes(estadoNorm) && !m.fecha_realizacion;
+
     const result = await pool.query(
       `UPDATE mantenimientos
-       SET estado          = $1,
-           tecnico_id      = $2,
-           observaciones   = $3,
-           fecha_realizacion = CASE
-             WHEN $1::text IN ('COMPLETADO','EN_PROCESO') AND fecha_realizacion IS NULL THEN NOW()
-             ELSE fecha_realizacion
-           END
+       SET estado            = $1,
+           tecnico_id        = $2,
+           observaciones     = $3,
+           fecha_realizacion = COALESCE(fecha_realizacion, $5)
        WHERE id = $4
        RETURNING *`,
-      [estadoNorm, finalTecnicoId, finalObs, id]
+      [estadoNorm, finalTecnicoId, finalObs, id, setFecha ? new Date() : m.fecha_realizacion]
     );
 
     // Resetear contadores predictivos si se marcó como COMPLETADO con partes indicadas
