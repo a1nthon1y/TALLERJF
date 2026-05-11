@@ -9,7 +9,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import { MapPin, Plus, Pencil, Trash2, Loader2, ToggleLeft, ToggleRight } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MapPin, Plus, Pencil, Trash2, Loader2, MoreHorizontal, Power } from "lucide-react";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 
@@ -221,19 +225,39 @@ function RutaRow({ ruta, onEdit, onDelete, onToggle }) {
         <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
         <span className="flex-1 text-sm font-medium">{ruta.nombre}</span>
         {ruta.orden > 0 && (
-          <span className="text-xs text-muted-foreground">#{ruta.orden}</span>
+          <span className="text-xs text-muted-foreground tabular-nums">#{ruta.orden}</span>
         )}
-        <button onClick={onToggle} title={ruta.activa ? "Desactivar" : "Activar"} className="text-muted-foreground hover:text-foreground transition-colors">
-          {ruta.activa
-            ? <ToggleRight className="h-5 w-5 text-green-500" />
-            : <ToggleLeft className="h-5 w-5" />}
-        </button>
-        <button onClick={onEdit} className="text-muted-foreground hover:text-foreground transition-colors">
-          <Pencil className="h-4 w-4" />
-        </button>
-        <button onClick={onDelete} className="text-muted-foreground hover:text-destructive transition-colors">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <Badge
+          className={ruta.activa
+            ? "text-xs bg-green-100 text-green-700 border-green-300"
+            : "text-xs bg-muted text-muted-foreground"}
+          variant="outline"
+        >
+          {ruta.activa ? "Activa" : "Inactiva"}
+        </Badge>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Acciones">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onEdit}>
+              <Pencil className="mr-2 h-4 w-4" /> Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onToggle}>
+              <Power className="mr-2 h-4 w-4" />
+              {ruta.activa ? "Desactivar" : "Activar"}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onDelete}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </CardContent>
     </Card>
   );
