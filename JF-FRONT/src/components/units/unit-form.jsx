@@ -46,6 +46,13 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
   // Usar choferes directamente de la tabla choferes
   const drivers = choferes || []
 
+  // Normalizar tipo a mayúsculas para que coincida con los SelectItems
+  const TIPOS_VALIDOS = ["BUS", "VAN", "CAMION", "OTRO"]
+  const normalizarTipo = (t) => {
+    const up = t?.toUpperCase()
+    return TIPOS_VALIDOS.includes(up) ? up : ""
+  }
+
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: unit
@@ -53,9 +60,8 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
           placa: unit.placa || "",
           modelo: unit.modelo || "",
           año: unit.año || new Date().getFullYear(),
-          tipo: unit.tipo || "",
+          tipo: normalizarTipo(unit.tipo),
           kilometraje: unit.kilometraje || 0,
-          // getUnitById devuelve chofer_id directamente
           chofer_id: unit.chofer_id?.toString() || null,
           dueno_id: unit.dueno_id || undefined,
         }

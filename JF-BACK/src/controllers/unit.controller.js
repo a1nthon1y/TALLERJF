@@ -7,7 +7,8 @@ const createUnit = async (req, res) => {
   try {
     const { placa, modelo, año, tipo, chofer_id, kilometraje, dueno_id } = req.body;
 
-    if (!placa || !modelo || !año || !tipo || !dueno_id) {
+    const tipoNorm = tipo?.toUpperCase();
+    if (!placa || !modelo || !año || !tipoNorm || !dueno_id) {
       return res.status(400).json({ message: "Faltan campos obligatorios" });
     }
 
@@ -15,7 +16,7 @@ const createUnit = async (req, res) => {
       `INSERT INTO unidades (placa, modelo, año, tipo, chofer_id, kilometraje, dueno_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [placa, modelo, año, tipo, chofer_id || null, kilometraje || 0, dueno_id]
+      [placa, modelo, año, tipoNorm, chofer_id || null, kilometraje || 0, dueno_id]
     );
 
     res.status(201).json({
@@ -159,7 +160,7 @@ const updateUnit = async (req, res) => {
       WHERE id = $8
       RETURNING *
       `,
-      [placa, modelo, año, tipo, chofer_id || null, kilometraje || 0, dueno_id, id]
+      [placa, modelo, año, tipo?.toUpperCase(), chofer_id || null, kilometraje || 0, dueno_id, id]
     );
 
     if (result.rows.length === 0) {

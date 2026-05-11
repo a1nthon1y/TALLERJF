@@ -55,6 +55,10 @@ pool.connect()
       `);
 
       console.log("🟢 Migración codigo completada");
+
+      // Normalizar tipo de unidades a mayúsculas
+      await client.query(`UPDATE unidades SET tipo = UPPER(tipo) WHERE tipo != UPPER(tipo);`);
+      console.log("🟢 Normalización tipo unidades completada");
     } catch (e) {
       console.error("🟡 Migración codigo:", e.message);
     }
