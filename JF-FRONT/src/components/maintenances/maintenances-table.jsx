@@ -250,10 +250,17 @@ export function MaintenancesTable() {
             )}
             {filteredMaintenances?.map((maintenance) => (
               <TableRow key={maintenance.id}>
-                <TableCell>{maintenance.placa ?? maintenance.unidad_id}</TableCell>
+                <TableCell>
+                  <div>
+                    <p className="font-medium">{maintenance.placa ?? `U-${maintenance.unidad_id}`}</p>
+                    {maintenance.modelo && <p className="text-xs text-muted-foreground">{maintenance.modelo}</p>}
+                  </div>
+                </TableCell>
                 <TableCell className="capitalize">{maintenance.tipo?.toLowerCase()}</TableCell>
                 <TableCell>{getStatusBadge(maintenance.estado)}</TableCell>
-                <TableCell>{getTechnicianName(maintenance.tecnico_id ?? maintenance.id_tecnico)}</TableCell>
+                <TableCell>
+                  {maintenance.tecnico_nombre ?? getTechnicianName(maintenance.tecnico_id ?? maintenance.id_tecnico)}
+                </TableCell>
                 <TableCell className="max-w-[180px]">
                   <p className="text-xs text-muted-foreground line-clamp-2" title={maintenance.observaciones}>
                     {maintenance.observaciones || "—"}

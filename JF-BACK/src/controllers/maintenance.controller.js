@@ -36,7 +36,16 @@ const createMaintenance = async (req, res) => {
 // Obtener todos los mantenimientos
 const getAllMaintenances = async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM mantenimientos ORDER BY fecha_solicitud DESC");
+    const result = await pool.query(`
+      SELECT m.*,
+             u.placa,
+             u.modelo,
+             t.nombre AS tecnico_nombre
+      FROM mantenimientos m
+      JOIN unidades u ON m.unidad_id = u.id
+      LEFT JOIN tecnicos t ON m.tecnico_id = t.id
+      ORDER BY m.fecha_solicitud DESC
+    `);
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
