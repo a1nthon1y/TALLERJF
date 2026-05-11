@@ -32,7 +32,7 @@ const formSchema = z.object({
   tipo: z.enum(["preventivo", "correctivo"], { message: "El tipo es requerido" }),
   observaciones: z.string().min(1, { message: "Las observaciones son requeridas" }),
   kilometraje_actual: z.number().min(0, { message: "El kilometraje no puede ser negativo" }),
-  id_tecnico: z.string().min(1, { message: "El técnico es requerido" }),
+  tecnico_id: z.string().min(1, { message: "El técnico es requerido" }),
 })
 
 export default function MaintenancesPage() {
@@ -48,13 +48,13 @@ export default function MaintenancesPage() {
       tipo: "preventivo",
       observaciones: "",
       kilometraje_actual: 0,
-      id_tecnico: "",
+      tecnico_id: "",
     },
   })
 
   useEffect(() => {
     if (technicians && technicians.length > 0) {
-      form.setValue("id_tecnico", String(technicians[0].id))
+      form.setValue("tecnico_id", String(technicians[0].id))
     }
   }, [technicians])
   
@@ -188,7 +188,7 @@ export default function MaintenancesPage() {
 
                 <FormField
                   control={form.control}
-                  name="id_tecnico"
+                  name="tecnico_id"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Técnico</FormLabel>

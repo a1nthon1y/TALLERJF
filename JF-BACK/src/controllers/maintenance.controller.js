@@ -314,7 +314,7 @@ const editMaintenance = async (req, res) => {
            tecnico_id      = $2,
            observaciones   = $3,
            fecha_realizacion = CASE
-             WHEN $1 IN ('COMPLETADO','EN_PROCESO') AND fecha_realizacion IS NULL THEN NOW()
+             WHEN $1::text IN ('COMPLETADO','EN_PROCESO') AND fecha_realizacion IS NULL THEN NOW()
              ELSE fecha_realizacion
            END
        WHERE id = $4
