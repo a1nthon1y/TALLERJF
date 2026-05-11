@@ -270,6 +270,35 @@ const deleteMaintenance = async (req, res) => {
   }
 };
 
+// Reasignar técnico (ADMIN/ENCARGADO, no CERRADO)
+const assignTecnico = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tecnico_id } = req.body;
+
+    const mant = await pool.query("SELECT estado FROM mantenimientos WHERE id = $1", [id]);
+    if (mant.rows.length === 0)
+      return res.status(404).json({ message: "Mantenimiento no encontrado" });
+    if (mant.rows[0].estado === "CERRADO")
+      return res.status(400).json({ message: "No se puede reasignar un mantenimiento cerrado" });
+
+    // Si tecnico_id es null se desasigna
+    if (tecnico_id) {
+      const tec = await pool.query("SELECT id FROM tecnicos WHERE id = $1", [tecnico_id]);
+      if (tec.rows.length === 0)
+        return res.status(404).json({ message: "Técnico no encontrado" });
+    }
+
+    const result = await pool.query(
+      "UPDATE mantenimientos SET tecnico_id = $1 WHERE id = $2 RETURNING *",
+      [tecnico_id || null, id]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Editar observaciones de un mantenimiento (ADMIN/ENCARGADO, no CERRADO)
 const updateObservaciones = async (req, res) => {
   try {
@@ -305,4 +334,5 @@ module.exports = {
   closeMaintenance,
   deleteMaintenance,
   updateObservaciones,
+  assignTecnico,
 };

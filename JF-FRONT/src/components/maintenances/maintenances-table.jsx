@@ -72,6 +72,11 @@ export function MaintenancesTable() {
   const [editObs, setEditObs] = useState("")
   const [isSavingObs, setIsSavingObs] = useState(false)
 
+  // Reasignar técnico
+  const [assigningMaintenance, setAssigningMaintenance] = useState(null)
+  const [assignTecnicoId, setAssignTecnicoId] = useState("")
+  const [isSavingTecnico, setIsSavingTecnico] = useState(false)
+
   // Materiales dialog state
   const [materialsMaintenance, setMaterialsMaintenance] = useState(null)
   const [materials, setMaterials] = useState([])
@@ -138,6 +143,24 @@ export function MaintenancesTable() {
       toast.error(error.message)
     } finally {
       setIsSavingObs(false)
+    }
+  }
+
+  const handleSaveTecnico = async () => {
+    if (!assigningMaintenance) return
+    setIsSavingTecnico(true)
+    try {
+      await maintenanceService.assignTecnico(
+        assigningMaintenance.id,
+        assignTecnicoId === "NONE" ? null : parseInt(assignTecnicoId)
+      )
+      toast.success("Técnico actualizado")
+      setAssigningMaintenance(null)
+      await mutate()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setIsSavingTecnico(false)
     }
   }
 
@@ -389,6 +412,16 @@ export function MaintenancesTable() {
                         <DropdownMenuItem onClick={() => { setEditingMaintenance(maintenance); setEditObs(maintenance.observaciones || "") }}>
                           <FileEdit className="mr-2 h-4 w-4" />
                           Editar observaciones
+                        </DropdownMenuItem>
+                      )}
+                      {/* Cambiar técnico — ADMIN/ENCARGADO, no CERRADO */}
+                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
+                        <DropdownMenuItem onClick={() => {
+                          setAssigningMaintenance(maintenance)
+                          setAssignTecnicoId(maintenance.tecnico_id?.toString() || "NONE")
+                        }}>
+                          <Wrench className="mr-2 h-4 w-4" />
+                          Cambiar técnico
                         </DropdownMenuItem>
                       )}
                       {/* Eliminar — solo ADMIN, solo PENDIENTE */}
@@ -679,6 +712,43 @@ export function MaintenancesTable() {
             <Button variant="outline" onClick={() => setEditingMaintenance(null)}>Cancelar</Button>
             <Button onClick={handleSaveObservaciones} disabled={isSavingObs || !editObs.trim()}>
               {isSavingObs && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Cambiar técnico */}
+      <Dialog open={!!assigningMaintenance} onOpenChange={(v) => { if (!v) setAssigningMaintenance(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-4 w-4" /> Cambiar Técnico
+            </DialogTitle>
+            <DialogDescription>
+              Unidad <strong>{assigningMaintenance?.placa}</strong> — {assigningMaintenance?.tipo?.toLowerCase()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <label className="text-sm font-medium">Técnico asignado</label>
+            <Select value={assignTecnicoId} onValueChange={setAssignTecnicoId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar técnico" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">Sin asignar</SelectItem>
+                {technicians?.filter(t => t.activo).map((t) => (
+                  <SelectItem key={t.id} value={t.id.toString()}>
+                    {t.nombre} {t.apellido}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssigningMaintenance(null)}>Cancelar</Button>
+            <Button onClick={handleSaveTecnico} disabled={isSavingTecnico}>
+              {isSavingTecnico && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Guardar
             </Button>
           </DialogFooter>

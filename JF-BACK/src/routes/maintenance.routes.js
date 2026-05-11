@@ -28,6 +28,9 @@ router.put("/:id/close", authenticate, checkRole(["ENCARGADO", "ADMIN"]), mainte
 // Editar observaciones (ADMIN/ENCARGADO, no CERRADO)
 router.put("/:id/observaciones", authenticate, checkRole(["ADMIN", "ENCARGADO"]), maintenanceController.updateObservaciones);
 
+// Reasignar técnico (ADMIN/ENCARGADO, no CERRADO)
+router.put("/:id/tecnico", authenticate, checkRole(["ADMIN", "ENCARGADO"]), maintenanceController.assignTecnico);
+
 // Eliminar (solo ADMIN, solo PENDIENTE)
 router.delete("/:id", authenticate, checkRole(["ADMIN"]), maintenanceController.deleteMaintenance);
 

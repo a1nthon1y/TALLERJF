@@ -106,6 +106,14 @@ export const maintenanceService = {
     }
   },
 
+  async assignTecnico(maintenanceId, tecnico_id) {
+    try {
+      return await makePutRequest(`/maintenances/${maintenanceId}/tecnico`, { tecnico_id });
+    } catch (error) {
+      throw new Error(error.message || 'Error al reasignar técnico');
+    }
+  },
+
   async deleteMaintenance(maintenanceId) {
     try {
       return await makeDeleteRequest(`/maintenances/${maintenanceId}`);
