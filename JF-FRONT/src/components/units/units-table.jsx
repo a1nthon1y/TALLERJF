@@ -85,9 +85,11 @@ export function UnitsTable() {
     setIsDeleting(true)
   }
 
+  const [isDeletingConfirm, setIsDeletingConfirm] = useState(false)
+
   const handleDeleteConfirm = async () => {
     if (!selectedUnit) return
-    
+    setIsDeletingConfirm(true)
     try {
       await deleteUnit(selectedUnit.id)
       toast.success("Unidad eliminada correctamente")
@@ -95,7 +97,11 @@ export function UnitsTable() {
       setSelectedUnit(null)
       await mutate()
     } catch (error) {
-      toast.error(error.message || "Error al eliminar la unidad")
+      // El backend devuelve el motivo exacto del bloqueo
+      toast.error(error.message || "Error al eliminar la unidad", { duration: 6000 })
+      setIsDeleting(false)
+    } finally {
+      setIsDeletingConfirm(false)
     }
   }
 
@@ -318,19 +324,26 @@ export function UnitsTable() {
 
       {/* Diálogo de confirmación de eliminación */}
       <Dialog open={isDeleting} onOpenChange={setIsDeleting}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>¿Estás seguro?</DialogTitle>
-            <DialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente la unidad{" "}
-              <strong>{selectedUnit?.placa}</strong> y todos sus datos asociados.
+            <DialogTitle>¿Eliminar unidad?</DialogTitle>
+            <DialogDescription className="space-y-2">
+              <p>
+                Vas a eliminar la unidad <strong>{selectedUnit?.placa}</strong>
+                {selectedUnit?.modelo ? ` — ${selectedUnit.modelo}` : ""}.
+              </p>
+              <p className="text-amber-600 dark:text-amber-400 text-xs">
+                Solo se puede eliminar si la unidad <strong>no tiene mantenimientos</strong> registrados.
+                Si tiene historial, primero elimina esos registros desde la sección Mantenimientos.
+              </p>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleting(false)}>
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={handleDeleteConfirm}>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isDeletingConfirm}>
+              {isDeletingConfirm && <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />}
               Eliminar
             </Button>
           </DialogFooter>

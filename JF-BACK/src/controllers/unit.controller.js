@@ -183,14 +183,38 @@ const deleteUnit = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
-      "DELETE FROM unidades WHERE id = $1 RETURNING *",
-      [id]
-    );
-
-    if (result.rows.length === 0) {
+    // Verificar que la unidad existe
+    const unitCheck = await pool.query("SELECT placa FROM unidades WHERE id = $1", [id]);
+    if (unitCheck.rows.length === 0) {
       return res.status(404).json({ message: "Unidad no encontrada" });
     }
+
+    // Bloquear si tiene mantenimientos activos (PENDIENTE o EN_PROCESO)
+    const activeCheck = await pool.query(
+      `SELECT COUNT(*) FROM mantenimientos
+       WHERE unidad_id = $1 AND estado IN ('PENDIENTE','EN_PROCESO')`,
+      [id]
+    );
+    if (parseInt(activeCheck.rows[0].count) > 0) {
+      return res.status(400).json({
+        message: `No se puede eliminar la unidad ${unitCheck.rows[0].placa}: tiene ${activeCheck.rows[0].count} mantenimiento(s) activo(s). Ciérralos antes de eliminar la unidad.`,
+      });
+    }
+
+    // Advertir si tiene historial (pero permitir si todos están cerrados)
+    const historyCheck = await pool.query(
+      "SELECT COUNT(*) FROM mantenimientos WHERE unidad_id = $1",
+      [id]
+    );
+    if (parseInt(historyCheck.rows[0].count) > 0) {
+      return res.status(400).json({
+        message: `No se puede eliminar la unidad ${unitCheck.rows[0].placa}: tiene ${historyCheck.rows[0].count} registro(s) de mantenimiento en su historial. Elimina primero esos registros desde la sección Mantenimientos.`,
+      });
+    }
+
+    await pool.query("DELETE FROM estado_partes_unidad WHERE unidad_id = $1", [id]);
+    await pool.query("DELETE FROM alertas_mantenimiento WHERE unidad_id = $1", [id]);
+    await pool.query("DELETE FROM unidades WHERE id = $1", [id]);
 
     res.json({ message: "Unidad eliminada correctamente" });
   } catch (error) {
