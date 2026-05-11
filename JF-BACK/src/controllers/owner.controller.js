@@ -96,12 +96,25 @@ const deleteOwner = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query("DELETE FROM duenos WHERE id = $1 RETURNING *", [id]);
-
-    if (result.rows.length === 0) {
+    const ownerCheck = await pool.query(
+      `SELECT u.nombre FROM duenos d JOIN usuarios u ON d.usuario_id = u.id WHERE d.id = $1`,
+      [id]
+    );
+    if (ownerCheck.rows.length === 0)
       return res.status(404).json({ message: "Dueño no encontrado" });
+
+    // Bloquear si tiene unidades registradas
+    const unidadesCheck = await pool.query(
+      "SELECT COUNT(*) FROM unidades WHERE dueno_id = $1",
+      [id]
+    );
+    if (parseInt(unidadesCheck.rows[0].count) > 0) {
+      return res.status(400).json({
+        message: `No se puede eliminar al dueño ${ownerCheck.rows[0].nombre}: tiene ${unidadesCheck.rows[0].count} unidad(es) registrada(s). Elimínalas o reasígnalas primero.`,
+      });
     }
 
+    await pool.query("DELETE FROM duenos WHERE id = $1", [id]);
     res.json({ message: "Dueño eliminado correctamente" });
   } catch (error) {
     res.status(500).json({ error: "Error al eliminar dueño", details: error.message });

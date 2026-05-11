@@ -292,10 +292,12 @@ export function ChoferesTable({ externalCreateTrigger }) {
       <Dialog open={isDeleting} onOpenChange={setIsDeleting}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>¿Estás seguro?</DialogTitle>
-            <DialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente el chofer{" "}
-              <strong>{selectedChofer?.usuario_nombre}</strong> y todos sus datos asociados.
+            <DialogTitle>¿Eliminar chofer?</DialogTitle>
+            <DialogDescription className="space-y-1">
+              <p>Vas a eliminar a <strong>{selectedChofer?.usuario_nombre}</strong>.</p>
+              <p className="text-amber-600 dark:text-amber-400 text-xs">
+                Solo se puede eliminar si el chofer <strong>no tiene unidades asignadas</strong>. Desasígnalo primero si corresponde.
+              </p>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

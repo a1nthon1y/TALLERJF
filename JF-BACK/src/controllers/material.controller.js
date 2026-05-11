@@ -53,13 +53,23 @@ const deleteMaterial = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query("DELETE FROM materiales WHERE id = $1 RETURNING *", [id]);
-
-    if (result.rows.length === 0) {
+    const matCheck = await pool.query("SELECT nombre FROM materiales WHERE id = $1", [id]);
+    if (matCheck.rows.length === 0)
       return res.status(404).json({ error: "Material no encontrado" });
+
+    // Bloquear si ha sido usado en algún mantenimiento (historial intacto)
+    const usadoCheck = await pool.query(
+      "SELECT COUNT(*) FROM detalles_mantenimiento WHERE material_id = $1",
+      [id]
+    );
+    if (parseInt(usadoCheck.rows[0].count) > 0) {
+      return res.status(400).json({
+        message: `No se puede eliminar "${matCheck.rows[0].nombre}": está registrado en ${usadoCheck.rows[0].count} mantenimiento(s). Desactívalo si ya no quieres usarlo.`,
+      });
     }
 
-    res.json({ message: "Material eliminado correctamente", material: result.rows[0] });
+    await pool.query("DELETE FROM materiales WHERE id = $1", [id]);
+    res.json({ message: "Material eliminado correctamente" });
   } catch (error) {
     res.status(500).json({ error: "Error al eliminar material" });
   }

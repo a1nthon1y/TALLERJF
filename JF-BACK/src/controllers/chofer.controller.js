@@ -143,15 +143,25 @@ const deleteDriver = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
-      "DELETE FROM choferes WHERE id = $1 RETURNING *",
+    const choferCheck = await pool.query(
+      `SELECT u.nombre FROM choferes c JOIN usuarios u ON c.usuario_id = u.id WHERE c.id = $1`,
       [id]
     );
-
-    if (result.rows.length === 0) {
+    if (choferCheck.rows.length === 0)
       return res.status(404).json({ message: "Chofer no encontrado" });
+
+    // Bloquear si tiene unidades asignadas
+    const unidadesCheck = await pool.query(
+      "SELECT COUNT(*) FROM unidades WHERE chofer_id = $1",
+      [id]
+    );
+    if (parseInt(unidadesCheck.rows[0].count) > 0) {
+      return res.status(400).json({
+        message: `No se puede eliminar al chofer ${choferCheck.rows[0].nombre}: tiene ${unidadesCheck.rows[0].count} unidad(es) asignada(s). Desasígnalas primero desde Unidades.`,
+      });
     }
 
+    await pool.query("DELETE FROM choferes WHERE id = $1", [id]);
     res.json({ message: "Chofer eliminado correctamente" });
 
   } catch (error) {

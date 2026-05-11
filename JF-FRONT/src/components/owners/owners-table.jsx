@@ -190,10 +190,11 @@ export function OwnersTable() {
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" /> Eliminar Dueño
             </DialogTitle>
-            <DialogDescription>
-              ¿Estás seguro de que deseas eliminar a{" "}
-              <span className="font-semibold">{deleteTarget?.nombre}</span>?
-              Esta acción no se puede deshacer.
+            <DialogDescription className="space-y-1">
+              <p>Vas a eliminar al dueño <span className="font-semibold">{deleteTarget?.nombre}</span>.</p>
+              <p className="text-amber-600 dark:text-amber-400 text-xs">
+                Solo se puede eliminar si el dueño <strong>no tiene unidades registradas</strong>. Elimina o reasigna sus unidades primero.
+              </p>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
