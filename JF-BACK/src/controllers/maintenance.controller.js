@@ -271,6 +271,83 @@ const deleteMaintenance = async (req, res) => {
 };
 
 // Reasignar técnico (ADMIN/ENCARGADO, no CERRADO)
+// Editar mantenimiento completo (ADMIN/ENCARGADO) — unifica estado, técnico, observaciones y partes
+const editMaintenance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { estado, tecnico_id, observaciones, partes_reparadas } = req.body;
+
+    const mantQuery = await pool.query("SELECT * FROM mantenimientos WHERE id = $1", [id]);
+    if (mantQuery.rows.length === 0)
+      return res.status(404).json({ message: "Mantenimiento no encontrado" });
+    const m = mantQuery.rows[0];
+
+    if (m.estado === "CERRADO")
+      return res.status(400).json({ message: "No se puede editar un mantenimiento cerrado" });
+
+    const estadoNorm = estado ? estado.toUpperCase() : m.estado;
+
+    if (estadoNorm === "CERRADO")
+      return res.status(400).json({ message: "Para cerrar use el flujo Cerrar/Aprobar" });
+
+    // tecnico_id obligatorio al completar
+    const finalTecnicoId = tecnico_id != null ? (tecnico_id || null) : m.tecnico_id;
+    if (estadoNorm === "COMPLETADO" && !finalTecnicoId)
+      return res.status(400).json({ message: "El técnico es obligatorio al marcar como Completado" });
+
+    // Validar que el técnico exista si se envía
+    if (finalTecnicoId) {
+      const tec = await pool.query("SELECT id FROM tecnicos WHERE id = $1", [finalTecnicoId]);
+      if (tec.rows.length === 0)
+        return res.status(404).json({ message: "Técnico no encontrado" });
+    }
+
+    // No tiene sentido retroceder de COMPLETADO a PENDIENTE si ya tiene fecha de realización
+    // — lo permitimos para que el admin pueda corregir errores, pero lo dejamos registrado en log futuro
+
+    const finalObs = observaciones !== undefined
+      ? (observaciones?.trim() || m.observaciones)
+      : m.observaciones;
+
+    const result = await pool.query(
+      `UPDATE mantenimientos
+       SET estado          = $1,
+           tecnico_id      = $2,
+           observaciones   = $3,
+           fecha_realizacion = CASE
+             WHEN $1 IN ('COMPLETADO','EN_PROCESO') AND fecha_realizacion IS NULL THEN NOW()
+             ELSE fecha_realizacion
+           END
+       WHERE id = $4
+       RETURNING *`,
+      [estadoNorm, finalTecnicoId, finalObs, id]
+    );
+
+    // Resetear contadores predictivos si se marcó como COMPLETADO con partes indicadas
+    if (estadoNorm === "COMPLETADO" && Array.isArray(partes_reparadas) && partes_reparadas.length > 0) {
+      for (const p_id of partes_reparadas) {
+        await pool.query(
+          `INSERT INTO estado_partes_unidad (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (unidad_id, configuracion_parte_id)
+           DO UPDATE SET ultimo_mantenimiento_km = EXCLUDED.ultimo_mantenimiento_km,
+                         ultimo_mantenimiento_fecha = NOW()`,
+          [m.unidad_id, p_id, m.kilometraje_actual || 0]
+        );
+        await pool.query(
+          `UPDATE alertas_mantenimiento SET estado = 'RESUELTO'
+           WHERE unidad_id = $1 AND parte_id = $2`,
+          [m.unidad_id, p_id]
+        );
+      }
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const assignTecnico = async (req, res) => {
   try {
     const { id } = req.params;
@@ -335,4 +412,5 @@ module.exports = {
   deleteMaintenance,
   updateObservaciones,
   assignTecnico,
+  editMaintenance,
 };

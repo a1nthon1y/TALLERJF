@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, FileEdit } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -43,13 +43,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { configService } from "@/services/configService"
 import { materialService } from "@/services/materialService"
 
-const formSchema = z.object({
-  estado: z.enum(["pendiente", "en_proceso", "completado"], { message: "El estado es requerido" }),
+const editSchema = z.object({
+  estado: z.enum(["PENDIENTE", "EN_PROCESO", "COMPLETADO"]),
   tecnico_id: z.string().optional(),
-  partes_reparadas: z.array(z.string()).optional()
+  observaciones: z.string().optional(),
+  partes_reparadas: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
-  if (data.estado === "completado" && !data.tecnico_id) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Debe asignar un técnico para completar", path: ["tecnico_id"] })
+  if (data.estado === "COMPLETADO" && !data.tecnico_id) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El técnico es obligatorio al completar", path: ["tecnico_id"] })
   }
 })
 
@@ -57,25 +58,19 @@ export function MaintenancesTable() {
   const [searchTerm, setSearchTerm] = useState("")
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
   const [tipoFilter, setTipoFilter] = useState("TODOS")
-  const [selectedMaintenance, setSelectedMaintenance] = useState(null)
+  // Editar unificado
+  const [editingMaintenance, setEditingMaintenance] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const [partConfigs, setPartConfigs] = useState([])
+
+  // Cerrar / Aprobar
   const [closingMaintenance, setClosingMaintenance] = useState(null)
   const [closeObs, setCloseObs] = useState("")
   const [isClosing, setIsClosing] = useState(false)
-  const [partConfigs, setPartConfigs] = useState([])
 
   // Eliminar
   const [deletingMaintenance, setDeletingMaintenance] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
-
-  // Editar observaciones
-  const [editingMaintenance, setEditingMaintenance] = useState(null)
-  const [editObs, setEditObs] = useState("")
-  const [isSavingObs, setIsSavingObs] = useState(false)
-
-  // Reasignar técnico
-  const [assigningMaintenance, setAssigningMaintenance] = useState(null)
-  const [assignTecnicoId, setAssignTecnicoId] = useState("")
-  const [isSavingTecnico, setIsSavingTecnico] = useState(false)
 
   // Materiales dialog state
   const [materialsMaintenance, setMaterialsMaintenance] = useState(null)
@@ -94,25 +89,44 @@ export function MaintenancesTable() {
      configService.getConfigs().then(setPartConfigs).catch(() => {})
   }, [])
 
-  const form = useForm({
-    resolver: zodResolver(formSchema),
+  const editForm = useForm({
+    resolver: zodResolver(editSchema),
     defaultValues: {
-      estado: "pendiente",
+      estado: "PENDIENTE",
       tecnico_id: "",
+      observaciones: "",
       partes_reparadas: [],
     },
   })
 
-  const handleUpdateStatus = async (values) => {
+  const openEditDialog = (maintenance) => {
+    setEditingMaintenance(maintenance)
+    editForm.reset({
+      estado: maintenance.estado?.toUpperCase() === "REALIZADO" ? "COMPLETADO" : (maintenance.estado?.toUpperCase() || "PENDIENTE"),
+      tecnico_id: maintenance.tecnico_id?.toString() || "",
+      observaciones: maintenance.observaciones || "",
+      partes_reparadas: [],
+    })
+  }
+
+  const handleEditSubmit = async (values) => {
+    if (!editingMaintenance) return
+    setIsSaving(true)
     try {
-      const partsArray = values.estado === "completado" ? (values.partes_reparadas || []).map(Number) : [];
-      const tecnicoId = values.estado === "completado" ? parseInt(values.tecnico_id) : null;
-      await maintenanceService.updateMaintenanceStatus(selectedMaintenance.id, values.estado, partsArray, tecnicoId)
-      toast.success("Estado y reglas predictivas actualizados correctamente")
-      setSelectedMaintenance(null)
+      const partes = values.estado === "COMPLETADO" ? (values.partes_reparadas || []).map(Number) : []
+      await maintenanceService.editMaintenance(editingMaintenance.id, {
+        estado: values.estado,
+        tecnico_id: values.tecnico_id ? parseInt(values.tecnico_id) : null,
+        observaciones: values.observaciones,
+        partes_reparadas: partes,
+      })
+      toast.success("Mantenimiento actualizado correctamente")
+      setEditingMaintenance(null)
       await mutate()
     } catch (error) {
       toast.error(error.message)
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -129,44 +143,6 @@ export function MaintenancesTable() {
     } finally {
       setIsDeleting(false)
     }
-  }
-
-  const handleSaveObservaciones = async () => {
-    if (!editingMaintenance) return
-    setIsSavingObs(true)
-    try {
-      await maintenanceService.updateObservaciones(editingMaintenance.id, editObs)
-      toast.success("Observaciones actualizadas")
-      setEditingMaintenance(null)
-      await mutate()
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setIsSavingObs(false)
-    }
-  }
-
-  const handleSaveTecnico = async () => {
-    if (!assigningMaintenance) return
-    setIsSavingTecnico(true)
-    try {
-      await maintenanceService.assignTecnico(
-        assigningMaintenance.id,
-        assignTecnicoId === "NONE" ? null : parseInt(assignTecnicoId)
-      )
-      toast.success("Técnico actualizado")
-      setAssigningMaintenance(null)
-      await mutate()
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setIsSavingTecnico(false)
-    }
-  }
-
-  const handleEditClick = (maintenance) => {
-    setSelectedMaintenance(maintenance)
-    form.reset({ estado: maintenance.estado?.toLowerCase() || "pendiente", tecnico_id: maintenance.tecnico_id?.toString() || "", partes_reparadas: [] })
   }
 
   const handleCloseMaintenance = async () => {
@@ -385,11 +361,11 @@ export function MaintenancesTable() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {maintenance.estado?.toUpperCase() !== "CERRADO" &&
-                       maintenance.estado?.toUpperCase() !== "REALIZADO" && (
-                        <DropdownMenuItem onClick={() => handleEditClick(maintenance)}>
+                      {/* Editar — formulario unificado (no CERRADO) */}
+                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
+                        <DropdownMenuItem onClick={() => openEditDialog(maintenance)}>
                           <Edit className="mr-2 h-4 w-4" />
-                          Actualizar Estado
+                          Editar
                         </DropdownMenuItem>
                       )}
                       {isAdminOrEncargado && (
@@ -405,23 +381,6 @@ export function MaintenancesTable() {
                         >
                           <CheckCheck className="mr-2 h-4 w-4" />
                           Cerrar / Aprobar
-                        </DropdownMenuItem>
-                      )}
-                      {/* Editar observaciones — ADMIN/ENCARGADO, no CERRADO */}
-                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
-                        <DropdownMenuItem onClick={() => { setEditingMaintenance(maintenance); setEditObs(maintenance.observaciones || "") }}>
-                          <FileEdit className="mr-2 h-4 w-4" />
-                          Editar observaciones
-                        </DropdownMenuItem>
-                      )}
-                      {/* Cambiar técnico — ADMIN/ENCARGADO, no CERRADO */}
-                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
-                        <DropdownMenuItem onClick={() => {
-                          setAssigningMaintenance(maintenance)
-                          setAssignTecnicoId(maintenance.tecnico_id?.toString() || "NONE")
-                        }}>
-                          <Wrench className="mr-2 h-4 w-4" />
-                          Cambiar técnico
                         </DropdownMenuItem>
                       )}
                       {/* Eliminar — solo ADMIN, solo PENDIENTE */}
@@ -553,6 +512,151 @@ export function MaintenancesTable() {
         </DialogContent>
       </Dialog>
 
+      {/* Dialog: Editar mantenimiento (formulario unificado) */}
+      <Dialog open={!!editingMaintenance} onOpenChange={(v) => { if (!v) setEditingMaintenance(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-4 w-4" /> Editar Mantenimiento
+            </DialogTitle>
+            <DialogDescription>
+              Unidad <strong>{editingMaintenance?.placa ?? `U-${editingMaintenance?.unidad_id}`}</strong>
+              {" · "}{editingMaintenance?.tipo?.toLowerCase()}
+              {editingMaintenance?.kilometraje_actual && (
+                <> · {editingMaintenance.kilometraje_actual.toLocaleString()} km</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
+
+              {/* Estado — solo si no es REALIZADO (en campo no se puede cambiar estado retroactivo) */}
+              {editingMaintenance?.estado?.toUpperCase() !== "REALIZADO" && (
+                <FormField
+                  control={editForm.control}
+                  name="estado"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estado</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                          <SelectItem value="EN_PROCESO">En Proceso</SelectItem>
+                          <SelectItem value="COMPLETADO">Completado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* Técnico */}
+              <FormField
+                control={editForm.control}
+                name="tecnico_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Técnico asignado
+                      {editForm.watch("estado") === "COMPLETADO" && (
+                        <span className="text-destructive"> *</span>
+                      )}
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sin asignar" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">Sin asignar</SelectItem>
+                        {technicians?.filter(t => t.activo).map((t) => (
+                          <SelectItem key={t.id} value={t.id.toString()}>
+                            {t.nombre} {t.apellido ?? ""} — {t.especialidad}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Observaciones */}
+              <FormField
+                control={editForm.control}
+                name="observaciones"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Observaciones</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Describe el problema o las acciones a realizar..."
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Partes reparadas — solo al completar */}
+              {editForm.watch("estado") === "COMPLETADO" && (
+                <FormField
+                  control={editForm.control}
+                  name="partes_reparadas"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Piezas/Sistemas reparados</FormLabel>
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        Selecciona las partes atendidas para reiniciar sus contadores predictivos
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 border p-3 rounded-md bg-muted/30 max-h-40 overflow-y-auto">
+                        {partConfigs.map((item) => (
+                          <label key={item.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-gray-300"
+                              checked={field.value?.includes(String(item.id))}
+                              onChange={(e) => {
+                                let updated = [...(field.value || [])]
+                                if (e.target.checked) updated.push(String(item.id))
+                                else updated = updated.filter(v => v !== String(item.id))
+                                field.onChange(updated)
+                              }}
+                            />
+                            {item.nombre}
+                          </label>
+                        ))}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditingMaintenance(null)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  Guardar cambios
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog: Cerrar / Aprobar mantenimiento */}
       <Dialog open={!!closingMaintenance} onOpenChange={() => setClosingMaintenance(null)}>
         <DialogContent>
@@ -576,180 +680,6 @@ export function MaintenancesTable() {
             <Button onClick={handleCloseMaintenance} disabled={isClosing}>
               {isClosing && <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />}
               Cerrar y Aprobar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!selectedMaintenance} onOpenChange={() => setSelectedMaintenance(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Actualizar Estado del Mantenimiento</DialogTitle>
-            <DialogDescription>
-              Selecciona el nuevo estado para el mantenimiento.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleUpdateStatus)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="estado"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Estado</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un estado" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="pendiente">Pendiente</SelectItem>
-                        <SelectItem value="en_proceso">En Proceso</SelectItem>
-                        <SelectItem value="completado">Completado</SelectItem>
-                        <SelectItem value="cerrado" disabled>Cerrado (usar botón Cerrar/Aprobar)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {form.watch("estado") === "completado" && (
-                <FormField
-                  control={form.control}
-                  name="tecnico_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Técnico Responsable <span className="text-destructive">*</span></FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Seleccione el técnico que realizó el trabajo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {technicians?.filter(t => t.activo).map((t) => (
-                            <SelectItem key={t.id} value={t.id.toString()}>
-                              {t.nombre} — {t.especialidad}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-
-              {form.watch("estado") === "completado" && (
-                <FormField
-                  control={form.control}
-                  name="partes_reparadas"
-                  render={({ field }) => (
-                     <FormItem>
-                       <div className="mb-4">
-                         <FormLabel className="text-base">Piezas/Sistemas Reparados</FormLabel>
-                         <p className="text-sm text-muted-foreground">
-                           Selecciona los elementos mantenidos para reiniciar sus respectivos contadores de kilómetros predictivos:
-                         </p>
-                       </div>
-                       <div className="grid grid-cols-2 gap-2 border p-4 rounded bg-slate-50 dark:bg-slate-900 overflow-y-auto max-h-40">
-                         {partConfigs.map((item) => (
-                           <label key={item.id} className="flex flex-row items-center space-x-3 space-y-0 cursor-pointer">
-                             <input
-                               type="checkbox"
-                               className="h-4 w-4 rounded border-gray-300"
-                               checked={field.value?.includes(String(item.id))}
-                               onChange={(e) => {
-                                 let updated = [...(field.value || [])];
-                                 if (e.target.checked) updated.push(String(item.id));
-                                 else updated = updated.filter(val => val !== String(item.id));
-                                 field.onChange(updated);
-                               }}
-                             />
-                             <span className="font-normal text-sm">{item.nombre}</span>
-                           </label>
-                         ))}
-                       </div>
-                       <FormMessage />
-                     </FormItem>
-                  )}
-                />
-              )}
-
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setSelectedMaintenance(null)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  Actualizar Estado
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog: Editar observaciones */}
-      <Dialog open={!!editingMaintenance} onOpenChange={(v) => { if (!v) setEditingMaintenance(null) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileEdit className="h-4 w-4" /> Editar Observaciones
-            </DialogTitle>
-            <DialogDescription>
-              Unidad <strong>{editingMaintenance?.placa}</strong> — {editingMaintenance?.tipo?.toLowerCase()}
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            value={editObs}
-            onChange={(e) => setEditObs(e.target.value)}
-            rows={5}
-            placeholder="Describe el problema o las acciones a realizar..."
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingMaintenance(null)}>Cancelar</Button>
-            <Button onClick={handleSaveObservaciones} disabled={isSavingObs || !editObs.trim()}>
-              {isSavingObs && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Guardar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog: Cambiar técnico */}
-      <Dialog open={!!assigningMaintenance} onOpenChange={(v) => { if (!v) setAssigningMaintenance(null) }}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Wrench className="h-4 w-4" /> Cambiar Técnico
-            </DialogTitle>
-            <DialogDescription>
-              Unidad <strong>{assigningMaintenance?.placa}</strong> — {assigningMaintenance?.tipo?.toLowerCase()}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-2">
-            <label className="text-sm font-medium">Técnico asignado</label>
-            <Select value={assignTecnicoId} onValueChange={setAssignTecnicoId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar técnico" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="NONE">Sin asignar</SelectItem>
-                {technicians?.filter(t => t.activo).map((t) => (
-                  <SelectItem key={t.id} value={t.id.toString()}>
-                    {t.nombre} {t.apellido}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssigningMaintenance(null)}>Cancelar</Button>
-            <Button onClick={handleSaveTecnico} disabled={isSavingTecnico}>
-              {isSavingTecnico && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Guardar
             </Button>
           </DialogFooter>
         </DialogContent>
