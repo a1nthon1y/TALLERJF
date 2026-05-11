@@ -262,7 +262,6 @@ const deleteMaintenance = async (req, res) => {
       return res.status(400).json({ message: "Solo se pueden eliminar mantenimientos en estado PENDIENTE" });
 
     await pool.query("DELETE FROM detalles_mantenimiento WHERE mantenimiento_id = $1", [id]);
-    await pool.query("DELETE FROM alertas_mantenimiento WHERE mantenimiento_id = $1", [id]);
     await pool.query("DELETE FROM mantenimientos WHERE id = $1", [id]);
     res.json({ message: "Mantenimiento eliminado correctamente" });
   } catch (error) {
