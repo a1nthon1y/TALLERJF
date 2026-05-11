@@ -49,7 +49,7 @@ const editSchema = z.object({
   observaciones: z.string().optional(),
   partes_reparadas: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
-  if (data.estado === "COMPLETADO" && !data.tecnico_id) {
+  if (data.estado === "COMPLETADO" && (!data.tecnico_id || data.tecnico_id === "NONE")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El técnico es obligatorio al completar", path: ["tecnico_id"] })
   }
 })
@@ -93,7 +93,7 @@ export function MaintenancesTable() {
     resolver: zodResolver(editSchema),
     defaultValues: {
       estado: "PENDIENTE",
-      tecnico_id: "",
+      tecnico_id: "NONE",
       observaciones: "",
       partes_reparadas: [],
     },
@@ -103,7 +103,7 @@ export function MaintenancesTable() {
     setEditingMaintenance(maintenance)
     editForm.reset({
       estado: maintenance.estado?.toUpperCase() === "REALIZADO" ? "COMPLETADO" : (maintenance.estado?.toUpperCase() || "PENDIENTE"),
-      tecnico_id: maintenance.tecnico_id?.toString() || "",
+      tecnico_id: maintenance.tecnico_id?.toString() || "NONE",
       observaciones: maintenance.observaciones || "",
       partes_reparadas: [],
     })
@@ -116,7 +116,7 @@ export function MaintenancesTable() {
       const partes = values.estado === "COMPLETADO" ? (values.partes_reparadas || []).map(Number) : []
       await maintenanceService.editMaintenance(editingMaintenance.id, {
         estado: values.estado,
-        tecnico_id: values.tecnico_id ? parseInt(values.tecnico_id) : null,
+        tecnico_id: (values.tecnico_id && values.tecnico_id !== "NONE") ? parseInt(values.tecnico_id) : null,
         observaciones: values.observaciones,
         partes_reparadas: partes,
       })
@@ -576,7 +576,7 @@ export function MaintenancesTable() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Sin asignar</SelectItem>
+                        <SelectItem value="NONE">Sin asignar</SelectItem>
                         {technicians?.filter(t => t.activo).map((t) => (
                           <SelectItem key={t.id} value={t.id.toString()}>
                             {t.nombre} {t.apellido ?? ""} — {t.especialidad}
