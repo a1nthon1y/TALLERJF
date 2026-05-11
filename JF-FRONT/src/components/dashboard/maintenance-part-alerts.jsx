@@ -88,7 +88,7 @@ export function MaintenancePartAlerts() {
           </div>
           <Button variant="outline" size="sm" className="bg-white dark:bg-gray-800" asChild>
             <Link href="/mantenimientos/alertas">
-              Ver todas <ChevronRight className="ml-1 h-4 w-4" />
+              Ver todas ({criticalParts.length}) <ChevronRight className="ml-1 h-4 w-4" />
             </Link>
           </Button>
         </div>
