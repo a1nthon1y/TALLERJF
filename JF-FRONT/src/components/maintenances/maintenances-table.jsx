@@ -54,6 +54,8 @@ const formSchema = z.object({
 
 export function MaintenancesTable() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [estadoFilter, setEstadoFilter] = useState("TODOS")
+  const [tipoFilter, setTipoFilter] = useState("TODOS")
   const [selectedMaintenance, setSelectedMaintenance] = useState(null)
   const [closingMaintenance, setClosingMaintenance] = useState(null)
   const [closeObs, setCloseObs] = useState("")
@@ -195,12 +197,18 @@ export function MaintenancesTable() {
 
   const filteredMaintenances = maintenances?.filter((maintenance) => {
     const searchLower = searchTerm.toLowerCase()
-    return (
+    const matchSearch =
+      !searchTerm ||
       maintenance.placa?.toLowerCase().includes(searchLower) ||
-      maintenance.unidad_id?.toString().includes(searchLower) ||
+      maintenance.modelo?.toLowerCase().includes(searchLower) ||
       maintenance.tipo?.toLowerCase().includes(searchLower) ||
-      maintenance.observaciones?.toLowerCase().includes(searchLower)
-    )
+      maintenance.observaciones?.toLowerCase().includes(searchLower) ||
+      maintenance.tecnico_nombre?.toLowerCase().includes(searchLower)
+    const matchEstado =
+      estadoFilter === "TODOS" || maintenance.estado?.toUpperCase() === estadoFilter
+    const matchTipo =
+      tipoFilter === "TODOS" || maintenance.tipo?.toUpperCase() === tipoFilter
+    return matchSearch && matchEstado && matchTipo
   })
 
   if (isLoadingMaintenances || isLoadingTechnicians) {
@@ -214,15 +222,54 @@ export function MaintenancesTable() {
     )
   }
 
+  // Contadores para badges de filtro
+  const pendientes = maintenances?.filter((m) => m.estado === "PENDIENTE").length ?? 0
+  const enProceso  = maintenances?.filter((m) => m.estado === "EN_PROCESO").length ?? 0
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Input
-          placeholder="Buscar mantenimientos..."
+          placeholder="Buscar por placa, técnico, observaciones..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
+          className="max-w-xs"
         />
+        <Select value={estadoFilter} onValueChange={setEstadoFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TODOS">Todos los estados</SelectItem>
+            <SelectItem value="PENDIENTE">
+              Pendiente {pendientes > 0 ? `(${pendientes})` : ""}
+            </SelectItem>
+            <SelectItem value="EN_PROCESO">
+              En Proceso {enProceso > 0 ? `(${enProceso})` : ""}
+            </SelectItem>
+            <SelectItem value="COMPLETADO">Completado</SelectItem>
+            <SelectItem value="REALIZADO">En Campo</SelectItem>
+            <SelectItem value="CERRADO">Cerrado</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={tipoFilter} onValueChange={setTipoFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="TODOS">Todos los tipos</SelectItem>
+            <SelectItem value="PREVENTIVO">Preventivo</SelectItem>
+            <SelectItem value="CORRECTIVO">Correctivo</SelectItem>
+          </SelectContent>
+        </Select>
+        {(estadoFilter !== "TODOS" || tipoFilter !== "TODOS" || searchTerm) && (
+          <button
+            onClick={() => { setEstadoFilter("TODOS"); setTipoFilter("TODOS"); setSearchTerm("") }}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Limpiar filtros
+          </button>
+        )}
       </div>
       <div className="rounded-md border">
         <Table>
