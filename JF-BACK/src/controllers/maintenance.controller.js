@@ -251,6 +251,49 @@ const closeMaintenance = async (req, res) => {
   }
 };
 
+// Eliminar un mantenimiento (solo ADMIN, solo si está PENDIENTE)
+const deleteMaintenance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const mant = await pool.query("SELECT estado FROM mantenimientos WHERE id = $1", [id]);
+    if (mant.rows.length === 0)
+      return res.status(404).json({ message: "Mantenimiento no encontrado" });
+    if (mant.rows[0].estado !== "PENDIENTE")
+      return res.status(400).json({ message: "Solo se pueden eliminar mantenimientos en estado PENDIENTE" });
+
+    await pool.query("DELETE FROM detalles_mantenimiento WHERE mantenimiento_id = $1", [id]);
+    await pool.query("DELETE FROM alertas_mantenimiento WHERE mantenimiento_id = $1", [id]);
+    await pool.query("DELETE FROM mantenimientos WHERE id = $1", [id]);
+    res.json({ message: "Mantenimiento eliminado correctamente" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Editar observaciones de un mantenimiento (ADMIN/ENCARGADO, no CERRADO)
+const updateObservaciones = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { observaciones } = req.body;
+    if (!observaciones?.trim())
+      return res.status(400).json({ message: "Las observaciones no pueden estar vacías" });
+
+    const mant = await pool.query("SELECT estado FROM mantenimientos WHERE id = $1", [id]);
+    if (mant.rows.length === 0)
+      return res.status(404).json({ message: "Mantenimiento no encontrado" });
+    if (mant.rows[0].estado === "CERRADO")
+      return res.status(400).json({ message: "No se puede editar un mantenimiento cerrado" });
+
+    const result = await pool.query(
+      "UPDATE mantenimientos SET observaciones = $1 WHERE id = $2 RETURNING *",
+      [observaciones.trim(), id]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 module.exports = {
   createMaintenance,
   getAllMaintenances,
@@ -260,4 +303,6 @@ module.exports = {
   getMyJobs,
   updateMyJobStatus,
   closeMaintenance,
+  deleteMaintenance,
+  updateObservaciones,
 };

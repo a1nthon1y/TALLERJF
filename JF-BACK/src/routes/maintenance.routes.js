@@ -25,6 +25,12 @@ router.put("/:id/my-status", authenticate, checkRole(["TECNICO"]), maintenanceCo
 // Encargado cierra/aprueba el mantenimiento (COMPLETADO → CERRADO)
 router.put("/:id/close", authenticate, checkRole(["ENCARGADO", "ADMIN"]), maintenanceController.closeMaintenance);
 
+// Editar observaciones (ADMIN/ENCARGADO, no CERRADO)
+router.put("/:id/observaciones", authenticate, checkRole(["ADMIN", "ENCARGADO"]), maintenanceController.updateObservaciones);
+
+// Eliminar (solo ADMIN, solo PENDIENTE)
+router.delete("/:id", authenticate, checkRole(["ADMIN"]), maintenanceController.deleteMaintenance);
+
 // Materiales usados en un mantenimiento
 router.get("/:id/materials", authenticate, getMaterials);
 router.post("/:id/materials", authenticate, checkRole(["ADMIN", "ENCARGADO"]), addMaterial);

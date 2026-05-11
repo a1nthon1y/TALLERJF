@@ -105,4 +105,20 @@ export const maintenanceService = {
       throw new Error(error.message || 'Error al eliminar material');
     }
   },
+
+  async deleteMaintenance(maintenanceId) {
+    try {
+      return await makeDeleteRequest(`/maintenances/${maintenanceId}`);
+    } catch (error) {
+      throw new Error(error.message || 'Error al eliminar mantenimiento');
+    }
+  },
+
+  async updateObservaciones(maintenanceId, observaciones) {
+    try {
+      return await makePutRequest(`/maintenances/${maintenanceId}/observaciones`, { observaciones });
+    } catch (error) {
+      throw new Error(error.message || 'Error al actualizar observaciones');
+    }
+  },
 };

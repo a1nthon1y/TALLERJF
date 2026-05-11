@@ -15,10 +15,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, FileEdit } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -62,6 +63,15 @@ export function MaintenancesTable() {
   const [isClosing, setIsClosing] = useState(false)
   const [partConfigs, setPartConfigs] = useState([])
 
+  // Eliminar
+  const [deletingMaintenance, setDeletingMaintenance] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // Editar observaciones
+  const [editingMaintenance, setEditingMaintenance] = useState(null)
+  const [editObs, setEditObs] = useState("")
+  const [isSavingObs, setIsSavingObs] = useState(false)
+
   // Materiales dialog state
   const [materialsMaintenance, setMaterialsMaintenance] = useState(null)
   const [materials, setMaterials] = useState([])
@@ -98,6 +108,36 @@ export function MaintenancesTable() {
       await mutate()
     } catch (error) {
       toast.error(error.message)
+    }
+  }
+
+  const handleDeleteMaintenance = async () => {
+    if (!deletingMaintenance) return
+    setIsDeleting(true)
+    try {
+      await maintenanceService.deleteMaintenance(deletingMaintenance.id)
+      toast.success("Mantenimiento eliminado")
+      setDeletingMaintenance(null)
+      await mutate()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleSaveObservaciones = async () => {
+    if (!editingMaintenance) return
+    setIsSavingObs(true)
+    try {
+      await maintenanceService.updateObservaciones(editingMaintenance.id, editObs)
+      toast.success("Observaciones actualizadas")
+      setEditingMaintenance(null)
+      await mutate()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setIsSavingObs(false)
     }
   }
 
@@ -343,6 +383,26 @@ export function MaintenancesTable() {
                           <CheckCheck className="mr-2 h-4 w-4" />
                           Cerrar / Aprobar
                         </DropdownMenuItem>
+                      )}
+                      {/* Editar observaciones — ADMIN/ENCARGADO, no CERRADO */}
+                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
+                        <DropdownMenuItem onClick={() => { setEditingMaintenance(maintenance); setEditObs(maintenance.observaciones || "") }}>
+                          <FileEdit className="mr-2 h-4 w-4" />
+                          Editar observaciones
+                        </DropdownMenuItem>
+                      )}
+                      {/* Eliminar — solo ADMIN, solo PENDIENTE */}
+                      {currentUser?.rol === "ADMIN" && maintenance.estado?.toUpperCase() === "PENDIENTE" && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setDeletingMaintenance(maintenance)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Eliminar
+                          </DropdownMenuItem>
+                        </>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -595,6 +655,53 @@ export function MaintenancesTable() {
               </div>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Editar observaciones */}
+      <Dialog open={!!editingMaintenance} onOpenChange={(v) => { if (!v) setEditingMaintenance(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileEdit className="h-4 w-4" /> Editar Observaciones
+            </DialogTitle>
+            <DialogDescription>
+              Unidad <strong>{editingMaintenance?.placa}</strong> — {editingMaintenance?.tipo?.toLowerCase()}
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={editObs}
+            onChange={(e) => setEditObs(e.target.value)}
+            rows={5}
+            placeholder="Describe el problema o las acciones a realizar..."
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMaintenance(null)}>Cancelar</Button>
+            <Button onClick={handleSaveObservaciones} disabled={isSavingObs || !editObs.trim()}>
+              {isSavingObs && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar eliminación */}
+      <Dialog open={!!deletingMaintenance} onOpenChange={(v) => { if (!v) setDeletingMaintenance(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar mantenimiento?</DialogTitle>
+            <DialogDescription>
+              Se eliminará el mantenimiento <strong>PENDIENTE</strong> de la unidad{" "}
+              <strong>{deletingMaintenance?.placa}</strong>. Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingMaintenance(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteMaintenance} disabled={isDeleting}>
+              {isDeleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Eliminar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
