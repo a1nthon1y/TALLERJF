@@ -1,5 +1,26 @@
 const pool = require("../config/db");
 
+// Genera un código único: PRV-YYMM-NNNN | CRR-YYMM-NNNN | CAM-YYMM-NNNN
+// Exportado para ser usado en otros controladores (ej: chofer.controller)
+async function generarCodigo(tipo, estado = null) {
+  const now = new Date();
+  const yy = now.getFullYear().toString().slice(2);
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+
+  let prefix;
+  if (tipo === 'PREVENTIVO') prefix = 'PRV';
+  else if (estado === 'REALIZADO') prefix = 'CAM';
+  else prefix = 'CRR';
+
+  const pattern = `${prefix}-${yy}${mm}-%`;
+  const { rows } = await pool.query(
+    `SELECT COUNT(*) FROM mantenimientos WHERE codigo LIKE $1`,
+    [pattern]
+  );
+  const seq = String(parseInt(rows[0].count) + 1).padStart(4, '0');
+  return `${prefix}-${yy}${mm}-${seq}`;
+}
+
 // Registrar un mantenimiento (preventivo o correctivo) con kilometraje y TECNICO
 const createMaintenance = async (req, res) => {
   try {
@@ -14,11 +35,13 @@ const createMaintenance = async (req, res) => {
       return res.status(404).json({ message: "Unidad no encontrada" });
     }
 
+    const codigo = await generarCodigo(tipoNorm);
+
     // Registrar el mantenimiento incluyendo el tecnico_id
     const result = await pool.query(
-      `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [unidad_id, tipoNorm, observaciones, kilometraje_actual, tecnico_id || null]
+      `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id, codigo) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [unidad_id, tipoNorm, observaciones, kilometraje_actual, tecnico_id || null, codigo]
     );
 
     // Actualizar el kilometraje de la unidad
@@ -400,6 +423,7 @@ const updateObservaciones = async (req, res) => {
 };
 
 module.exports = {
+  generarCodigo,
   createMaintenance,
   getAllMaintenances,
   getMaintenanceById,

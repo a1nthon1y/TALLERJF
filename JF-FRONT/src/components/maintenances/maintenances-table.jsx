@@ -314,12 +314,13 @@ export function MaintenancesTable() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Código</TableHead>
               <TableHead>Unidad</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Técnico</TableHead>
-              <TableHead>Observaciones</TableHead>
-              <TableHead>Kilometraje</TableHead>
+              <TableHead className="hidden lg:table-cell">Observaciones</TableHead>
+              <TableHead className="hidden md:table-cell">Kilometraje</TableHead>
               <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
@@ -337,6 +338,11 @@ export function MaintenancesTable() {
             {filteredMaintenances?.map((maintenance) => (
               <TableRow key={maintenance.id}>
                 <TableCell>
+                  <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground whitespace-nowrap">
+                    {maintenance.codigo ?? `#${maintenance.id}`}
+                  </code>
+                </TableCell>
+                <TableCell>
                   <div>
                     <p className="font-medium">{maintenance.placa ?? `U-${maintenance.unidad_id}`}</p>
                     {maintenance.modelo && <p className="text-xs text-muted-foreground">{maintenance.modelo}</p>}
@@ -347,12 +353,12 @@ export function MaintenancesTable() {
                 <TableCell>
                   {maintenance.tecnico_nombre ?? getTechnicianName(maintenance.tecnico_id)}
                 </TableCell>
-                <TableCell className="max-w-[180px]">
+                <TableCell className="max-w-[180px] hidden lg:table-cell">
                   <p className="text-xs text-muted-foreground line-clamp-2" title={maintenance.observaciones}>
                     {maintenance.observaciones || "—"}
                   </p>
                 </TableCell>
-                <TableCell>{maintenance.kilometraje_actual?.toLocaleString() ?? "—"}</TableCell>
+                <TableCell className="hidden md:table-cell">{maintenance.kilometraje_actual?.toLocaleString() ?? "—"}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -519,12 +525,19 @@ export function MaintenancesTable() {
             <DialogTitle className="flex items-center gap-2">
               <Edit className="h-4 w-4" /> Editar Mantenimiento
             </DialogTitle>
-            <DialogDescription>
-              Unidad <strong>{editingMaintenance?.placa ?? `U-${editingMaintenance?.unidad_id}`}</strong>
-              {" · "}{editingMaintenance?.tipo?.toLowerCase()}
-              {editingMaintenance?.kilometraje_actual && (
-                <> · {editingMaintenance.kilometraje_actual.toLocaleString()} km</>
+            <DialogDescription className="flex items-center gap-2 flex-wrap">
+              {editingMaintenance?.codigo && (
+                <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
+                  {editingMaintenance.codigo}
+                </code>
               )}
+              <span>
+                Unidad <strong>{editingMaintenance?.placa ?? `U-${editingMaintenance?.unidad_id}`}</strong>
+                {" · "}{editingMaintenance?.tipo?.toLowerCase()}
+                {editingMaintenance?.kilometraje_actual && (
+                  <> · {editingMaintenance.kilometraje_actual.toLocaleString()} km</>
+                )}
+              </span>
             </DialogDescription>
           </DialogHeader>
 

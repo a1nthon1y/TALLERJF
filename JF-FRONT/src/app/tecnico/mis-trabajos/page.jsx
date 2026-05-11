@@ -84,6 +84,11 @@ function JobCard({ job, onAction }) {
               {esPreventivo
                 ? <Badge className="text-xs bg-red-100 text-red-700 border-red-300 flex items-center gap-1"><Zap className="h-3 w-3" /> Preventivo</Badge>
                 : <Badge variant="outline" className="text-xs">Correctivo</Badge>}
+              {job.codigo && (
+                <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                  {job.codigo}
+                </code>
+              )}
             </div>
           </div>
           <div className="shrink-0">{estadoBadge(job.estado)}</div>

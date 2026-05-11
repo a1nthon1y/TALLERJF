@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { generarCodigo } = require("./maintenance.controller");
 
 // ===============================================================
 //  ✅ Crear chofer
@@ -254,10 +255,12 @@ const crearReporteLlegada = async (req, res) => {
           costo > 0 ? `Costo estimado: S/. ${costo.toFixed(2)}` : null,
         ].filter(Boolean).join("\n");
 
+        const codigoCampo = await generarCodigo('CORRECTIVO', 'REALIZADO');
+
         const mantResult = await pool.query(
-          `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, estado, fecha_realizacion)
-           VALUES ($1, 'CORRECTIVO', $2, $3, 'REALIZADO', NOW()) RETURNING id`,
-          [unidad_id, obsText, kmIntervencion]
+          `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, estado, fecha_realizacion, codigo)
+           VALUES ($1, 'CORRECTIVO', $2, $3, 'REALIZADO', NOW(), $4) RETURNING id`,
+          [unidad_id, obsText, kmIntervencion, codigoCampo]
         );
         const mantId = mantResult.rows[0].id;
 

@@ -141,6 +141,11 @@ function CardActivo({ m }) {
           <div className="flex items-center gap-2 flex-wrap">
             {tipoBadge(m.tipo)}
             {cfg.badge}
+            {m.codigo && (
+              <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                {m.codigo}
+              </code>
+            )}
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {m.fecha_solicitud && (
@@ -210,6 +215,11 @@ function CardHistorial({ m }) {
 
         {/* badges */}
         <div className="flex items-center gap-2 shrink-0">
+          {m.codigo && (
+            <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded text-muted-foreground hidden sm:inline">
+              {m.codigo}
+            </code>
+          )}
           {tipoBadge(m.tipo)}
           {cfg.badge}
           {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}

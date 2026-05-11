@@ -233,6 +233,11 @@ export default function DuenoMantenimientosPage() {
                             <MapPin className="h-3 w-3" /> Ruta
                           </span>
                         )}
+                        {m.codigo && (
+                          <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
+                            {m.codigo}
+                          </code>
+                        )}
                       </div>
                       {m.observaciones && (
                         <ObservacionesView observaciones={m.observaciones} />

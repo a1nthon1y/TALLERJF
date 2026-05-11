@@ -27,8 +27,37 @@ pool.on('error', (err, client) => {
 });
 
 pool.connect()
-  .then(client => {
+  .then(async client => {
     console.log("🟢 Conectado a PostgreSQL");
+    try {
+      // Agregar columna codigo si no existe
+      await client.query(`
+        ALTER TABLE mantenimientos
+        ADD COLUMN IF NOT EXISTS codigo VARCHAR(20) UNIQUE;
+      `);
+
+      // Backfill: generar código para registros que no lo tengan
+      await client.query(`
+        UPDATE mantenimientos
+        SET codigo = CONCAT(
+          CASE tipo
+            WHEN 'PREVENTIVO' THEN 'PRV'
+            WHEN 'CORRECTIVO' THEN
+              CASE WHEN estado = 'REALIZADO' THEN 'CAM' ELSE 'CRR' END
+            ELSE 'MNT'
+          END,
+          '-',
+          TO_CHAR(COALESCE(fecha_solicitud, NOW()), 'YYMM'),
+          '-',
+          LPAD(id::text, 4, '0')
+        )
+        WHERE codigo IS NULL;
+      `);
+
+      console.log("🟢 Migración codigo completada");
+    } catch (e) {
+      console.error("🟡 Migración codigo:", e.message);
+    }
     client.release();
   })
   .catch(err => console.error("🔴 Error de conexión:", err.message));
