@@ -48,15 +48,6 @@ export const maintenanceService = {
     }
   },
 
-  async assignTechnician(maintenanceId, technicianId) {
-    try {
-      return await makePutRequest(`/maintenances/${maintenanceId}/assign`, {
-        id_tecnico: technicianId,
-      });
-    } catch (error) {
-      throw new Error(error.message || 'Error al asignar técnico');
-    }
-  },
 
   async getMyJobs() {
     try {

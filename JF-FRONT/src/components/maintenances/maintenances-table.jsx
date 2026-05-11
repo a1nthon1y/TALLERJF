@@ -345,7 +345,7 @@ export function MaintenancesTable() {
                 <TableCell className="capitalize">{maintenance.tipo?.toLowerCase()}</TableCell>
                 <TableCell>{getStatusBadge(maintenance.estado)}</TableCell>
                 <TableCell>
-                  {maintenance.tecnico_nombre ?? getTechnicianName(maintenance.tecnico_id ?? maintenance.id_tecnico)}
+                  {maintenance.tecnico_nombre ?? getTechnicianName(maintenance.tecnico_id)}
                 </TableCell>
                 <TableCell className="max-w-[180px]">
                   <p className="text-xs text-muted-foreground line-clamp-2" title={maintenance.observaciones}>
