@@ -350,24 +350,24 @@ const editMaintenance = async (req, res) => {
       return res.status(400).json({ message: "Un mantenimiento cerrado no puede ser modificado" });
 
     const estadoNorm = estado ? estado.toUpperCase() : m.estado;
+    const userRole = req.user?.rol;
+    const isAdmin = userRole === "ADMIN";
 
-    // Validar transiciones de estado: solo avanzar, nunca retroceder
-    const ORDEN_ESTADOS = { PENDIENTE: 0, EN_PROCESO: 1, COMPLETADO: 2, CERRADO: 3 };
-    const TRANSICIONES_VALIDAS = {
+    // Encargado: forward-only · Admin: libre (puede corregir errores)
+    const TRANSICIONES_ENCARGADO = {
       PENDIENTE:  ["EN_PROCESO", "COMPLETADO"],
       EN_PROCESO: ["COMPLETADO"],
-      COMPLETADO: [], // solo via closeMaintenance
+      COMPLETADO: [], // encargado solo cierra via closeMaintenance
     };
-    const actualOrden = ORDEN_ESTADOS[m.estado] ?? -1;
-    const nuevoOrden  = ORDEN_ESTADOS[estadoNorm] ?? -1;
 
     if (estadoNorm !== m.estado) {
       if (estadoNorm === "CERRADO")
         return res.status(400).json({ message: "Para cerrar un mantenimiento use la acción 'Cerrar / Aprobar'" });
-      if (!TRANSICIONES_VALIDAS[m.estado]?.includes(estadoNorm))
+      if (!isAdmin && !TRANSICIONES_ENCARGADO[m.estado]?.includes(estadoNorm))
         return res.status(400).json({
-          message: `No se puede cambiar el estado de ${m.estado} a ${estadoNorm}. El flujo solo avanza.`
+          message: `Solo el ADMIN puede retroceder estados. Cambio ${m.estado} → ${estadoNorm} no permitido para ${userRole}.`
         });
+      // Admin sí puede retroceder libremente entre PENDIENTE/EN_PROCESO/COMPLETADO
     }
 
     // tecnico_id obligatorio al avanzar a COMPLETADO

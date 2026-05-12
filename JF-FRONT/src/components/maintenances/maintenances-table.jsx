@@ -44,11 +44,18 @@ import { configService } from "@/services/configService"
 import { materialService } from "@/services/materialService"
 import { getPartsStatus } from "@/services/unitsService"
 
-// Transiciones permitidas por estado actual (forward-only)
-const TRANSICIONES_VALIDAS = {
+// Transiciones permitidas por estado actual
+// Encargado: forward-only (flujo estricto)
+// Admin: libre (puede retroceder para corregir errores)
+const TRANSICIONES_ENCARGADO = {
   PENDIENTE:  ["PENDIENTE", "EN_PROCESO", "COMPLETADO"],
   EN_PROCESO: ["EN_PROCESO", "COMPLETADO"],
-  COMPLETADO: ["COMPLETADO"], // estado no cambia vía Edit; solo via Cerrar/Aprobar
+  COMPLETADO: ["COMPLETADO"],
+}
+const TRANSICIONES_ADMIN = {
+  PENDIENTE:  ["PENDIENTE", "EN_PROCESO", "COMPLETADO"],
+  EN_PROCESO: ["PENDIENTE", "EN_PROCESO", "COMPLETADO"],
+  COMPLETADO: ["PENDIENTE", "EN_PROCESO", "COMPLETADO"],
 }
 
 const editSchema = z.object({
@@ -181,13 +188,17 @@ export function MaintenancesTable() {
     if (!editingMaintenance) return
     setIsSaving(true)
     try {
-      const partes = values.estado === "COMPLETADO" ? (values.partes_reparadas || []).map(Number) : []
+      const isPreventivo = editingMaintenance.tipo?.toUpperCase() === "PREVENTIVO"
+      // Las "partes a atender" son la única fuente de verdad — al COMPLETAR
+      // se usan también como partes_reparadas para resetear sus contadores predictivos
+      const partesAtender = isPreventivo ? editPartesRef.current.map(Number) : []
+      const partesReparadas = values.estado === "COMPLETADO" ? partesAtender : []
       await maintenanceService.editMaintenance(editingMaintenance.id, {
         estado: values.estado,
         tecnico_id: (values.tecnico_id && values.tecnico_id !== "NONE") ? parseInt(values.tecnico_id) : null,
         nota_adicional: values.nota_adicional || "",
-        partes_reparadas: partes,
-        partes_programadas: editingMaintenance.tipo?.toUpperCase() === "PREVENTIVO" ? editPartesRef.current.map(Number) : undefined,
+        partes_reparadas: partesReparadas,
+        partes_programadas: isPreventivo ? partesAtender : undefined,
       })
       toast.success("Mantenimiento actualizado correctamente")
       setEditingMaintenance(null)
@@ -1062,11 +1073,13 @@ export function MaintenancesTable() {
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
 
-              {/* Estado — solo se puede avanzar, nunca retroceder */}
+              {/* Estado — Encargado: forward-only · Admin: libre (puede corregir) */}
               {(() => {
                 const estadoActual = editingMaintenance?.estado?.toUpperCase()
-                // COMPLETADO no puede cambiar estado desde edición (solo via Cerrar/Aprobar)
-                if (estadoActual === "COMPLETADO") return (
+                const isAdmin = currentUser?.rol === "ADMIN"
+                const matriz = isAdmin ? TRANSICIONES_ADMIN : TRANSICIONES_ENCARGADO
+                // Encargado en COMPLETADO solo puede usar Cerrar/Aprobar; admin sí puede corregir
+                if (estadoActual === "COMPLETADO" && !isAdmin) return (
                   <div className="space-y-1.5">
                     <p className="text-sm font-medium">Estado</p>
                     <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/50">
@@ -1075,14 +1088,14 @@ export function MaintenancesTable() {
                     </div>
                   </div>
                 )
-                const opciones = TRANSICIONES_VALIDAS[estadoActual] ?? ["PENDIENTE"]
+                const opciones = matriz[estadoActual] ?? ["PENDIENTE"]
                 return (
                   <FormField
                     control={editForm.control}
                     name="estado"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Estado</FormLabel>
+                        <FormLabel>Estado {isAdmin && <span className="text-xs text-muted-foreground font-normal">(admin: puede corregir hacia atrás)</span>}</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
@@ -1227,41 +1240,6 @@ export function MaintenancesTable() {
                     )}
                   />
                 </>
-              )}
-
-              {/* Partes reparadas — al completar */}
-              {editForm.watch("estado") === "COMPLETADO" && (
-                <FormField
-                  control={editForm.control}
-                  name="partes_reparadas"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Piezas/Sistemas reparados</FormLabel>
-                      <p className="text-xs text-muted-foreground -mt-1">
-                        Selecciona las partes atendidas para reiniciar sus contadores predictivos
-                      </p>
-                      <div className="grid grid-cols-2 gap-2 border p-3 rounded-md bg-muted/30 max-h-40 overflow-y-auto">
-                        {partConfigs.map((item) => (
-                          <label key={item.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4 rounded border-gray-300"
-                              checked={field.value?.includes(String(item.id))}
-                              onChange={(e) => {
-                                let updated = [...(field.value || [])]
-                                if (e.target.checked) updated.push(String(item.id))
-                                else updated = updated.filter(v => v !== String(item.id))
-                                field.onChange(updated)
-                              }}
-                            />
-                            {item.nombre}
-                          </label>
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               )}
 
               <DialogFooter>
