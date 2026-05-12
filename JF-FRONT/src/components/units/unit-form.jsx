@@ -36,7 +36,7 @@ const formSchema = z.object({
   }),
   kilometraje: z.coerce.number().min(0, { message: "El kilometraje no puede ser negativo" }).optional(),
   chofer_id: z.string().nullable().optional(),
-  dueno_id: z.coerce.number().min(1, { message: "El dueño es requerido" }),
+  dueno_id: z.coerce.number().int().positive().nullable().optional(),
 })
 
 export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
@@ -195,17 +195,18 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
           name="dueno_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Dueño *</FormLabel>
+              <FormLabel>Dueño</FormLabel>
               <Select
-                onValueChange={(value) => field.onChange(parseInt(value))}
-                value={field.value?.toString()}
+                onValueChange={(value) => field.onChange(value === "none" ? null : parseInt(value))}
+                value={field.value ? field.value.toString() : "none"}
               >
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Seleccione un dueño" />
+                    <SelectValue placeholder="Sin dueño asignado" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
+                  <SelectItem value="none">Sin dueño asignado</SelectItem>
                   {owners?.map((owner) => (
                     <SelectItem key={owner.id} value={owner.id.toString()}>
                       {owner.nombre || `Dueño ${owner.id}`}
@@ -213,7 +214,7 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
                   ))}
                 </SelectContent>
               </Select>
-              <FormDescription>Seleccione el dueño de la unidad</FormDescription>
+              <FormDescription>Opcional — puedes asignarlo después desde la página de Dueños</FormDescription>
               <FormMessage />
             </FormItem>
           )}

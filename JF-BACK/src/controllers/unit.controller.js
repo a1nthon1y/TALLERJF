@@ -8,15 +8,15 @@ const createUnit = async (req, res) => {
     const { placa, modelo, año, tipo, chofer_id, kilometraje, dueno_id } = req.body;
 
     const tipoNorm = tipo?.toUpperCase();
-    if (!placa || !modelo || !año || !tipoNorm || !dueno_id) {
-      return res.status(400).json({ message: "Faltan campos obligatorios" });
+    if (!placa || !modelo || !año || !tipoNorm) {
+      return res.status(400).json({ message: "Faltan campos obligatorios (placa, modelo, año, tipo)" });
     }
 
     const result = await pool.query(
       `INSERT INTO unidades (placa, modelo, año, tipo, chofer_id, kilometraje, dueno_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
-      [placa, modelo, año, tipoNorm, chofer_id || null, kilometraje || 0, dueno_id]
+      [placa, modelo, año, tipoNorm, chofer_id || null, kilometraje || 0, dueno_id || null]
     );
 
     res.status(201).json({
@@ -183,29 +183,27 @@ const updateUnit = async (req, res) => {
 const reassignOwner = async (req, res) => {
   try {
     const { id } = req.params;
-    const { dueno_id } = req.body;
-
-    if (dueno_id == null) {
-      return res.status(400).json({ message: "dueno_id es obligatorio" });
-    }
+    const { dueno_id } = req.body; // null = dejar sin dueño
 
     const unitCheck = await pool.query("SELECT id, placa FROM unidades WHERE id = $1", [id]);
     if (unitCheck.rows.length === 0) {
       return res.status(404).json({ message: "Unidad no encontrada" });
     }
 
-    const ownerCheck = await pool.query("SELECT id FROM duenos WHERE id = $1", [dueno_id]);
-    if (ownerCheck.rows.length === 0) {
-      return res.status(404).json({ message: "Dueño no encontrado" });
+    if (dueno_id != null) {
+      const ownerCheck = await pool.query("SELECT id FROM duenos WHERE id = $1", [dueno_id]);
+      if (ownerCheck.rows.length === 0) {
+        return res.status(404).json({ message: "Dueño no encontrado" });
+      }
     }
 
     const result = await pool.query(
       "UPDATE unidades SET dueno_id = $1 WHERE id = $2 RETURNING *",
-      [dueno_id, id]
+      [dueno_id || null, id]
     );
 
     res.json({
-      message: "Dueño reasignado correctamente",
+      message: dueno_id ? "Dueño asignado correctamente" : "Dueño removido de la unidad",
       unidad: result.rows[0],
     });
   } catch (error) {

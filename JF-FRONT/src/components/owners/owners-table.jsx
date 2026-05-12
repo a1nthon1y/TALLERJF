@@ -118,8 +118,24 @@ export function OwnersTable() {
     )
   }
 
+  const orphanUnitsCount = allUnits.filter(u => u.dueno_id == null).length
+
   return (
     <div className="space-y-4">
+      {orphanUnitsCount > 0 && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 px-3 py-2">
+          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              <strong>{orphanUnitsCount}</strong> unidad{orphanUnitsCount === 1 ? "" : "es"} sin dueño asignado
+            </span>
+          </div>
+          <span className="text-xs text-amber-700 dark:text-amber-400">
+            Asígnalas desde "Gestionar unidades" en cualquier dueño
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center gap-2">
         <Input
           placeholder="Buscar por nombre o correo..."
@@ -249,14 +265,16 @@ export function OwnersTable() {
           {(() => {
             if (!manageOwner) return null
             const ownerUnits = allUnits.filter((u) => u.dueno_id === manageOwner.id)
-            const otherUnits = allUnits.filter((u) => u.dueno_id !== manageOwner.id)
+            const orphanUnits = allUnits.filter((u) => u.dueno_id == null)
+            const otherUnits  = allUnits.filter((u) => u.dueno_id != null && u.dueno_id !== manageOwner.id)
             const term = unitSearch.toLowerCase()
             const matches = (u) =>
               !term ||
               u.placa?.toLowerCase().includes(term) ||
               u.modelo?.toLowerCase().includes(term)
 
-            const filteredOwn = ownerUnits.filter(matches)
+            const filteredOwn    = ownerUnits.filter(matches)
+            const filteredOrphan = orphanUnits.filter(matches)
             const filteredOthers = otherUnits.filter(matches)
             const ownerNameById = new Map(owners.map(o => [o.id, o.nombre]))
 
@@ -277,7 +295,7 @@ export function OwnersTable() {
                   <div className="flex flex-col border rounded-md overflow-hidden">
                     <div className="bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 border-b">
                       <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                        Asignadas ({ownerUnits.length})
+                        Asignadas a {manageOwner.nombre} ({ownerUnits.length})
                       </p>
                     </div>
                     <div className="flex-1 overflow-y-auto divide-y">
@@ -293,11 +311,11 @@ export function OwnersTable() {
                             <p className="text-sm font-medium truncate">{u.placa}</p>
                             <p className="text-xs text-muted-foreground truncate">{u.modelo}</p>
                           </div>
-                          {/* Reasignar a otro dueño */}
+                          {/* Quitar / reasignar */}
                           <Select
                             value=""
-                            onValueChange={(val) => handleReassign(u.id, parseInt(val))}
-                            disabled={reassigningUnitId === u.id || owners.length <= 1}
+                            onValueChange={(val) => handleReassign(u.id, val === "_unassign" ? null : parseInt(val))}
+                            disabled={reassigningUnitId === u.id}
                           >
                             <SelectTrigger className="h-8 w-auto px-2 text-xs gap-1" aria-label={`Reasignar ${u.placa}`}>
                               {reassigningUnitId === u.id ? (
@@ -310,6 +328,7 @@ export function OwnersTable() {
                               )}
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="_unassign">Dejar sin dueño</SelectItem>
                               {owners
                                 .filter(o => o.id !== manageOwner.id)
                                 .map(o => (
@@ -317,9 +336,6 @@ export function OwnersTable() {
                                     Reasignar a: {o.nombre}
                                   </SelectItem>
                                 ))}
-                              {owners.length <= 1 && (
-                                <SelectItem value="_none" disabled>No hay otros dueños</SelectItem>
-                              )}
                             </SelectContent>
                           </Select>
                         </div>
@@ -327,46 +343,79 @@ export function OwnersTable() {
                     </div>
                   </div>
 
-                  {/* Columna: unidades de otros dueños (disponibles para reasignar) */}
+                  {/* Columna: disponibles (sin dueño + de otros dueños) */}
                   <div className="flex flex-col border rounded-md overflow-hidden">
                     <div className="bg-muted/40 px-3 py-2 border-b">
                       <p className="text-sm font-medium">
-                        De otros dueños ({otherUnits.length})
+                        Disponibles para asignar ({orphanUnits.length + otherUnits.length})
                       </p>
                     </div>
-                    <div className="flex-1 overflow-y-auto divide-y">
-                      {filteredOthers.length === 0 ? (
+                    <div className="flex-1 overflow-y-auto">
+                      {/* Sin dueño */}
+                      {filteredOrphan.length > 0 && (
+                        <div className="bg-amber-50/40 dark:bg-amber-950/10 border-b">
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-amber-700 dark:text-amber-400 px-3 py-1.5">
+                            Sin dueño ({orphanUnits.length})
+                          </p>
+                          <div className="divide-y">
+                            {filteredOrphan.map((u) => (
+                              <div key={u.id} className="flex items-center gap-2 p-2.5 hover:bg-muted/40">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{u.placa}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{u.modelo} · sin dueño</p>
+                                </div>
+                                <Button size="sm" variant="default" className="h-8 px-2 text-xs"
+                                  disabled={reassigningUnitId === u.id}
+                                  onClick={() => handleReassign(u.id, manageOwner.id)}>
+                                  {reassigningUnitId === u.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <><Plus className="h-3 w-3 mr-1" /> Asignar</>
+                                  )}
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* De otros dueños */}
+                      {filteredOthers.length > 0 && (
+                        <>
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground px-3 py-1.5">
+                            De otros dueños ({otherUnits.length})
+                          </p>
+                          <div className="divide-y">
+                            {filteredOthers.map((u) => (
+                              <div key={u.id} className="flex items-center gap-2 p-2.5 hover:bg-muted/40">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{u.placa}</p>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {u.modelo} · {ownerNameById.get(u.dueno_id) ?? `Dueño #${u.dueno_id}`}
+                                  </p>
+                                </div>
+                                <Button size="sm" variant="outline" className="h-8 px-2 text-xs"
+                                  disabled={reassigningUnitId === u.id}
+                                  onClick={() => handleReassign(u.id, manageOwner.id)}>
+                                  {reassigningUnitId === u.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <><Plus className="h-3 w-3 mr-1" /> Asignar</>
+                                  )}
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {filteredOrphan.length === 0 && filteredOthers.length === 0 && (
                         <p className="text-xs text-muted-foreground p-4 text-center">
-                          {otherUnits.length === 0
+                          {orphanUnits.length + otherUnits.length === 0
                             ? "No hay otras unidades en el sistema"
                             : "Sin coincidencias"}
                         </p>
-                      ) : filteredOthers.map((u) => (
-                        <div key={u.id} className="flex items-center gap-2 p-2.5 hover:bg-muted/40">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{u.placa}</p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {u.modelo} · Dueño: {ownerNameById.get(u.dueno_id) ?? `#${u.dueno_id}`}
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 px-2 text-xs"
-                            disabled={reassigningUnitId === u.id}
-                            onClick={() => handleReassign(u.id, manageOwner.id)}
-                          >
-                            {reassigningUnitId === u.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <>
-                                <Plus className="h-3 w-3 mr-1" />
-                                Asignar
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      ))}
+                      )}
                     </div>
                   </div>
                 </div>
