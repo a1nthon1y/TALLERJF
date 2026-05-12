@@ -277,12 +277,18 @@ export function MaintenancesTable() {
       if (partsStatus) {
         const partes = Array.isArray(partsStatus) ? partsStatus : (partsStatus?.partes || [])
         setCompUnitParts(partes)
-        // Pre-seleccionar partes críticas y de advertencia usando configuracion_parte_id
-        // que es el mismo que el id en partConfigs
+      }
+
+      // Pre-seleccionar desde partes_programadas (guardadas en DB al crear)
+      // Fallback a las partes con alerta si no hay partes_programadas
+      const programadas = maintenance.partes_programadas
+      if (Array.isArray(programadas) && programadas.length > 0) {
+        setCompPartes(programadas.map(String))
+      } else if (partsStatus) {
+        const partes = Array.isArray(partsStatus) ? partsStatus : (partsStatus?.partes || [])
         const alertIds = partes
           .filter(p => ["CRITICO","ADVERTENCIA"].includes(p.estado?.toUpperCase()))
-          .map(p => String(p.configuracion_parte_id))
-          .filter(Boolean)
+          .map(p => String(p.configuracion_parte_id)).filter(Boolean)
         setCompPartes(alertIds)
       }
     } catch (err) {
@@ -337,6 +343,7 @@ export function MaintenancesTable() {
         tecnico_id: parseInt(tecId),
         nota_adicional: compNota || "",
         partes_reparadas: compPartes.map(Number),
+        partes_programadas: compPartes.map(Number), // actualizar registro de partes trabajadas
       })
       toast.success("Mantenimiento marcado como Completado")
       setCompletingMaintenance(null)

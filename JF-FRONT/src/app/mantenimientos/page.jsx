@@ -143,7 +143,11 @@ function MaintenancesContent() {
     }
 
     try {
-      await maintenanceService.createMaintenance({ ...values, observaciones })
+      await maintenanceService.createMaintenance({
+        ...values,
+        observaciones,
+        partes_programadas: values.tipo === "preventivo" ? selectedPartes.map(Number) : [],
+      })
       toast.success("Mantenimiento creado correctamente")
       setIsCreating(false)
       setSelectedPartes([])

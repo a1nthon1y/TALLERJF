@@ -24,7 +24,7 @@ async function generarCodigo(tipo, estado = null) {
 // Registrar un mantenimiento (preventivo o correctivo) con kilometraje y TECNICO
 const createMaintenance = async (req, res) => {
   try {
-    const { unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id } = req.body;
+    const { unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id, partes_programadas } = req.body;
 
     // Normalizar tipo a mayúsculas (la DB requiere PREVENTIVO/CORRECTIVO)
     const tipoNorm = (tipo || "CORRECTIVO").toUpperCase();
@@ -36,12 +36,13 @@ const createMaintenance = async (req, res) => {
     }
 
     const codigo = await generarCodigo(tipoNorm);
+    const partesJSON = JSON.stringify(Array.isArray(partes_programadas) ? partes_programadas.map(Number) : []);
 
-    // Registrar el mantenimiento incluyendo el tecnico_id
+    // Registrar el mantenimiento incluyendo partes_programadas
     const result = await pool.query(
-      `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id, codigo) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [unidad_id, tipoNorm, observaciones, kilometraje_actual, tecnico_id || null, codigo]
+      `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id, codigo, partes_programadas) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [unidad_id, tipoNorm, observaciones, kilometraje_actual, tecnico_id || null, codigo, partesJSON]
     );
 
     // Actualizar el kilometraje de la unidad
@@ -329,7 +330,7 @@ const deleteMaintenance = async (req, res) => {
 const editMaintenance = async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado, tecnico_id, observaciones, nota_adicional, partes_reparadas } = req.body;
+    const { estado, tecnico_id, observaciones, nota_adicional, partes_reparadas, partes_programadas } = req.body;
 
     const mantQuery = await pool.query("SELECT * FROM mantenimientos WHERE id = $1", [id]);
     if (mantQuery.rows.length === 0)
@@ -382,15 +383,21 @@ const editMaintenance = async (req, res) => {
 
     const setFecha = ['COMPLETADO', 'EN_PROCESO'].includes(estadoNorm) && !m.fecha_realizacion;
 
+    // Actualizar partes_programadas si se envían (permite editar el plan)
+    const finalPartesProg = Array.isArray(partes_programadas)
+      ? JSON.stringify(partes_programadas.map(Number))
+      : null;
+
     const result = await pool.query(
       `UPDATE mantenimientos
-       SET estado            = $1,
-           tecnico_id        = $2,
-           observaciones     = $3,
-           fecha_realizacion = COALESCE(fecha_realizacion, $5)
+       SET estado              = $1,
+           tecnico_id          = $2,
+           observaciones       = $3,
+           fecha_realizacion   = COALESCE(fecha_realizacion, $5),
+           partes_programadas  = COALESCE($6::jsonb, partes_programadas)
        WHERE id = $4
        RETURNING *`,
-      [estadoNorm, finalTecnicoId, finalObs, id, setFecha ? new Date() : m.fecha_realizacion]
+      [estadoNorm, finalTecnicoId, finalObs, id, setFecha ? new Date() : m.fecha_realizacion, finalPartesProg]
     );
 
     // Resetear contadores predictivos al completar con partes indicadas
