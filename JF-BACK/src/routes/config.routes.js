@@ -6,6 +6,7 @@ const checkRole = require("../middlewares/role.middleware");
 
 // Sólo Encargados y Admins pueden administrar el catálogo de reglas predictivas
 router.get("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.getPartConfigs);
+router.get("/:id/impact", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.getPartConfigImpact);
 router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.createPartConfig);
 router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.updatePartConfig);
 router.delete("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.deletePartConfig);

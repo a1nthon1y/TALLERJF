@@ -15,11 +15,19 @@ export const configService = {
       throw new Error(error.message || 'Error al crear configuración');
     }
   },
-  async updateConfig(id, data) {
+  async updateConfig(id, data, { resolveAlerts = false } = {}) {
     try {
-      return await makePutRequest(`/config/${id}`, data);
+      const url = resolveAlerts ? `/config/${id}?resolveAlerts=true` : `/config/${id}`;
+      return await makePutRequest(url, data);
     } catch (error) {
       throw new Error(error.message || 'Error al actualizar configuración');
+    }
+  },
+  async getConfigImpact(id) {
+    try {
+      return await makeGetRequest(`/config/${id}/impact`);
+    } catch (error) {
+      throw new Error(error.message || 'Error al obtener impacto');
     }
   },
   async deleteConfig(id) {

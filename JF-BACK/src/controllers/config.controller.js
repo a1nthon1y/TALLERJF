@@ -32,19 +32,61 @@ const createPartConfig = async (req, res) => {
 
 // ===================================
 // 📝 Editar regla de mantenimiento
+// Si activo=false y ?resolveAlerts=true, también marca las alertas
+// activas vinculadas como RESUELTO (limpieza de inconsistencias)
 // ===================================
 const updatePartConfig = async (req, res) => {
   try {
     const { id } = req.params;
     const { umbral_km, activo } = req.body;
+    const resolveAlerts = req.query.resolveAlerts === "true";
+
     const result = await pool.query(
       "UPDATE configuracion_partes SET umbral_km = $1, activo = $2 WHERE id = $3 RETURNING *",
       [umbral_km, activo, id]
     );
-    if(result.rows.length === 0) return res.status(404).json({ error: "Config no encontrado "});
-    res.json(result.rows[0]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Config no encontrado " });
+
+    let alertasResueltas = 0;
+    if (activo === false && resolveAlerts) {
+      const r = await pool.query(
+        "UPDATE alertas_mantenimiento SET estado = 'RESUELTO' WHERE parte_id = $1 AND estado = 'ACTIVO'",
+        [id]
+      );
+      alertasResueltas = r.rowCount || 0;
+    }
+
+    res.json({ ...result.rows[0], alertas_resueltas: alertasResueltas });
   } catch (error) {
     console.error("Error actualizando config:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// ===================================
+// 📊 Resumen de impacto de una configuración (cuántas alertas/mantenimientos la usan)
+// ===================================
+const getPartConfigImpact = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [alerts, maints] = await Promise.all([
+      pool.query(
+        "SELECT COUNT(*)::int AS count FROM alertas_mantenimiento WHERE parte_id = $1 AND estado = 'ACTIVO'",
+        [id]
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS count FROM mantenimientos
+         WHERE estado IN ('PENDIENTE','EN_PROCESO')
+         AND partes_programadas::jsonb @> $1::jsonb`,
+        [JSON.stringify([Number(id)])]
+      ),
+    ]);
+    res.json({
+      alertas_activas: alerts.rows[0].count,
+      mantenimientos_en_curso: maints.rows[0].count,
+    });
+  } catch (error) {
+    console.error("Error obteniendo impacto:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 };
@@ -89,4 +131,5 @@ module.exports = {
   createPartConfig,
   updatePartConfig,
   deletePartConfig,
+  getPartConfigImpact,
 };

@@ -13,7 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
-import { PlusCircle, Edit, Loader2, Settings, Trash2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { PlusCircle, Edit, Loader2, Settings, Trash2, AlertTriangle, Info } from "lucide-react";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 
@@ -27,6 +28,9 @@ export default function ConfiguracionesPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [deactivateImpact, setDeactivateImpact] = useState(null);
+  const [resolveAlertsOnDeactivate, setResolveAlertsOnDeactivate] = useState(true);
 
   const { data: configs = [], isLoading } = useQuery({
     queryKey: ["configs"],
@@ -44,10 +48,17 @@ export default function ConfiguracionesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, ...data }) => configService.updateConfig(id, data),
-    onSuccess: () => {
-      toast.success("Regla actualizada");
+    mutationFn: ({ id, resolveAlerts, ...data }) =>
+      configService.updateConfig(id, data, { resolveAlerts }),
+    onSuccess: (data) => {
+      const resueltas = data?.alertas_resueltas;
+      if (resueltas > 0) {
+        toast.success(`Regla actualizada · ${resueltas} alerta${resueltas === 1 ? "" : "s"} resuelta${resueltas === 1 ? "" : "s"}`);
+      } else {
+        toast.success("Regla actualizada");
+      }
       queryClient.invalidateQueries({ queryKey: ["configs"] });
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
       closeDialog();
     },
     onError: (e) => toast.error(e.message),
@@ -84,8 +95,35 @@ export default function ConfiguracionesPage() {
     }
   };
 
-  const toggleActivo = (config) => {
-    updateMutation.mutate({ id: config.id, umbral_km: config.umbral_km, activo: !config.activo });
+  const toggleActivo = async (config) => {
+    if (config.activo) {
+      // Desactivando: pedir confirmación con impacto
+      setDeactivateTarget(config);
+      setDeactivateImpact(null);
+      setResolveAlertsOnDeactivate(true);
+      try {
+        const impact = await configService.getConfigImpact(config.id);
+        setDeactivateImpact(impact);
+      } catch {
+        setDeactivateImpact({ alertas_activas: 0, mantenimientos_en_curso: 0 });
+      }
+    } else {
+      // Activando: aplicar directo
+      updateMutation.mutate({ id: config.id, umbral_km: config.umbral_km, activo: true });
+    }
+  };
+
+  const confirmDeactivate = () => {
+    if (!deactivateTarget) return;
+    updateMutation.mutate(
+      {
+        id: deactivateTarget.id,
+        umbral_km: deactivateTarget.umbral_km,
+        activo: false,
+        resolveAlerts: resolveAlertsOnDeactivate && (deactivateImpact?.alertas_activas > 0),
+      },
+      { onSettled: () => setDeactivateTarget(null) }
+    );
   };
 
   const deleteMutation = useMutation({
@@ -173,6 +211,97 @@ export default function ConfiguracionesPage() {
           </Table>
         </div>
       )}
+
+      {/* Dialog: Confirmar Desactivación */}
+      <Dialog open={!!deactivateTarget} onOpenChange={(v) => { if (!v) setDeactivateTarget(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Desactivar regla "{deactivateTarget?.nombre}"
+            </DialogTitle>
+            <DialogDescription>
+              ¿Qué efecto tiene desactivar esta regla?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            <div className="rounded-md bg-muted/40 border p-3 space-y-1.5">
+              <p className="flex items-start gap-2">
+                <span className="text-emerald-600">•</span>
+                <span><strong>Dejará de generar alertas nuevas</strong> al registrar llegadas</span>
+              </p>
+              <p className="flex items-start gap-2">
+                <span className="text-emerald-600">•</span>
+                <span>No aparecerá en el estado predictivo de las unidades</span>
+              </p>
+              <p className="flex items-start gap-2">
+                <span className="text-emerald-600">•</span>
+                <span>No se mostrará en formularios de mantenimiento preventivo</span>
+              </p>
+              <p className="flex items-start gap-2">
+                <span className="text-amber-600">•</span>
+                <span>Las alertas activas existentes <strong>siguen visibles</strong> hasta resolverlas</span>
+              </p>
+            </div>
+
+            {deactivateImpact == null ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-xs">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Calculando impacto...
+              </div>
+            ) : (
+              <div className="rounded-md border p-3 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Info className="h-3.5 w-3.5" /> Impacto actual
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-2xl font-bold text-red-600">{deactivateImpact.alertas_activas}</p>
+                    <p className="text-xs text-muted-foreground">alerta{deactivateImpact.alertas_activas === 1 ? "" : "s"} activa{deactivateImpact.alertas_activas === 1 ? "" : "s"}</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-amber-600">{deactivateImpact.mantenimientos_en_curso}</p>
+                    <p className="text-xs text-muted-foreground">mantenimiento{deactivateImpact.mantenimientos_en_curso === 1 ? "" : "s"} en curso</p>
+                  </div>
+                </div>
+
+                {deactivateImpact.alertas_activas > 0 && (
+                  <label className="flex items-start gap-2 pt-2 mt-2 border-t cursor-pointer">
+                    <Checkbox
+                      checked={resolveAlertsOnDeactivate}
+                      onCheckedChange={(v) => setResolveAlertsOnDeactivate(!!v)}
+                      className="mt-0.5"
+                    />
+                    <span className="text-xs">
+                      <strong>Resolver también las {deactivateImpact.alertas_activas} alerta{deactivateImpact.alertas_activas === 1 ? "" : "s"} activa{deactivateImpact.alertas_activas === 1 ? "" : "s"}</strong>
+                      <br />
+                      <span className="text-muted-foreground">Recomendado para evitar inconsistencias en el dashboard</span>
+                    </span>
+                  </label>
+                )}
+
+                {deactivateImpact.mantenimientos_en_curso > 0 && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 pt-2 border-t mt-2">
+                    Hay mantenimientos en curso que la incluyen — revísalos antes de desactivar.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeactivateTarget(null)}>Cancelar</Button>
+            <Button
+              variant="default"
+              onClick={confirmDeactivate}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Desactivar regla
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Confirmar Eliminación */}
       <Dialog open={!!deletingId} onOpenChange={(v) => { if (!v) setDeletingId(null) }}>
