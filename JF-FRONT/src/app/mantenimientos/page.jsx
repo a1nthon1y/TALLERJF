@@ -5,9 +5,10 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { MaintenancesTable } from "@/components/maintenances/maintenances-table"
 import { FleetPartsStatus } from "@/components/maintenances/fleet-parts-status"
 import { Button } from "@/components/ui/button"
-import { Plus, AlertCircle, Bell } from "lucide-react"
+import { Plus, AlertCircle, Bell, Wrench, FileText } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { maintenanceService } from "@/services/maintenanceService"
+import { getPartsStatus } from "@/services/unitsService"
 import { toast } from "sonner"
 import Link from "next/link"
 import {
@@ -19,6 +20,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
 import { useUnits } from "@/hooks/useUnits"
@@ -32,15 +35,23 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 const formSchema = z.object({
   unidad_id: z.string().min(1, { message: "La unidad es requerida" }),
   tipo: z.enum(["preventivo", "correctivo"], { message: "El tipo es requerido" }),
-  observaciones: z.string().min(1, { message: "Las observaciones son requeridas" }),
+  observaciones: z.string().optional(),
   kilometraje_actual: z.number().min(0, { message: "El kilometraje no puede ser negativo" }),
   tecnico_id: z.string().min(1, { message: "El técnico es requerido" }),
+}).superRefine((data, ctx) => {
+  if (data.tipo === "correctivo" && !data.observaciones?.trim()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Describe el problema reportado", path: ["observaciones"] })
+  }
 })
 
 function MaintenancesContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [isCreating, setIsCreating] = useState(false)
+  // Partes preventivas de la unidad seleccionada
+  const [unitParts, setUnitParts] = useState([])
+  const [unitPartsLoading, setUnitPartsLoading] = useState(false)
+  const [selectedPartes, setSelectedPartes] = useState([])
   const { data: maintenances, isLoading: isLoadingMaintenances, isError: isErrorMaintenances, mutate } = useMaintenances()
   const { data: technicians, isLoading: isLoadingTechnicians, isError: isErrorTechnicians } = useTechnicians()
   const { data: units, isLoading: isLoadingUnits, isError: isErrorUnits } = useUnits()
@@ -86,25 +97,57 @@ function MaintenancesContent() {
     }
   }, [units])
 
+  // Cargar partes predictivas cuando unidad o tipo cambian
+  const watchedUnidad = form.watch("unidad_id")
+  const watchedTipo   = form.watch("tipo")
+  useEffect(() => {
+    if (!watchedUnidad || watchedTipo !== "preventivo") { setUnitParts([]); setSelectedPartes([]); return }
+    setUnitPartsLoading(true)
+    getPartsStatus(watchedUnidad)
+      .then(data => {
+        // solo mostrar partes que tienen alerta (CRITICO o ADVERTENCIA) o todas si no hay alertas
+        const partes = Array.isArray(data) ? data : (data?.partes || [])
+        setUnitParts(partes)
+        // pre-seleccionar las críticas y de advertencia
+        const alertas = partes.filter(p => ["CRITICO","ADVERTENCIA"].includes(p.estado?.toUpperCase()))
+        setSelectedPartes(alertas.map(p => String(p.id || p.configuracion_parte_id)))
+      })
+      .catch(() => setUnitParts([]))
+      .finally(() => setUnitPartsLoading(false))
+  }, [watchedUnidad, watchedTipo])
+
   const selectedUnit = units?.find((unit) => String(unit.id) === form.watch("unidad_id"))
   const kilometrajeUnidad = selectedUnit?.kilometraje ?? 0
   const unidadOperativa = selectedUnit?.estado === "operativo"
 
   const handleCreateMaintenance = async (values) => {
-    if (!selectedUnit) {
-      toast.error("Unidad no encontrada")
-      return
-    }
-
+    if (!selectedUnit) { toast.error("Unidad no encontrada"); return }
     if (unidadOperativa && values.kilometraje_actual <= kilometrajeUnidad) {
       toast.error(`El kilometraje ingresado debe ser mayor al actual (${kilometrajeUnidad} km)`)
       return
     }
 
+    // Para preventivo: si no hay observación manual, generar desde partes seleccionadas
+    let observaciones = values.observaciones?.trim() || ""
+    if (values.tipo === "preventivo") {
+      if (selectedPartes.length > 0) {
+        const nombresPartes = unitParts
+          .filter(p => selectedPartes.includes(String(p.id || p.configuracion_parte_id)))
+          .map(p => p.nombre || p.parte_nombre)
+          .filter(Boolean)
+        const autoObs = `Mantenimiento preventivo programado: ${nombresPartes.join(", ")}`
+        observaciones = observaciones ? `${autoObs}\n${observaciones}` : autoObs
+      } else if (!observaciones) {
+        observaciones = "Mantenimiento preventivo programado"
+      }
+    }
+
     try {
-      await maintenanceService.createMaintenance(values)
+      await maintenanceService.createMaintenance({ ...values, observaciones })
       toast.success("Mantenimiento creado correctamente")
       setIsCreating(false)
+      setSelectedPartes([])
+      setUnitParts([])
       form.reset()
       await mutate()
     } catch (error) {
@@ -258,19 +301,81 @@ function MaintenancesContent() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="observaciones"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Observaciones</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Ingresa las observaciones" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {/* PREVENTIVO: selección de partes con alertas */}
+                {form.watch("tipo") === "preventivo" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Wrench className="h-4 w-4 text-amber-500" />
+                      <p className="text-sm font-medium">Partes a atender</p>
+                    </div>
+                    {unitPartsLoading ? (
+                      <p className="text-xs text-muted-foreground">Cargando estado de partes...</p>
+                    ) : unitParts.length === 0 ? (
+                      <p className="text-xs text-muted-foreground border rounded-md px-3 py-2">
+                        No hay partes configuradas para esta unidad — <a href="/configuraciones" className="underline text-primary">configurar umbrales</a>
+                      </p>
+                    ) : (
+                      <div className="border rounded-md divide-y">
+                        {unitParts.map((p) => {
+                          const id = String(p.id || p.configuracion_parte_id)
+                          const estado = p.estado?.toUpperCase()
+                          const checked = selectedPartes.includes(id)
+                          return (
+                            <label key={id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40">
+                              <input type="checkbox" className="rounded" checked={checked}
+                                onChange={(e) => setSelectedPartes(prev =>
+                                  e.target.checked ? [...prev, id] : prev.filter(x => x !== id)
+                                )}
+                              />
+                              <span className="flex-1 text-sm">{p.nombre || p.parte_nombre}</span>
+                              {estado === "CRITICO" && <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Crítico</Badge>}
+                              {estado === "ADVERTENCIA" && <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Alerta</Badge>}
+                              {estado === "OK" && <Badge variant="outline" className="text-xs text-green-600">OK</Badge>}
+                              {p.km_restantes != null && (
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {p.km_restantes > 0 ? `${p.km_restantes.toLocaleString()} km restantes` : `${Math.abs(p.km_restantes).toLocaleString()} km vencido`}
+                                </span>
+                              )}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {/* Nota adicional opcional para preventivo */}
+                    <FormField control={form.control} name="observaciones"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1 text-sm text-muted-foreground font-normal">
+                            <FileText className="h-3.5 w-3.5" /> Nota adicional <span className="text-xs">(opcional)</span>
+                          </FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={2} placeholder="Ej: Incluir revisión de frenos adicional..." />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+
+                {/* CORRECTIVO: descripción del problema (obligatorio) */}
+                {form.watch("tipo") === "correctivo" && (
+                  <FormField control={form.control} name="observaciones"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" /> Problema reportado <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea {...field} rows={3}
+                            placeholder="Describe el problema: ruido en motor, fuga de aceite, frenos duros..." />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">Basado en el reporte del chofer o inspección directa</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
