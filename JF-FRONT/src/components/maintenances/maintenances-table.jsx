@@ -403,13 +403,14 @@ export function MaintenancesTable() {
             <SelectItem value="CORRECTIVO">Correctivo</SelectItem>
           </SelectContent>
         </Select>
-        {(estadoFilter !== "TODOS" || tipoFilter !== "TODOS" || searchTerm || estadoFilter === "SIN_TECNICO") && (
-          <button
+        {(estadoFilter !== "TODOS" || tipoFilter !== "TODOS" || searchTerm) && (
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => { setEstadoFilter("TODOS"); setTipoFilter("TODOS"); setSearchTerm("") }}
-            className="text-xs text-muted-foreground hover:text-foreground underline"
           >
-            Limpiar filtros
-          </button>
+            Ver todos
+          </Button>
         )}
       </div>
       <div className="rounded-md border">
