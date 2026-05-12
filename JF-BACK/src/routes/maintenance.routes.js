@@ -16,10 +16,14 @@ router.get("/:id", authenticate, maintenanceController.getMaintenanceById);
 // Creación: admin, encargado y chofer
 router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO", "CHOFER"]), maintenanceController.createMaintenance);
 
-// Actualización de estado general (admin/encargado) y técnico
-router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO", "TECNICO"]), maintenanceController.updateMaintenanceStatus);
+// Actualización de estado general — solo ADMIN y ENCARGADO (jefe mecánico).
+// Bug #4: TÉCNICO removido del checkRole; podía cambiar el estado de
+// cualquier mantenimiento sin chequeo de ownership. El técnico debe usar
+// el endpoint dedicado `/:id/my-status` que valida que el trabajo le
+// pertenece y restringe transiciones a EN_PROCESO/COMPLETADO.
+router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), maintenanceController.updateMaintenanceStatus);
 
-// Técnico actualiza su propio trabajo (EN_PROCESO o COMPLETADO)
+// Técnico actualiza su propio trabajo (EN_PROCESO o COMPLETADO) con ownership check
 router.put("/:id/my-status", authenticate, checkRole(["TECNICO"]), maintenanceController.updateMyJobStatus);
 
 // Encargado cierra/aprueba el mantenimiento (COMPLETADO → CERRADO)
