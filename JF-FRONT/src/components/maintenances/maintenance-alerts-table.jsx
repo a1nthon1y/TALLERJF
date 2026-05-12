@@ -9,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import {
   AlertCircle, AlertTriangle, CheckCircle2, BellOff,
-  Gauge, Bus, ChevronDown, ChevronUp,
+  Gauge, Bus, ChevronDown, ChevronUp, Wrench,
 } from "lucide-react"
+import Link from "next/link"
 import { makeGetRequest } from "@/utils/api"
 import { getPartsStatus } from "@/services/unitsService"
 
@@ -135,6 +136,19 @@ function UnitAlertCard({ group, defaultOpen }) {
           {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
         </div>
       </button>
+
+      {/* Acción rápida */}
+      <div className="px-4 pb-3 pt-0 border-t bg-muted/20 flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {vencidas > 0 ? "Requiere atención inmediata" : "Programar mantenimiento pronto"}
+        </p>
+        <Button asChild size="sm" variant={vencidas > 0 ? "destructive" : "outline"} className="shrink-0 h-7 text-xs gap-1">
+          <Link href={`/mantenimientos?crear=true&unidad_id=${u.id}`}>
+            <Wrench className="h-3.5 w-3.5" />
+            Registrar mantenimiento
+          </Link>
+        </Button>
+      </div>
 
       {/* Detalle partes */}
       {open && (

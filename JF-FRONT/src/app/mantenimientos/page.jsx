@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { MaintenancesTable } from "@/components/maintenances/maintenances-table"
 import { FleetPartsStatus } from "@/components/maintenances/fleet-parts-status"
 import { Button } from "@/components/ui/button"
-import { Plus, AlertCircle } from "lucide-react"
+import { Plus, AlertCircle, Bell } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { maintenanceService } from "@/services/maintenanceService"
 import { toast } from "sonner"
+import Link from "next/link"
 import {
   Dialog,
   DialogContent,
@@ -35,7 +37,9 @@ const formSchema = z.object({
   tecnico_id: z.string().min(1, { message: "El técnico es requerido" }),
 })
 
-export default function MaintenancesPage() {
+function MaintenancesContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [isCreating, setIsCreating] = useState(false)
   const { data: maintenances, isLoading: isLoadingMaintenances, isError: isErrorMaintenances, mutate } = useMaintenances()
   const { data: technicians, isLoading: isLoadingTechnicians, isError: isErrorTechnicians } = useTechnicians()
@@ -52,6 +56,23 @@ export default function MaintenancesPage() {
     },
   })
 
+  // Leer query params: ?crear=true&unidad_id=X
+  useEffect(() => {
+    if (!units || units.length === 0) return
+    const crear = searchParams.get("crear")
+    const unidadId = searchParams.get("unidad_id")
+    if (crear === "true") {
+      const targetUnit = unidadId ? units.find((u) => String(u.id) === unidadId) : units[0]
+      if (targetUnit) {
+        form.setValue("unidad_id", String(targetUnit.id))
+        form.setValue("kilometraje_actual", targetUnit.kilometraje)
+      }
+      setIsCreating(true)
+      // Limpiar query params de la URL sin recargar
+      router.replace("/mantenimientos", { scroll: false })
+    }
+  }, [units, searchParams])
+
   useEffect(() => {
     if (technicians && technicians.length > 0) {
       form.setValue("tecnico_id", String(technicians[0].id))
@@ -59,7 +80,7 @@ export default function MaintenancesPage() {
   }, [technicians])
   
   useEffect(() => {
-    if (units && units.length > 0) {
+    if (units && units.length > 0 && !form.getValues("unidad_id")) {
       form.setValue("unidad_id", String(units[0].id))
       form.setValue("kilometraje_actual", units[0].kilometraje)
     }
@@ -104,15 +125,22 @@ export default function MaintenancesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-2xl font-bold">Mantenimientos</h1>
-        <Dialog open={isCreating} onOpenChange={setIsCreating}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nuevo Mantenimiento
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/mantenimientos/alertas">
+              <Bell className="mr-2 h-4 w-4 text-amber-500" />
+              Ver alertas
+            </Link>
+          </Button>
+          <Dialog open={isCreating} onOpenChange={setIsCreating}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo Mantenimiento
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Crear Nuevo Mantenimiento</DialogTitle>
@@ -255,11 +283,20 @@ export default function MaintenancesPage() {
               </form>
             </Form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
       <FleetPartsStatus />
       <MaintenancesTable />
     </div>
+  )
+}
+
+export default function MaintenancesPage() {
+  return (
+    <Suspense fallback={null}>
+      <MaintenancesContent />
+    </Suspense>
   )
 }
 
