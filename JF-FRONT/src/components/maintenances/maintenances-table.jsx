@@ -287,7 +287,10 @@ export function MaintenancesTable() {
       maintenance.observaciones?.toLowerCase().includes(searchLower) ||
       maintenance.tecnico_nombre?.toLowerCase().includes(searchLower)
     const matchEstado =
-      estadoFilter === "TODOS" || maintenance.estado?.toUpperCase() === estadoFilter
+      estadoFilter === "TODOS" ||
+      (estadoFilter === "SIN_TECNICO"
+        ? maintenance.estado?.toUpperCase() === "PENDIENTE" && !maintenance.tecnico_id && !maintenance.tecnico_nombre
+        : maintenance.estado?.toUpperCase() === estadoFilter)
     const matchTipo =
       tipoFilter === "TODOS" || maintenance.tipo?.toUpperCase() === tipoFilter
     return matchSearch && matchEstado && matchTipo
@@ -334,7 +337,7 @@ export function MaintenancesTable() {
           </div>
           <Button size="sm" variant="outline"
             className="shrink-0 border-blue-400 text-blue-700 hover:bg-blue-100"
-            onClick={() => setEstadoFilter("PENDIENTE")}>
+            onClick={() => setEstadoFilter("SIN_TECNICO")}>
             Ver solicitudes
           </Button>
         </div>
@@ -377,6 +380,11 @@ export function MaintenancesTable() {
             <SelectItem value="PENDIENTE">
               Pendiente {pendientes > 0 ? `(${pendientes})` : ""}
             </SelectItem>
+            {sinTecnico.length > 0 && (
+              <SelectItem value="SIN_TECNICO">
+                Sin técnico ({sinTecnico.length})
+              </SelectItem>
+            )}
             <SelectItem value="EN_PROCESO">
               En Proceso {enProceso > 0 ? `(${enProceso})` : ""}
             </SelectItem>
@@ -395,7 +403,7 @@ export function MaintenancesTable() {
             <SelectItem value="CORRECTIVO">Correctivo</SelectItem>
           </SelectContent>
         </Select>
-        {(estadoFilter !== "TODOS" || tipoFilter !== "TODOS" || searchTerm) && (
+        {(estadoFilter !== "TODOS" || tipoFilter !== "TODOS" || searchTerm || estadoFilter === "SIN_TECNICO") && (
           <button
             onClick={() => { setEstadoFilter("TODOS"); setTipoFilter("TODOS"); setSearchTerm("") }}
             className="text-xs text-muted-foreground hover:text-foreground underline"
