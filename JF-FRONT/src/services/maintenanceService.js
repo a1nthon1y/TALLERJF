@@ -109,14 +109,9 @@ export const maintenanceService = {
     }
   },
 
-  async editMaintenance(maintenanceId, { estado, tecnico_id, observaciones, partes_reparadas }) {
+  async editMaintenance(maintenanceId, payload) {
     try {
-      return await makePutRequest(`/maintenances/${maintenanceId}/edit`, {
-        estado,
-        tecnico_id,
-        observaciones,
-        partes_reparadas,
-      });
+      return await makePutRequest(`/maintenances/${maintenanceId}/edit`, payload);
     } catch (error) {
       throw new Error(error.message || 'Error al guardar cambios');
     }
