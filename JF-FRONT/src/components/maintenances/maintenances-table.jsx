@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle, Play, ClipboardCheck } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle, Play, ClipboardCheck, FileText } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -91,6 +91,11 @@ export function MaintenancesTable() {
   const [addMatQty, setAddMatQty] = useState(1)
   const [addingMat, setAddingMat] = useState(false)
 
+  // Partes en el dialog de Editar
+  const [editPartes, setEditPartes] = useState([])
+  const [editUnitParts, setEditUnitParts] = useState([])
+  const [editUnitPartsLoading, setEditUnitPartsLoading] = useState(false)
+
   // Dialog: Completar mantenimiento (dedicado)
   const [completingMaintenance, setCompletingMaintenance] = useState(null)
   const [compMaterials, setCompMaterials] = useState([])
@@ -133,6 +138,29 @@ export function MaintenancesTable() {
       nota_adicional: "",
       partes_reparadas: [],
     })
+    // Pre-cargar partes programadas del mantenimiento
+    const prog = maintenance.partes_programadas
+    setEditPartes(Array.isArray(prog) && prog.length > 0 ? prog.map(String) : [])
+
+    // Cargar estado real de partes si es preventivo
+    if (maintenance.tipo?.toUpperCase() === "PREVENTIVO" && maintenance.unidad_id) {
+      setEditUnitParts([])
+      setEditUnitPartsLoading(true)
+      getPartsStatus(maintenance.unidad_id)
+        .then(data => {
+          const partes = Array.isArray(data) ? data : (data?.partes || [])
+          setEditUnitParts(partes)
+          // Si no había partes programadas, pre-seleccionar críticas/advertencia
+          if (!Array.isArray(prog) || prog.length === 0) {
+            const alertas = partes.filter(p => ["CRITICO","ADVERTENCIA"].includes(p.estado?.toUpperCase()))
+            setEditPartes(alertas.map(p => String(p.id || p.configuracion_parte_id)))
+          }
+        })
+        .catch(() => setEditUnitParts([]))
+        .finally(() => setEditUnitPartsLoading(false))
+    } else {
+      setEditUnitParts([])
+    }
   }
 
   const handleEditSubmit = async (values) => {
@@ -145,6 +173,7 @@ export function MaintenancesTable() {
         tecnico_id: (values.tecnico_id && values.tecnico_id !== "NONE") ? parseInt(values.tecnico_id) : null,
         nota_adicional: values.nota_adicional || "",
         partes_reparadas: partes,
+        partes_programadas: editingMaintenance.tipo?.toUpperCase() === "PREVENTIVO" ? editPartes.map(Number) : undefined,
       })
       toast.success("Mantenimiento actualizado correctamente")
       setEditingMaintenance(null)
@@ -993,7 +1022,7 @@ export function MaintenancesTable() {
 
       {/* Dialog: Editar mantenimiento (formulario unificado) */}
       <Dialog open={!!editingMaintenance} onOpenChange={(v) => { if (!v) setEditingMaintenance(null) }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Edit className="h-4 w-4" /> Editar Mantenimiento
@@ -1089,38 +1118,100 @@ export function MaintenancesTable() {
                 )}
               />
 
-              {/* Historial de notas (solo lectura) */}
-              {editingMaintenance?.observaciones && (
-                <div className="space-y-1.5">
-                  <p className="text-sm font-medium">Historial de notas</p>
-                  <div className="rounded-md border bg-muted/50 px-3 py-2 max-h-32 overflow-y-auto">
-                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans">
-                      {editingMaintenance.observaciones}
-                    </pre>
+              {/* PREVENTIVO: partes a atender con estado actual */}
+              {editingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO" && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Wrench className="h-4 w-4 text-amber-500" />
+                    <p className="text-sm font-medium">Partes a atender</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">Solo lectura — el historial no se puede modificar</p>
+                  {editUnitPartsLoading ? (
+                    <p className="text-xs text-muted-foreground">Cargando estado de partes...</p>
+                  ) : editUnitParts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground border rounded-md px-3 py-2">
+                      No hay partes configuradas para esta unidad
+                    </p>
+                  ) : (
+                    <div className="border rounded-md divide-y">
+                      {editUnitParts.map((p) => {
+                        const pid = String(p.id || p.configuracion_parte_id)
+                        const estado = p.estado?.toUpperCase()
+                        const checked = editPartes.includes(pid)
+                        return (
+                          <label key={pid} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40">
+                            <input type="checkbox" className="rounded" checked={checked}
+                              onChange={(e) => setEditPartes(prev =>
+                                e.target.checked ? [...prev, pid] : prev.filter(x => x !== pid)
+                              )}
+                            />
+                            <span className="flex-1 text-sm">{p.nombre || p.parte_nombre}</span>
+                            {estado === "CRITICO" && <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Crítico</Badge>}
+                            {estado === "ADVERTENCIA" && <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Alerta</Badge>}
+                            {estado === "OK" && <Badge variant="outline" className="text-xs text-green-600">OK</Badge>}
+                            {p.km_restantes != null && (
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {p.km_restantes > 0 ? `${p.km_restantes.toLocaleString()} km restantes` : `${Math.abs(p.km_restantes).toLocaleString()} km vencido`}
+                              </span>
+                            )}
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {/* Nota adicional opcional para preventivo */}
+                  <FormField
+                    control={editForm.control}
+                    name="nota_adicional"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1 text-sm text-muted-foreground font-normal">
+                          <FileText className="h-3.5 w-3.5" /> Nota adicional <span className="text-xs">(opcional)</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea {...field} rows={2} placeholder="Ej: Incluir revisión adicional..." />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">Se añadirá al historial de notas</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               )}
 
-              {/* Agregar nota adicional (se agrega al historial, no reemplaza) */}
-              <FormField
-                control={editForm.control}
-                name="nota_adicional"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Agregar nota</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        {...field}
-                        rows={2}
-                        placeholder="Escribe una nota adicional (opcional)..."
-                      />
-                    </FormControl>
-                    <p className="text-xs text-muted-foreground">Se añadirá al historial de notas</p>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* CORRECTIVO: historial de notas + agregar nota */}
+              {editingMaintenance?.tipo?.toUpperCase() !== "PREVENTIVO" && (
+                <>
+                  {editingMaintenance?.observaciones && (
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-medium flex items-center gap-2">
+                        <FileText className="h-4 w-4" /> Problema reportado / Historial
+                      </p>
+                      <div className="rounded-md border bg-muted/50 px-3 py-2 max-h-32 overflow-y-auto">
+                        <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans">
+                          {editingMaintenance.observaciones}
+                        </pre>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Solo lectura — el historial no se puede modificar</p>
+                    </div>
+                  )}
+                  <FormField
+                    control={editForm.control}
+                    name="nota_adicional"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <FileText className="h-4 w-4" /> Agregar nota
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea {...field} rows={2} placeholder="Escribe una nota adicional (opcional)..." />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">Se añadirá al historial de notas</p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
 
               {/* Partes reparadas — al completar */}
               {editForm.watch("estado") === "COMPLETADO" && (
