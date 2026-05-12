@@ -324,6 +324,10 @@ export function MaintenancesTable() {
       toast.error("El técnico es obligatorio para marcar como completado")
       return
     }
+    if (compMaterials.length === 0) {
+      toast.error("Debes registrar al menos un material antes de completar el mantenimiento")
+      return
+    }
     setIsCompleting(true)
     try {
       await maintenanceService.editMaintenance(completingMaintenance.id, {
@@ -965,10 +969,16 @@ export function MaintenancesTable() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            {compMaterials.length === 0 && !compMatLoading && (
+              <p className="text-xs text-destructive flex items-center gap-1 mr-auto">
+                <AlertCircle className="h-3.5 w-3.5" /> Registra al menos un material para continuar
+              </p>
+            )}
             <Button variant="outline" onClick={() => setCompletingMaintenance(null)}>Cancelar</Button>
-            <Button onClick={handleCompleteSubmit} disabled={isCompleting || compMatLoading}
-              className="bg-emerald-600 hover:bg-emerald-700">
+            <Button onClick={handleCompleteSubmit}
+              disabled={isCompleting || compMatLoading || compMaterials.length === 0}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
               {isCompleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
               Marcar como Completado
             </Button>
