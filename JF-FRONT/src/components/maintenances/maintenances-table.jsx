@@ -44,13 +44,13 @@ import { configService } from "@/services/configService"
 import { materialService } from "@/services/materialService"
 
 const editSchema = z.object({
-  estado: z.enum(["PENDIENTE", "EN_PROCESO", "COMPLETADO"]),
+  estado: z.enum(["PENDIENTE", "EN_PROCESO", "COMPLETADO", "CERRADO"]),
   tecnico_id: z.string().optional(),
   observaciones: z.string().optional(),
   partes_reparadas: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
-  if (data.estado === "COMPLETADO" && (!data.tecnico_id || data.tecnico_id === "NONE")) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El técnico es obligatorio al completar", path: ["tecnico_id"] })
+  if (["COMPLETADO", "CERRADO"].includes(data.estado) && (!data.tecnico_id || data.tecnico_id === "NONE")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El técnico es obligatorio al completar o cerrar", path: ["tecnico_id"] })
   }
 })
 
@@ -103,8 +103,9 @@ export function MaintenancesTable() {
 
   const openEditDialog = (maintenance) => {
     setEditingMaintenance(maintenance)
+    const est = maintenance.estado?.toUpperCase()
     editForm.reset({
-      estado: maintenance.estado?.toUpperCase() === "REALIZADO" ? "COMPLETADO" : (maintenance.estado?.toUpperCase() || "PENDIENTE"),
+      estado: est === "REALIZADO" ? "COMPLETADO" : (["PENDIENTE","EN_PROCESO","COMPLETADO","CERRADO"].includes(est) ? est : "PENDIENTE"),
       tecnico_id: maintenance.tecnico_id?.toString() || "NONE",
       observaciones: maintenance.observaciones || "",
       partes_reparadas: [],
@@ -115,7 +116,7 @@ export function MaintenancesTable() {
     if (!editingMaintenance) return
     setIsSaving(true)
     try {
-      const partes = values.estado === "COMPLETADO" ? (values.partes_reparadas || []).map(Number) : []
+      const partes = ["COMPLETADO", "CERRADO"].includes(values.estado) ? (values.partes_reparadas || []).map(Number) : []
       await maintenanceService.editMaintenance(editingMaintenance.id, {
         estado: values.estado,
         tecnico_id: (values.tecnico_id && values.tecnico_id !== "NONE") ? parseInt(values.tecnico_id) : null,
@@ -405,8 +406,8 @@ export function MaintenancesTable() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {/* Editar — formulario unificado (no CERRADO) */}
-                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
+                                      {/* Editar — formulario unificado (admin puede editar cualquier estado) */}
+                      {isAdminOrEncargado && (
                         <DropdownMenuItem onClick={() => openEditDialog(maintenance)}>
                           <Edit className="mr-2 h-4 w-4" />
                           Editar
@@ -419,8 +420,16 @@ export function MaintenancesTable() {
                         </DropdownMenuItem>
                       )}
                       {canClose(maintenance.estado) && (
-                          <DropdownMenuItem
-                          onClick={() => openCloseDialog(maintenance)}
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setEditingMaintenance(maintenance)
+                            editForm.reset({
+                              estado: "CERRADO",
+                              tecnico_id: maintenance.tecnico_id?.toString() || "NONE",
+                              observaciones: "",
+                              partes_reparadas: [],
+                            })
+                          }}
                           className="text-green-700 focus:text-green-700"
                         >
                           <CheckCheck className="mr-2 h-4 w-4" />
@@ -582,7 +591,7 @@ export function MaintenancesTable() {
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
 
-              {/* Estado — solo si no es REALIZADO (en campo no se puede cambiar estado retroactivo) */}
+              {/* Estado — admin puede mover a cualquier estado incluyendo CERRADO */}
               {editingMaintenance?.estado?.toUpperCase() !== "REALIZADO" && (
                 <FormField
                   control={editForm.control}
@@ -600,8 +609,19 @@ export function MaintenancesTable() {
                           <SelectItem value="PENDIENTE">Pendiente</SelectItem>
                           <SelectItem value="EN_PROCESO">En Proceso</SelectItem>
                           <SelectItem value="COMPLETADO">Completado</SelectItem>
+                          <SelectItem value="CERRADO">
+                            <span className="flex items-center gap-2">
+                              <CheckCheck className="h-3.5 w-3.5 text-green-600" />
+                              Cerrado / Aprobado
+                            </span>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
+                      {field.value === "CERRADO" && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Al cerrar, se finalizará el mantenimiento. Esta acción no se puede deshacer.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -616,7 +636,7 @@ export function MaintenancesTable() {
                   <FormItem>
                     <FormLabel>
                       Técnico asignado
-                      {editForm.watch("estado") === "COMPLETADO" && (
+                      {["COMPLETADO", "CERRADO"].includes(editForm.watch("estado")) && (
                         <span className="text-destructive"> *</span>
                       )}
                     </FormLabel>
@@ -659,8 +679,8 @@ export function MaintenancesTable() {
                 )}
               />
 
-              {/* Partes reparadas — solo al completar */}
-              {editForm.watch("estado") === "COMPLETADO" && (
+              {/* Partes reparadas — al completar o cerrar */}
+              {["COMPLETADO", "CERRADO"].includes(editForm.watch("estado")) && (
                 <FormField
                   control={editForm.control}
                   name="partes_reparadas"

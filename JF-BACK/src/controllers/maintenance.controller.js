@@ -341,30 +341,30 @@ const editMaintenance = async (req, res) => {
 
     const estadoNorm = estado ? estado.toUpperCase() : m.estado;
 
-    if (estadoNorm === "CERRADO")
-      return res.status(400).json({ message: "Para cerrar use el flujo Cerrar/Aprobar" });
-
-    // tecnico_id obligatorio al completar
+    // tecnico_id obligatorio al completar o cerrar
     const finalTecnicoId = tecnico_id != null ? (tecnico_id || null) : m.tecnico_id;
-    if (estadoNorm === "COMPLETADO" && !finalTecnicoId)
-      return res.status(400).json({ message: "El técnico es obligatorio al marcar como Completado" });
+    if (['COMPLETADO', 'CERRADO'].includes(estadoNorm) && !finalTecnicoId)
+      return res.status(400).json({ message: "El técnico es obligatorio al marcar como Completado o Cerrado" });
 
-    // Validar que el técnico exista si se envía
     if (finalTecnicoId) {
       const tec = await pool.query("SELECT id FROM tecnicos WHERE id = $1", [finalTecnicoId]);
       if (tec.rows.length === 0)
         return res.status(404).json({ message: "Técnico no encontrado" });
     }
 
-    // No tiene sentido retroceder de COMPLETADO a PENDIENTE si ya tiene fecha de realización
-    // — lo permitimos para que el admin pueda corregir errores, pero lo dejamos registrado en log futuro
-
-    const finalObs = observaciones !== undefined
+    // Construir observaciones: si se cierra, añadir nota de cierre al final
+    let finalObs = observaciones !== undefined
       ? (observaciones?.trim() || m.observaciones)
       : m.observaciones;
 
-    // Calcular fecha_realizacion en JS para evitar ambigüedad de tipos en la query
-    const setFecha = ['COMPLETADO', 'EN_PROCESO'].includes(estadoNorm) && !m.fecha_realizacion;
+    if (estadoNorm === "CERRADO" && observaciones?.trim()) {
+      const base = m.observaciones || "";
+      finalObs = base
+        ? `${base}\n\n--- CIERRE DEL ENCARGADO ---\n${observaciones.trim()}`
+        : `--- CIERRE DEL ENCARGADO ---\n${observaciones.trim()}`;
+    }
+
+    const setFecha = ['COMPLETADO', 'EN_PROCESO', 'CERRADO'].includes(estadoNorm) && !m.fecha_realizacion;
 
     const result = await pool.query(
       `UPDATE mantenimientos
@@ -377,8 +377,8 @@ const editMaintenance = async (req, res) => {
       [estadoNorm, finalTecnicoId, finalObs, id, setFecha ? new Date() : m.fecha_realizacion]
     );
 
-    // Resetear contadores predictivos si se marcó como COMPLETADO con partes indicadas
-    if (estadoNorm === "COMPLETADO" && Array.isArray(partes_reparadas) && partes_reparadas.length > 0) {
+    // Resetear contadores predictivos si se marcó como COMPLETADO o CERRADO con partes indicadas
+    if (['COMPLETADO', 'CERRADO'].includes(estadoNorm) && Array.isArray(partes_reparadas) && partes_reparadas.length > 0) {
       for (const p_id of partes_reparadas) {
         await pool.query(
           `INSERT INTO estado_partes_unidad (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)
