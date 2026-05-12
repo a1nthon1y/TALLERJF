@@ -9,6 +9,14 @@ export const maintenanceService = {
     }
   },
 
+  async getMaintenanceById(id) {
+    try {
+      return await makeGetRequest(`/maintenances/${id}`);
+    } catch (error) {
+      throw new Error(error.message || 'Error al obtener mantenimiento');
+    }
+  },
+
   async getMaintenancesByUnit(unidadId) {
     try {
       return await makeGetRequest(`/maintenances/unit/${unidadId}`);

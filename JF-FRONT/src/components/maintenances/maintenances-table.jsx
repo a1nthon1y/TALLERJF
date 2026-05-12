@@ -294,12 +294,14 @@ export function MaintenancesTable() {
       const fetches = [
         maintenanceService.getMaintenanceMaterials(maintenance.id),
         materialService.getMaterials(),
+        // Traer el mantenimiento fresco desde el servidor para tener partes_programadas actualizadas
+        maintenanceService.getMaintenanceById(maintenance.id).catch(() => null),
       ]
       // Para preventivo: cargar partes de la unidad para pre-selección contextual
       if (maintenance.tipo?.toUpperCase() === "PREVENTIVO" && maintenance.unidad_id) {
         fetches.push(getPartsStatus(maintenance.unidad_id).catch(() => []))
       }
-      const [mats, cat, partsStatus] = await Promise.all(fetches)
+      const [mats, cat, freshMaint, partsStatus] = await Promise.all(fetches)
       setCompMaterials(Array.isArray(mats) ? mats : [])
       setCompCatalog(Array.isArray(cat) ? cat.filter(m => m.stock > 0) : [])
 
@@ -308,9 +310,8 @@ export function MaintenancesTable() {
         setCompUnitParts(partes)
       }
 
-      // Pre-seleccionar desde partes_programadas (guardadas en DB al crear)
-      // Fallback a las partes con alerta si no hay partes_programadas
-      const programadas = maintenance.partes_programadas
+      // Usar partes_programadas del registro fresco (no del objeto en memoria)
+      const programadas = freshMaint?.partes_programadas ?? maintenance.partes_programadas
       if (Array.isArray(programadas) && programadas.length > 0) {
         setCompPartes(programadas.map(String))
       } else if (partsStatus) {
