@@ -43,14 +43,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { configService } from "@/services/configService"
 import { materialService } from "@/services/materialService"
 
+// Transiciones permitidas por estado actual (forward-only)
+const TRANSICIONES_VALIDAS = {
+  PENDIENTE:  ["PENDIENTE", "EN_PROCESO", "COMPLETADO"],
+  EN_PROCESO: ["EN_PROCESO", "COMPLETADO"],
+  COMPLETADO: ["COMPLETADO"], // estado no cambia vía Edit; solo via Cerrar/Aprobar
+}
+
 const editSchema = z.object({
-  estado: z.enum(["PENDIENTE", "EN_PROCESO", "COMPLETADO", "CERRADO"]),
+  estado: z.enum(["PENDIENTE", "EN_PROCESO", "COMPLETADO"]),
   tecnico_id: z.string().optional(),
   observaciones: z.string().optional(),
   partes_reparadas: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
-  if (["COMPLETADO", "CERRADO"].includes(data.estado) && (!data.tecnico_id || data.tecnico_id === "NONE")) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El técnico es obligatorio al completar o cerrar", path: ["tecnico_id"] })
+  if (data.estado === "COMPLETADO" && (!data.tecnico_id || data.tecnico_id === "NONE")) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El técnico es obligatorio al completar", path: ["tecnico_id"] })
   }
 })
 
@@ -104,8 +111,9 @@ export function MaintenancesTable() {
   const openEditDialog = (maintenance) => {
     setEditingMaintenance(maintenance)
     const est = maintenance.estado?.toUpperCase()
+    const estadoNorm = est === "REALIZADO" ? "COMPLETADO" : (["PENDIENTE","EN_PROCESO","COMPLETADO"].includes(est) ? est : "PENDIENTE")
     editForm.reset({
-      estado: est === "REALIZADO" ? "COMPLETADO" : (["PENDIENTE","EN_PROCESO","COMPLETADO","CERRADO"].includes(est) ? est : "PENDIENTE"),
+      estado: estadoNorm,
       tecnico_id: maintenance.tecnico_id?.toString() || "NONE",
       observaciones: maintenance.observaciones || "",
       partes_reparadas: [],
@@ -116,7 +124,7 @@ export function MaintenancesTable() {
     if (!editingMaintenance) return
     setIsSaving(true)
     try {
-      const partes = ["COMPLETADO", "CERRADO"].includes(values.estado) ? (values.partes_reparadas || []).map(Number) : []
+      const partes = values.estado === "COMPLETADO" ? (values.partes_reparadas || []).map(Number) : []
       await maintenanceService.editMaintenance(editingMaintenance.id, {
         estado: values.estado,
         tecnico_id: (values.tecnico_id && values.tecnico_id !== "NONE") ? parseInt(values.tecnico_id) : null,
@@ -406,8 +414,8 @@ export function MaintenancesTable() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                                      {/* Editar — formulario unificado (admin puede editar cualquier estado) */}
-                      {isAdminOrEncargado && (
+                                      {/* Editar — no disponible para CERRADO (estado final) */}
+                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
                         <DropdownMenuItem onClick={() => openEditDialog(maintenance)}>
                           <Edit className="mr-2 h-4 w-4" />
                           Editar
@@ -421,15 +429,7 @@ export function MaintenancesTable() {
                       )}
                       {canClose(maintenance.estado) && (
                         <DropdownMenuItem
-                          onClick={() => {
-                            setEditingMaintenance(maintenance)
-                            editForm.reset({
-                              estado: "CERRADO",
-                              tecnico_id: maintenance.tecnico_id?.toString() || "NONE",
-                              observaciones: "",
-                              partes_reparadas: [],
-                            })
-                          }}
+                          onClick={() => openCloseDialog(maintenance)}
                           className="text-green-700 focus:text-green-700"
                         >
                           <CheckCheck className="mr-2 h-4 w-4" />
@@ -591,42 +591,45 @@ export function MaintenancesTable() {
           <Form {...editForm}>
             <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-4">
 
-              {/* Estado — admin puede mover a cualquier estado incluyendo CERRADO */}
-              {editingMaintenance?.estado?.toUpperCase() !== "REALIZADO" && (
-                <FormField
-                  control={editForm.control}
-                  name="estado"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Estado</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                          <SelectItem value="EN_PROCESO">En Proceso</SelectItem>
-                          <SelectItem value="COMPLETADO">Completado</SelectItem>
-                          <SelectItem value="CERRADO">
-                            <span className="flex items-center gap-2">
-                              <CheckCheck className="h-3.5 w-3.5 text-green-600" />
-                              Cerrado / Aprobado
-                            </span>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {field.value === "CERRADO" && (
-                        <p className="text-xs text-amber-600 mt-1">
-                          Al cerrar, se finalizará el mantenimiento. Esta acción no se puede deshacer.
-                        </p>
-                      )}
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+              {/* Estado — solo se puede avanzar, nunca retroceder */}
+              {(() => {
+                const estadoActual = editingMaintenance?.estado?.toUpperCase()
+                // COMPLETADO no puede cambiar estado desde edición (solo via Cerrar/Aprobar)
+                if (estadoActual === "COMPLETADO") return (
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-medium">Estado</p>
+                    <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/50">
+                      {getStatusBadge("COMPLETADO")}
+                      <span className="text-xs text-muted-foreground ml-1">— usa "Cerrar / Aprobar" para finalizar</span>
+                    </div>
+                  </div>
+                )
+                const opciones = TRANSICIONES_VALIDAS[estadoActual] ?? ["PENDIENTE"]
+                return (
+                  <FormField
+                    control={editForm.control}
+                    name="estado"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Estado</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {opciones.includes("PENDIENTE") && <SelectItem value="PENDIENTE">Pendiente</SelectItem>}
+                            {opciones.includes("EN_PROCESO") && <SelectItem value="EN_PROCESO">En Proceso</SelectItem>}
+                            {opciones.includes("COMPLETADO") && <SelectItem value="COMPLETADO">Completado (trabajo realizado)</SelectItem>}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )
+              })()}
 
               {/* Técnico */}
               <FormField
@@ -636,7 +639,7 @@ export function MaintenancesTable() {
                   <FormItem>
                     <FormLabel>
                       Técnico asignado
-                      {["COMPLETADO", "CERRADO"].includes(editForm.watch("estado")) && (
+                      {editForm.watch("estado") === "COMPLETADO" && (
                         <span className="text-destructive"> *</span>
                       )}
                     </FormLabel>
@@ -679,8 +682,8 @@ export function MaintenancesTable() {
                 )}
               />
 
-              {/* Partes reparadas — al completar o cerrar */}
-              {["COMPLETADO", "CERRADO"].includes(editForm.watch("estado")) && (
+              {/* Partes reparadas — al completar */}
+              {editForm.watch("estado") === "COMPLETADO" && (
                 <FormField
                   control={editForm.control}
                   name="partes_reparadas"

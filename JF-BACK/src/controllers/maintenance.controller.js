@@ -336,15 +336,35 @@ const editMaintenance = async (req, res) => {
       return res.status(404).json({ message: "Mantenimiento no encontrado" });
     const m = mantQuery.rows[0];
 
+    // CERRADO es estado final — no se puede alterar (integridad para los dueños)
     if (m.estado === "CERRADO")
-      return res.status(400).json({ message: "No se puede editar un mantenimiento cerrado" });
+      return res.status(400).json({ message: "Un mantenimiento cerrado no puede ser modificado" });
 
     const estadoNorm = estado ? estado.toUpperCase() : m.estado;
 
-    // tecnico_id obligatorio al completar o cerrar
+    // Validar transiciones de estado: solo avanzar, nunca retroceder
+    const ORDEN_ESTADOS = { PENDIENTE: 0, EN_PROCESO: 1, COMPLETADO: 2, CERRADO: 3 };
+    const TRANSICIONES_VALIDAS = {
+      PENDIENTE:  ["EN_PROCESO", "COMPLETADO"],
+      EN_PROCESO: ["COMPLETADO"],
+      COMPLETADO: [], // solo via closeMaintenance
+    };
+    const actualOrden = ORDEN_ESTADOS[m.estado] ?? -1;
+    const nuevoOrden  = ORDEN_ESTADOS[estadoNorm] ?? -1;
+
+    if (estadoNorm !== m.estado) {
+      if (estadoNorm === "CERRADO")
+        return res.status(400).json({ message: "Para cerrar un mantenimiento use la acción 'Cerrar / Aprobar'" });
+      if (!TRANSICIONES_VALIDAS[m.estado]?.includes(estadoNorm))
+        return res.status(400).json({
+          message: `No se puede cambiar el estado de ${m.estado} a ${estadoNorm}. El flujo solo avanza.`
+        });
+    }
+
+    // tecnico_id obligatorio al avanzar a COMPLETADO
     const finalTecnicoId = tecnico_id != null ? (tecnico_id || null) : m.tecnico_id;
-    if (['COMPLETADO', 'CERRADO'].includes(estadoNorm) && !finalTecnicoId)
-      return res.status(400).json({ message: "El técnico es obligatorio al marcar como Completado o Cerrado" });
+    if (estadoNorm === "COMPLETADO" && !finalTecnicoId)
+      return res.status(400).json({ message: "El técnico es obligatorio al marcar como Completado" });
 
     if (finalTecnicoId) {
       const tec = await pool.query("SELECT id FROM tecnicos WHERE id = $1", [finalTecnicoId]);
@@ -352,19 +372,11 @@ const editMaintenance = async (req, res) => {
         return res.status(404).json({ message: "Técnico no encontrado" });
     }
 
-    // Construir observaciones: si se cierra, añadir nota de cierre al final
-    let finalObs = observaciones !== undefined
+    const finalObs = observaciones !== undefined
       ? (observaciones?.trim() || m.observaciones)
       : m.observaciones;
 
-    if (estadoNorm === "CERRADO" && observaciones?.trim()) {
-      const base = m.observaciones || "";
-      finalObs = base
-        ? `${base}\n\n--- CIERRE DEL ENCARGADO ---\n${observaciones.trim()}`
-        : `--- CIERRE DEL ENCARGADO ---\n${observaciones.trim()}`;
-    }
-
-    const setFecha = ['COMPLETADO', 'EN_PROCESO', 'CERRADO'].includes(estadoNorm) && !m.fecha_realizacion;
+    const setFecha = ['COMPLETADO', 'EN_PROCESO'].includes(estadoNorm) && !m.fecha_realizacion;
 
     const result = await pool.query(
       `UPDATE mantenimientos
@@ -377,8 +389,8 @@ const editMaintenance = async (req, res) => {
       [estadoNorm, finalTecnicoId, finalObs, id, setFecha ? new Date() : m.fecha_realizacion]
     );
 
-    // Resetear contadores predictivos si se marcó como COMPLETADO o CERRADO con partes indicadas
-    if (['COMPLETADO', 'CERRADO'].includes(estadoNorm) && Array.isArray(partes_reparadas) && partes_reparadas.length > 0) {
+    // Resetear contadores predictivos al completar con partes indicadas
+    if (estadoNorm === "COMPLETADO" && Array.isArray(partes_reparadas) && partes_reparadas.length > 0) {
       for (const p_id of partes_reparadas) {
         await pool.query(
           `INSERT INTO estado_partes_unidad (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)
