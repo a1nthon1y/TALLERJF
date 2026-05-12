@@ -49,9 +49,9 @@ export function UnitsTable() {
       if (unit.dueno_id && !uniqueOwners.has(unit.dueno_id)) {
         uniqueOwners.set(unit.dueno_id, {
           id: unit.dueno_id,
-          name: unit.nombre || 'Sin nombre',
-          correo: unit.correo_dueno || '',
-          telefono: unit.telefono_dueno || ''
+          name: unit.dueno_nombre || 'Sin nombre',
+          correo: unit.dueno_correo || '',
+          telefono: unit.dueno_telefono || ''
         })
       }
     })
@@ -76,7 +76,7 @@ export function UnitsTable() {
 
   // Función para obtener el nombre del dueño
   const getOwnerName = (unit) => {
-    return unit.nombre || "Desconocido"
+    return unit.dueno_nombre || "Desconocido"
   }
 
   // Función para manejar la eliminación

@@ -236,14 +236,18 @@ const crearReporteLlegada = async (req, res) => {
     //    para que los contadores ya estén resetados cuando se evalúen las alertas
     let trabajosCampo = 0;
     if (Array.isArray(partes_campo) && partes_campo.length > 0) {
-      // Obtener o crear material especial "Servicio en Ruta"
+      // El material "Servicio en Ruta" se siembra en run-migrations.js. Lo buscamos;
+      // si por algún motivo (BD recién creada sin migrar, borrado manual) no existe,
+      // lo creamos aquí defensivamente con la columna correcta (`precio`, no `precio_unitario`).
       let materialCampoId;
-      const matExistente = await pool.query("SELECT id FROM materiales WHERE nombre = 'Servicio en Ruta' LIMIT 1");
+      const matExistente = await pool.query(
+        "SELECT id FROM materiales WHERE nombre = 'Servicio en Ruta' LIMIT 1"
+      );
       if (matExistente.rows.length > 0) {
         materialCampoId = matExistente.rows[0].id;
       } else {
         const matNuevo = await pool.query(
-          "INSERT INTO materiales (nombre, precio_unitario) VALUES ('Servicio en Ruta', 1) RETURNING id"
+          "INSERT INTO materiales (nombre, precio, stock) VALUES ('Servicio en Ruta', 0, 0) RETURNING id"
         );
         materialCampoId = matNuevo.rows[0].id;
       }

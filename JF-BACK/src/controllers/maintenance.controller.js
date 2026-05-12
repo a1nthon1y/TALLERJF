@@ -338,16 +338,22 @@ const deleteMaintenance = async (req, res) => {
 const editMaintenance = async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado, tecnico_id, observaciones, nota_adicional, partes_reparadas, partes_programadas } = req.body;
+    // Nota: `observaciones` NO se acepta aquí — el historial es append-only.
+    // Para añadir notas, usar `nota_adicional` (se anexa con separador estándar).
+    const { estado, tecnico_id, nota_adicional, partes_reparadas, partes_programadas } = req.body;
 
     const mantQuery = await pool.query("SELECT * FROM mantenimientos WHERE id = $1", [id]);
     if (mantQuery.rows.length === 0)
       return res.status(404).json({ message: "Mantenimiento no encontrado" });
     const m = mantQuery.rows[0];
 
-    // CERRADO es estado final — no se puede alterar (integridad para los dueños)
+    // CERRADO y REALIZADO son estados finales — no se pueden alterar.
+    // (REALIZADO = trabajo en campo, queda registrado al instante desde la llegada
+    // del chofer; integridad de costos y contadores ya consolidados.)
     if (m.estado === "CERRADO")
       return res.status(400).json({ message: "Un mantenimiento cerrado no puede ser modificado" });
+    if (m.estado === "REALIZADO")
+      return res.status(400).json({ message: "Un mantenimiento de campo (REALIZADO) no puede ser modificado" });
 
     const estadoNorm = estado ? estado.toUpperCase() : m.estado;
     const userRole = req.user?.rol;
@@ -370,8 +376,11 @@ const editMaintenance = async (req, res) => {
       // Admin sí puede retroceder libremente entre PENDIENTE/EN_PROCESO/COMPLETADO
     }
 
-    // tecnico_id obligatorio al avanzar a COMPLETADO
-    const finalTecnicoId = tecnico_id != null ? (tecnico_id || null) : m.tecnico_id;
+    // tecnico_id: distinguir "no enviado" (mantener) de "enviado null" (desasignar).
+    // Bug #3: la versión previa usaba `tecnico_id != null ? (tecnico_id || null) : m.tecnico_id`
+    // que NUNCA lograba desasignar porque null caía en el else y reusaba m.tecnico_id.
+    const tecnicoIdProvided = Object.prototype.hasOwnProperty.call(req.body, "tecnico_id");
+    const finalTecnicoId = tecnicoIdProvided ? (tecnico_id || null) : m.tecnico_id;
     if (estadoNorm === "COMPLETADO" && !finalTecnicoId)
       return res.status(400).json({ message: "El técnico es obligatorio al marcar como Completado" });
 
@@ -389,7 +398,9 @@ const editMaintenance = async (req, res) => {
         : nota_adicional.trim();
     }
 
-    const setFecha = ['COMPLETADO', 'EN_PROCESO'].includes(estadoNorm) && !m.fecha_realizacion;
+    // fecha_realizacion = momento en que el trabajo se TERMINÓ.
+    // No setearla al pasar a EN_PROCESO (eso es "se inició", no "se realizó").
+    const setFecha = estadoNorm === 'COMPLETADO' && !m.fecha_realizacion;
 
     // Actualizar partes_programadas si se envían (permite editar el plan)
     const finalPartesProg = Array.isArray(partes_programadas)
@@ -461,23 +472,30 @@ const assignTecnico = async (req, res) => {
   }
 };
 
-// Editar observaciones de un mantenimiento (ADMIN/ENCARGADO, no CERRADO)
+// Anexar nota al historial de observaciones (ADMIN/ENCARGADO, no CERRADO).
+// IMPORTANTE: `observaciones` es un audit log acumulativo — nunca se sobrescribe.
+// La nota recibida se concatena al final con un separador estándar.
 const updateObservaciones = async (req, res) => {
   try {
     const { id } = req.params;
     const { observaciones } = req.body;
     if (!observaciones?.trim())
-      return res.status(400).json({ message: "Las observaciones no pueden estar vacías" });
+      return res.status(400).json({ message: "La nota no puede estar vacía" });
 
-    const mant = await pool.query("SELECT estado FROM mantenimientos WHERE id = $1", [id]);
+    const mant = await pool.query("SELECT estado, observaciones FROM mantenimientos WHERE id = $1", [id]);
     if (mant.rows.length === 0)
       return res.status(404).json({ message: "Mantenimiento no encontrado" });
     if (mant.rows[0].estado === "CERRADO")
       return res.status(400).json({ message: "No se puede editar un mantenimiento cerrado" });
 
+    const obsActual = mant.rows[0].observaciones || "";
+    const obsNueva = obsActual
+      ? `${obsActual}\n\n--- NOTA DEL ENCARGADO ---\n${observaciones.trim()}`
+      : observaciones.trim();
+
     const result = await pool.query(
       "UPDATE mantenimientos SET observaciones = $1 WHERE id = $2 RETURNING *",
-      [observaciones.trim(), id]
+      [obsNueva, id]
     );
     res.json(result.rows[0]);
   } catch (error) {

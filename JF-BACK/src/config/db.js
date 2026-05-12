@@ -56,9 +56,9 @@ pool.connect()
 
       console.log("🟢 Migración codigo completada");
 
-      // Normalizar tipo de unidades: mayúsculas + mapear valores legacy
+      // Normalizar tipo de unidades: solo mayúsculas (sin pisar valores legacy
+      // como 'CARGA' o 'MINIVAN', que el CHECK migrado ya admite).
       await client.query(`UPDATE unidades SET tipo = UPPER(tipo) WHERE tipo != UPPER(tipo);`);
-      await client.query(`UPDATE unidades SET tipo = 'BUS' WHERE tipo NOT IN ('BUS','VAN','CAMION','OTRO');`);
       console.log("🟢 Normalización tipo unidades completada");
     } catch (e) {
       console.error("🟡 Migración codigo:", e.message);

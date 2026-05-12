@@ -136,7 +136,7 @@ export function MaintenancesTable() {
     defaultValues: {
       estado: "PENDIENTE",
       tecnico_id: "NONE",
-      observaciones: "",
+      nota_adicional: "",
       partes_reparadas: [],
     },
   })
@@ -189,16 +189,30 @@ export function MaintenancesTable() {
     setIsSaving(true)
     try {
       const isPreventivo = editingMaintenance.tipo?.toUpperCase() === "PREVENTIVO"
-      // Las "partes a atender" son la única fuente de verdad — al COMPLETAR
-      // se usan también como partes_reparadas para resetear sus contadores predictivos
-      const partesAtender = isPreventivo ? editPartesRef.current.map(Number) : []
-      const partesReparadas = values.estado === "COMPLETADO" ? partesAtender : []
+      const estadoOriginal = editingMaintenance.estado?.toUpperCase()
+      // Si el mantenimiento ya estaba COMPLETADO, las partes están congeladas
+      // (los contadores ya fueron reseteados; cambiarlas acá los desincroniza).
+      // El admin puede rebobinar el estado, pero en esa misma transición no
+      // permitimos editar la lista de partes — debe rehacer el flujo via Completar.
+      const partesCongeladas = estadoOriginal === "COMPLETADO"
+
+      // Partes a enviar:
+      // - Si están congeladas: NO mandar partes_programadas (el backend usará el COALESCE
+      //   y las dejará intactas). Tampoco partes_reparadas (no re-reseteamos contadores).
+      // - Si están editables: mandar el array actual del editor.
+      const partesAtender = isPreventivo && !partesCongeladas
+        ? editPartesRef.current.map(Number)
+        : null
+      const partesReparadas = values.estado === "COMPLETADO" && !partesCongeladas
+        ? (partesAtender ?? [])
+        : []
+
       await maintenanceService.editMaintenance(editingMaintenance.id, {
         estado: values.estado,
         tecnico_id: (values.tecnico_id && values.tecnico_id !== "NONE") ? parseInt(values.tecnico_id) : null,
         nota_adicional: values.nota_adicional || "",
         partes_reparadas: partesReparadas,
-        partes_programadas: isPreventivo ? partesAtender : undefined,
+        partes_programadas: partesAtender ?? undefined,
       })
       toast.success("Mantenimiento actualizado correctamente")
       setEditingMaintenance(null)
@@ -210,9 +224,12 @@ export function MaintenancesTable() {
     }
   }
 
-  // Avance rápido de estado sin abrir el dialog de edición
+  // Avance rápido de estado sin abrir el dialog de edición.
+  // Chequea solo `tecnico_id` (la fuente de verdad). `tecnico_nombre` viene del JOIN
+  // y puede ser null si el técnico fue desasignado/eliminado, lo que generaría un
+  // falso bloqueo aunque el `tecnico_id` siga seteado.
   const quickAdvance = async (maintenance, nuevoEstado) => {
-    if (!maintenance.tecnico_id && !maintenance.tecnico_nombre && nuevoEstado !== "PENDIENTE") {
+    if (!maintenance.tecnico_id && nuevoEstado !== "PENDIENTE") {
       toast.error("Asigna un técnico antes de iniciar el trabajo", { description: "Usa Editar para asignarlo." })
       return
     }
@@ -220,7 +237,6 @@ export function MaintenancesTable() {
       await maintenanceService.editMaintenance(maintenance.id, {
         estado: nuevoEstado,
         tecnico_id: maintenance.tecnico_id ?? null,
-        observaciones: maintenance.observaciones ?? "",
         partes_reparadas: [],
       })
       toast.success(`Estado cambiado a ${nuevoEstado === "EN_PROCESO" ? "En Proceso" : nuevoEstado}`)
@@ -604,7 +620,7 @@ export function MaintenancesTable() {
           <TableBody>
             {filteredMaintenances?.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center">
+                <TableCell colSpan={8} className="py-12 text-center">
                   <Wrench className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" aria-hidden="true" />
                   <p className="text-muted-foreground text-sm">
                     {searchTerm ? "Sin resultados para esa búsqueda" : "No hay mantenimientos registrados"}
@@ -680,7 +696,9 @@ export function MaintenancesTable() {
                       <DropdownMenuSeparator />
 
                       {/* ── Acciones secundarias ── */}
-                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
+                      {/* REALIZADO y CERRADO son estados finales: no se editan */}
+                      {isAdminOrEncargado &&
+                        !["CERRADO", "REALIZADO"].includes(maintenance.estado?.toUpperCase()) && (
                         <DropdownMenuItem onClick={() => openEditDialog(maintenance)}>
                           <Edit className="mr-2 h-4 w-4" />
                           Editar detalles
@@ -728,7 +746,8 @@ export function MaintenancesTable() {
 
           {(() => {
             const matEstado = materialsMaintenance?.estado?.toUpperCase()
-            const matReadonly = ['COMPLETADO', 'CERRADO'].includes(matEstado)
+            // REALIZADO también es read-only: el trabajo se cerró al registrarse desde llegada.
+            const matReadonly = ['COMPLETADO', 'CERRADO', 'REALIZADO'].includes(matEstado)
             return matLoading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -783,7 +802,7 @@ export function MaintenancesTable() {
                           </TableRow>
                         ))}
                         <TableRow className="bg-muted/30">
-                          <TableCell colSpan={matReadonly ? 3 : 3} className="font-semibold text-right">Total</TableCell>
+                          <TableCell colSpan={3} className="font-semibold text-right">Total</TableCell>
                           <TableCell className="text-right font-bold text-base">S/. {totalCosto.toFixed(2)}</TableCell>
                           {!matReadonly && <TableCell />}
                         </TableRow>
@@ -1088,7 +1107,12 @@ export function MaintenancesTable() {
                     </div>
                   </div>
                 )
-                const opciones = matriz[estadoActual] ?? ["PENDIENTE"]
+                // Garantía de robustez: el estado actual SIEMPRE debe ser una opción
+                // visible (aunque la matriz no lo cubra), para que el Select nunca quede
+                // en blanco ante datos inesperados. estadoNorm normaliza REALIZADO/desconocido.
+                const baseOpciones = matriz[estadoActual] ?? []
+                const estadoNormCurrent = ["PENDIENTE","EN_PROCESO","COMPLETADO"].includes(estadoActual) ? estadoActual : "PENDIENTE"
+                const opciones = Array.from(new Set([estadoNormCurrent, ...baseOpciones]))
                 return (
                   <FormField
                     control={editForm.control}
@@ -1096,10 +1120,10 @@ export function MaintenancesTable() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Estado {isAdmin && <span className="text-xs text-muted-foreground font-normal">(admin: puede corregir hacia atrás)</span>}</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value || estadoNormCurrent}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue />
+                              <SelectValue placeholder="Selecciona estado" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -1147,13 +1171,32 @@ export function MaintenancesTable() {
                 )}
               />
 
-              {/* PREVENTIVO: partes a atender con estado actual */}
-              {editingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO" && (
+              {/* PREVENTIVO: partes a atender con estado actual.
+                  REGLA DE FLUJO:
+                  - PENDIENTE / EN_PROCESO: editable libremente.
+                  - COMPLETADO: read-only. Los contadores predictivos ya fueron reseteados
+                    al momento del COMPLETADO; quitar/agregar partes acá no rebobina los
+                    contadores y dejaría el motor predictivo desincronizado. Si se necesita
+                    corregir, el ADMIN debe primero retroceder a EN_PROCESO y volver a
+                    completar vía el dialog dedicado de "Completar trabajo". */}
+              {editingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO" && (() => {
+                const partesReadonly = editingMaintenance?.estado?.toUpperCase() === "COMPLETADO"
+                return (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <Wrench className="h-4 w-4 text-amber-500" />
                     <p className="text-sm font-medium">Partes a atender</p>
                   </div>
+                  {partesReadonly && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                      <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <span>
+                        Las partes ya quedaron registradas al completar el trabajo. Para
+                        corregirlas, retrocede el estado a <strong>En Proceso</strong> y vuelve a
+                        completar usando <strong>Completar trabajo</strong>.
+                      </span>
+                    </div>
+                  )}
                   {editUnitPartsLoading ? (
                     <p className="text-xs text-muted-foreground">Cargando estado de partes...</p>
                   ) : editUnitParts.length === 0 ? (
@@ -1161,14 +1204,15 @@ export function MaintenancesTable() {
                       No hay partes configuradas para esta unidad
                     </p>
                   ) : (
-                    <div className="border rounded-md divide-y">
+                    <div className={`border rounded-md divide-y ${partesReadonly ? "opacity-70" : ""}`}>
                       {editUnitParts.map((p) => {
                         const pid = String(p.id || p.configuracion_parte_id)
                         const estado = p.estado?.toUpperCase()
                         const checked = editPartes.includes(pid)
                         return (
-                          <label key={pid} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40">
+                          <label key={pid} className={`flex items-center gap-3 px-3 py-2 ${partesReadonly ? "cursor-not-allowed" : "cursor-pointer hover:bg-muted/40"}`}>
                             <input type="checkbox" className="rounded" checked={checked}
+                              disabled={partesReadonly}
                               onChange={(e) => setEditPartes(prev =>
                                 e.target.checked ? [...prev, pid] : prev.filter(x => x !== pid)
                               )}
@@ -1205,7 +1249,8 @@ export function MaintenancesTable() {
                     )}
                   />
                 </div>
-              )}
+                )
+              })()}
 
               {/* CORRECTIVO: historial de notas + agregar nota */}
               {editingMaintenance?.tipo?.toUpperCase() !== "PREVENTIVO" && (

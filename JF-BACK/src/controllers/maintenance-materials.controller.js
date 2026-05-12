@@ -47,8 +47,10 @@ const addMaterial = async (req, res) => {
 
     const mant = mantCheck.rows[0];
 
-    // Nadie puede agregar materiales a un mantenimiento COMPLETADO o CERRADO
-    if (['COMPLETADO', 'CERRADO'].includes(mant.estado)) {
+    // Nadie puede agregar materiales a un mantenimiento ya finalizado.
+    // REALIZADO también está bloqueado: es un trabajo de campo cerrado al
+    // momento de registrarse desde "reportar llegada".
+    if (['COMPLETADO', 'CERRADO', 'REALIZADO'].includes(mant.estado)) {
       await client.query("ROLLBACK");
       return res.status(400).json({
         message: `No se pueden agregar materiales a un mantenimiento en estado ${mant.estado}. El registro de materiales se cierra al completar el trabajo.`
@@ -123,8 +125,9 @@ const removeMaterial = async (req, res) => {
     }
     const mant = mantCheck.rows[0];
 
-    // Nadie puede eliminar materiales de un mantenimiento COMPLETADO o CERRADO
-    if (['COMPLETADO', 'CERRADO'].includes(mant.estado)) {
+    // Nadie puede eliminar materiales de un mantenimiento ya finalizado
+    // (incluye REALIZADO, que es trabajo de campo ya cerrado).
+    if (['COMPLETADO', 'CERRADO', 'REALIZADO'].includes(mant.estado)) {
       await client.query("ROLLBACK");
       return res.status(400).json({
         message: `No se pueden modificar materiales de un mantenimiento en estado ${mant.estado}.`

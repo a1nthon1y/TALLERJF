@@ -35,7 +35,10 @@ const getAllUnits = async (req, res) => {
     const result = await pool.query(`
       SELECT 
         u.id, u.placa, u.modelo, u.año, u.tipo, u.kilometraje, u.creado_en,
-        d.id AS dueno_id,us2.nombre,us2.correo AS correo_dueno, d.telefono AS telefono_dueno,
+        d.id AS dueno_id,
+        us2.nombre AS dueno_nombre,
+        us2.correo AS dueno_correo,
+        d.telefono AS dueno_telefono,
         us.id AS chofer_usuario_id, us.nombre AS chofer_nombre, us.correo AS chofer_correo
       FROM unidades u
       LEFT JOIN duenos d ON u.dueno_id = d.id
