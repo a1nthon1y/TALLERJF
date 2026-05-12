@@ -329,7 +329,7 @@ const deleteMaintenance = async (req, res) => {
 const editMaintenance = async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado, tecnico_id, observaciones, partes_reparadas } = req.body;
+    const { estado, tecnico_id, observaciones, nota_adicional, partes_reparadas } = req.body;
 
     const mantQuery = await pool.query("SELECT * FROM mantenimientos WHERE id = $1", [id]);
     if (mantQuery.rows.length === 0)
@@ -372,9 +372,13 @@ const editMaintenance = async (req, res) => {
         return res.status(404).json({ message: "Técnico no encontrado" });
     }
 
-    const finalObs = observaciones !== undefined
-      ? (observaciones?.trim() || m.observaciones)
-      : m.observaciones;
+    // Nunca sobrescribir historial — solo agregar nueva nota al final
+    let finalObs = m.observaciones || "";
+    if (nota_adicional?.trim()) {
+      finalObs = finalObs
+        ? `${finalObs}\n\n--- NOTA DEL ENCARGADO ---\n${nota_adicional.trim()}`
+        : nota_adicional.trim();
+    }
 
     const setFecha = ['COMPLETADO', 'EN_PROCESO'].includes(estadoNorm) && !m.fecha_realizacion;
 

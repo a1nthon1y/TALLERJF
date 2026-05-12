@@ -53,7 +53,7 @@ const TRANSICIONES_VALIDAS = {
 const editSchema = z.object({
   estado: z.enum(["PENDIENTE", "EN_PROCESO", "COMPLETADO"]),
   tecnico_id: z.string().optional(),
-  observaciones: z.string().optional(),
+  nota_adicional: z.string().optional(),
   partes_reparadas: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
   if (data.estado === "COMPLETADO" && (!data.tecnico_id || data.tecnico_id === "NONE")) {
@@ -115,7 +115,7 @@ export function MaintenancesTable() {
     editForm.reset({
       estado: estadoNorm,
       tecnico_id: maintenance.tecnico_id?.toString() || "NONE",
-      observaciones: maintenance.observaciones || "",
+      nota_adicional: "",
       partes_reparadas: [],
     })
   }
@@ -128,7 +128,7 @@ export function MaintenancesTable() {
       await maintenanceService.editMaintenance(editingMaintenance.id, {
         estado: values.estado,
         tecnico_id: (values.tecnico_id && values.tecnico_id !== "NONE") ? parseInt(values.tecnico_id) : null,
-        observaciones: values.observaciones,
+        nota_adicional: values.nota_adicional || "",
         partes_reparadas: partes,
       })
       toast.success("Mantenimiento actualizado correctamente")
@@ -749,20 +749,34 @@ export function MaintenancesTable() {
                 )}
               />
 
-              {/* Observaciones */}
+              {/* Historial de notas (solo lectura) */}
+              {editingMaintenance?.observaciones && (
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium">Historial de notas</p>
+                  <div className="rounded-md border bg-muted/50 px-3 py-2 max-h-32 overflow-y-auto">
+                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-sans">
+                      {editingMaintenance.observaciones}
+                    </pre>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Solo lectura — el historial no se puede modificar</p>
+                </div>
+              )}
+
+              {/* Agregar nota adicional (se agrega al historial, no reemplaza) */}
               <FormField
                 control={editForm.control}
-                name="observaciones"
+                name="nota_adicional"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Observaciones</FormLabel>
+                    <FormLabel>Agregar nota</FormLabel>
                     <FormControl>
                       <Textarea
                         {...field}
-                        rows={3}
-                        placeholder="Describe el problema o las acciones a realizar..."
+                        rows={2}
+                        placeholder="Escribe una nota adicional (opcional)..."
                       />
                     </FormControl>
+                    <p className="text-xs text-muted-foreground">Se añadirá al historial de notas</p>
                     <FormMessage />
                   </FormItem>
                 )}
