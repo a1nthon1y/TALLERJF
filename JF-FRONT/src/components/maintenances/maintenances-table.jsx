@@ -90,6 +90,19 @@ export function MaintenancesTable() {
   const [addMatQty, setAddMatQty] = useState(1)
   const [addingMat, setAddingMat] = useState(false)
 
+  // Dialog: Completar mantenimiento (dedicado)
+  const [completingMaintenance, setCompletingMaintenance] = useState(null)
+  const [compMaterials, setCompMaterials] = useState([])
+  const [compCatalog, setCompCatalog] = useState([])
+  const [compMatLoading, setCompMatLoading] = useState(false)
+  const [compAddMatId, setCompAddMatId] = useState("")
+  const [compAddMatQty, setCompAddMatQty] = useState(1)
+  const [compAddingMat, setCompAddingMat] = useState(false)
+  const [compPartes, setCompPartes] = useState([])
+  const [compNota, setCompNota] = useState("")
+  const [compTecnicoId, setCompTecnicoId] = useState("")
+  const [isCompleting, setIsCompleting] = useState(false)
+
   const { data: maintenances, isLoading: isLoadingMaintenances, isError: isErrorMaintenances, mutate } = useMaintenances()
   const { data: technicians, isLoading: isLoadingTechnicians, isError: isErrorTechnicians } = useTechnicians()
   const currentUser = authService.getUser()
@@ -234,6 +247,80 @@ export function MaintenancesTable() {
       toast.error(err.message)
     } finally {
       setMatLoading(false)
+    }
+  }
+
+  const openCompleteDialog = async (maintenance) => {
+    setCompletingMaintenance(maintenance)
+    setCompPartes([])
+    setCompNota("")
+    setCompAddMatId("")
+    setCompAddMatQty(1)
+    setCompTecnicoId(maintenance.tecnico_id?.toString() || "")
+    setCompMatLoading(true)
+    try {
+      const [mats, cat] = await Promise.all([
+        maintenanceService.getMaintenanceMaterials(maintenance.id),
+        materialService.getMaterials(),
+      ])
+      setCompMaterials(Array.isArray(mats) ? mats : [])
+      setCompCatalog(Array.isArray(cat) ? cat.filter(m => m.stock > 0) : [])
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setCompMatLoading(false)
+    }
+  }
+
+  const handleCompAddMaterial = async () => {
+    if (!compAddMatId || compAddMatQty < 1 || !completingMaintenance) return
+    setCompAddingMat(true)
+    try {
+      const added = await maintenanceService.addMaintenanceMaterial(completingMaintenance.id, parseInt(compAddMatId), compAddMatQty)
+      setCompMaterials(prev => [...prev, added])
+      setCompCatalog(prev => prev.map(c => c.id === parseInt(compAddMatId) ? { ...c, stock: c.stock - compAddMatQty } : c).filter(c => c.stock > 0))
+      setCompAddMatId("")
+      setCompAddMatQty(1)
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setCompAddingMat(false)
+    }
+  }
+
+  const handleCompRemoveMaterial = async (detalleId, materialId, cantidad) => {
+    if (!completingMaintenance) return
+    try {
+      await maintenanceService.removeMaintenanceMaterial(completingMaintenance.id, detalleId)
+      setCompMaterials(prev => prev.filter(m => m.id !== detalleId))
+      setCompCatalog(prev => prev.map(c => c.id === materialId ? { ...c, stock: c.stock + cantidad } : c))
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  const handleCompleteSubmit = async () => {
+    if (!completingMaintenance) return
+    const tecId = compTecnicoId || completingMaintenance.tecnico_id?.toString()
+    if (!tecId || tecId === "NONE") {
+      toast.error("El técnico es obligatorio para marcar como completado")
+      return
+    }
+    setIsCompleting(true)
+    try {
+      await maintenanceService.editMaintenance(completingMaintenance.id, {
+        estado: "COMPLETADO",
+        tecnico_id: parseInt(tecId),
+        nota_adicional: compNota || "",
+        partes_reparadas: compPartes.map(Number),
+      })
+      toast.success("Mantenimiento marcado como Completado")
+      setCompletingMaintenance(null)
+      await mutate()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setIsCompleting(false)
     }
   }
 
@@ -484,17 +571,13 @@ export function MaintenancesTable() {
                           Iniciar trabajo
                         </DropdownMenuItem>
                       )}
-                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() === "EN_PROCESO" && (
+                      {isAdminOrEncargado && ["EN_PROCESO", "PENDIENTE"].includes(maintenance.estado?.toUpperCase()) && (
                         <DropdownMenuItem
-                          onClick={() => {
-                            openEditDialog(maintenance)
-                            // pre-seleccionar COMPLETADO
-                            setTimeout(() => editForm.setValue("estado", "COMPLETADO"), 50)
-                          }}
+                          onClick={() => openCompleteDialog(maintenance)}
                           className="text-emerald-700 focus:text-emerald-700 font-medium"
                         >
                           <ClipboardCheck className="mr-2 h-4 w-4" />
-                          Marcar completado
+                          Completar trabajo
                         </DropdownMenuItem>
                       )}
                       {canClose(maintenance.estado) && (
@@ -663,6 +746,163 @@ export function MaintenancesTable() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setMaterialsMaintenance(null)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Completar mantenimiento */}
+      <Dialog open={!!completingMaintenance} onOpenChange={(v) => { if (!v) setCompletingMaintenance(null) }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5 text-emerald-600" /> Completar Mantenimiento
+            </DialogTitle>
+            <DialogDescription className="flex items-center gap-2 flex-wrap">
+              {completingMaintenance?.codigo && (
+                <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">{completingMaintenance.codigo}</code>
+              )}
+              <span>{completingMaintenance?.placa}</span>
+              <span>·</span>
+              <span className="capitalize">{completingMaintenance?.tipo?.toLowerCase()}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {compMatLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {/* Técnico — obligatorio si no está asignado */}
+              {(!completingMaintenance?.tecnico_id && !completingMaintenance?.tecnico_nombre) && (
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium text-destructive">Técnico responsable <span className="text-destructive">*</span></p>
+                  <Select value={compTecnicoId} onValueChange={setCompTecnicoId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecciona el técnico que realizó el trabajo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {technicians?.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.nombre} — {t.especialidad || t.rol || "Técnico"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Materiales registrados */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Materiales utilizados</p>
+                {compMaterials.length === 0 ? (
+                  <p className="text-sm text-muted-foreground border rounded-md py-3 text-center">
+                    No hay materiales registrados aún
+                  </p>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Material</TableHead>
+                          <TableHead className="text-right">Cant.</TableHead>
+                          <TableHead className="text-right">Subtotal</TableHead>
+                          <TableHead className="w-[40px]" />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {compMaterials.map((m) => (
+                          <TableRow key={m.id}>
+                            <TableCell className="font-medium">{m.nombre}</TableCell>
+                            <TableCell className="text-right">{m.cantidad}</TableCell>
+                            <TableCell className="text-right">S/. {Number(m.costo_total).toFixed(2)}</TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                onClick={() => handleCompRemoveMaterial(m.id, m.material_id, m.cantidad)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/30">
+                          <TableCell colSpan={2} className="font-semibold text-right">Total materiales</TableCell>
+                          <TableCell className="text-right font-bold">
+                            S/. {compMaterials.reduce((s, m) => s + Number(m.costo_total), 0).toFixed(2)}
+                          </TableCell>
+                          <TableCell />
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {/* Agregar material adicional */}
+                <div className="border rounded-md p-3 space-y-2 bg-muted/20">
+                  <p className="text-xs font-medium text-muted-foreground">Agregar material adicional</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <Select value={compAddMatId} onValueChange={setCompAddMatId}>
+                      <SelectTrigger className="flex-1 min-w-[160px]">
+                        <SelectValue placeholder="Seleccionar material..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {compCatalog.length === 0
+                          ? <SelectItem value="_none" disabled>Sin stock disponible</SelectItem>
+                          : compCatalog.map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.nombre} — S/. {Number(c.precio).toFixed(2)} (stock: {c.stock})
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Input type="number" min={1} value={compAddMatQty}
+                      onChange={(e) => setCompAddMatQty(Number(e.target.value))}
+                      className="w-20" placeholder="Cant." />
+                    <Button size="sm" onClick={handleCompAddMaterial}
+                      disabled={!compAddMatId || compAddMatQty < 1 || compAddingMat}>
+                      {compAddingMat ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                      Agregar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Partes/sistemas reparados */}
+              {partConfigs.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Piezas/Sistemas reparados</p>
+                  <p className="text-xs text-muted-foreground">Selecciona las partes atendidas para reiniciar sus contadores predictivos</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {partConfigs.map((p) => (
+                      <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" className="rounded"
+                          checked={compPartes.includes(String(p.id))}
+                          onChange={(e) => setCompPartes(prev =>
+                            e.target.checked ? [...prev, String(p.id)] : prev.filter(id => id !== String(p.id))
+                          )}
+                        />
+                        {p.nombre} {p.umbral_km ? `(${p.umbral_km.toLocaleString()} km)` : ""}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Nota del encargado */}
+              <div className="space-y-1.5">
+                <p className="text-sm font-medium">Nota de cierre del trabajo <span className="text-muted-foreground font-normal">(opcional)</span></p>
+                <Textarea value={compNota} onChange={(e) => setCompNota(e.target.value)}
+                  rows={2} placeholder="Ej: Trabajo realizado correctamente. Se reemplazaron filtros..." />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompletingMaintenance(null)}>Cancelar</Button>
+            <Button onClick={handleCompleteSubmit} disabled={isCompleting || compMatLoading}
+              className="bg-emerald-600 hover:bg-emerald-700">
+              {isCompleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
+              Marcar como Completado
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
