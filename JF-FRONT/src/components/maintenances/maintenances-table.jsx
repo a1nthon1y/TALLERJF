@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   Table,
   TableBody,
@@ -92,7 +92,13 @@ export function MaintenancesTable() {
   const [addingMat, setAddingMat] = useState(false)
 
   // Partes en el dialog de Editar
-  const [editPartes, setEditPartes] = useState([])
+  const [editPartes, setEditPartesState] = useState([])
+  const editPartesRef = useRef([])
+  const setEditPartes = (val) => {
+    const next = typeof val === "function" ? val(editPartesRef.current) : val
+    editPartesRef.current = next
+    setEditPartesState(next)
+  }
   const [editUnitParts, setEditUnitParts] = useState([])
   const [editUnitPartsLoading, setEditUnitPartsLoading] = useState(false)
 
@@ -181,7 +187,7 @@ export function MaintenancesTable() {
         tecnico_id: (values.tecnico_id && values.tecnico_id !== "NONE") ? parseInt(values.tecnico_id) : null,
         nota_adicional: values.nota_adicional || "",
         partes_reparadas: partes,
-        partes_programadas: editingMaintenance.tipo?.toUpperCase() === "PREVENTIVO" ? editPartes.map(Number) : undefined,
+        partes_programadas: editingMaintenance.tipo?.toUpperCase() === "PREVENTIVO" ? editPartesRef.current.map(Number) : undefined,
       })
       toast.success("Mantenimiento actualizado correctamente")
       setEditingMaintenance(null)
