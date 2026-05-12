@@ -2,131 +2,283 @@
 
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm } from "react-hook-form"
-import * as z from "zod"
-import { PlusCircle, AlertCircle, AlertTriangle, CheckCircle, Loader2, ArrowLeft } from "lucide-react"
-import { toast } from "sonner"
+import { AlertCircle, AlertTriangle, CheckCircle, Loader2, ArrowLeft, Settings, ChevronRight } from "lucide-react"
 import { getAllUnits } from "@/services/unitsService"
-import { makeGetRequest, makePostRequest } from "@/utils/api"
+import { makeGetRequest } from "@/utils/api"
 
-async function getAllParts() {
-  try {
-    return await makeGetRequest("/parts");
-  } catch {
-    return [];
-  }
-}
-
-async function createPart(data) {
-  return await makePostRequest("/parts", data);
-}
-
-const formSchema = z.object({
-  unidad_id: z.string().min(1, "Seleccione una unidad"),
-  nombre: z.string().min(2, "Nombre requerido"),
-  kilometraje_mantenimiento: z.coerce.number().int().min(1, "Debe ser mayor a 0"),
-})
-
-const calculateRemainingLife = (part, unidades) => {
-  const unit = unidades.find((u) => u.id === part.unidad_id)
-  const currentKm = unit?.kilometraje || 0
-  const kmSince = currentKm - (part.ultimo_mantenimiento_km || 0)
-  const pct = 100 - (kmSince / part.kilometraje_mantenimiento) * 100
-  return Math.max(0, Math.min(100, pct))
+async function fetchPartsStatus(unitId) {
+  return makeGetRequest(`/units/${unitId}/parts-status`)
 }
 
 const getStatus = (pct) => {
-  if (pct <= 10) return "critical"
-  if (pct <= 25) return "warning"
+  if (pct >= 100) return "critical"
+  if (pct >= 75) return "warning"
   return "normal"
 }
 
+const STATUS_CONFIG = {
+  critical: {
+    label: "Vencido",
+    badge: "destructive",
+    icon: AlertCircle,
+    rowClass: "bg-red-50 dark:bg-red-950/20",
+    cardClass: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",
+    iconClass: "text-red-500",
+    progressClass: "[&>div]:bg-red-500",
+  },
+  warning: {
+    label: "Por vencer",
+    badge: "outline",
+    icon: AlertTriangle,
+    rowClass: "bg-amber-50 dark:bg-amber-950/20",
+    cardClass: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
+    iconClass: "text-amber-500",
+    progressClass: "[&>div]:bg-amber-500",
+  },
+  normal: {
+    label: "Normal",
+    badge: "outline",
+    icon: CheckCircle,
+    rowClass: "",
+    cardClass: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800",
+    iconClass: "text-green-500",
+    progressClass: "[&>div]:bg-green-500",
+  },
+}
+
+function UnitPartsDetail({ unit }) {
+  const { data: parts = [], isLoading } = useQuery({
+    queryKey: ["parts-status", unit.id],
+    queryFn: () => fetchPartsStatus(unit.id),
+    staleTime: 30_000,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
+        <Loader2 className="h-5 w-5 animate-spin" /> Cargando estado de partes...
+      </div>
+    )
+  }
+
+  if (parts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
+        <Settings className="h-8 w-8 opacity-30" />
+        <p className="text-sm">No hay partes configuradas en el sistema.</p>
+        <p className="text-xs">Agrega reglas predictivas en <strong>Configuración Predictiva</strong>.</p>
+      </div>
+    )
+  }
+
+  const counts = { critical: 0, warning: 0, normal: 0 }
+  parts.forEach((p) => counts[getStatus(parseFloat(p.porcentaje))]++)
+
+  return (
+    <div className="space-y-4">
+      {/* Resumen rápido */}
+      <div className="grid grid-cols-3 gap-3">
+        {(["critical", "warning", "normal"]).map((s) => {
+          const cfg = STATUS_CONFIG[s]
+          const Icon = cfg.icon
+          return (
+            <div key={s} className={`p-3 rounded-lg border ${cfg.cardClass}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <Icon className={`h-4 w-4 ${cfg.iconClass}`} />
+                <span className="font-medium text-sm">{cfg.label}</span>
+              </div>
+              <p className="text-2xl font-bold">{counts[s]}</p>
+              <p className="text-xs text-muted-foreground">partes</p>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Tabla detallada */}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Componente</TableHead>
+              <TableHead>Intervalo</TableHead>
+              <TableHead>Último Mtto.</TableHead>
+              <TableHead>Km actual</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Desgaste</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {parts.map((part) => {
+              const pct = parseFloat(part.porcentaje)
+              const status = getStatus(pct)
+              const cfg = STATUS_CONFIG[status]
+              const Icon = cfg.icon
+              const kmRestantes = Math.max(0, part.umbral_km - part.km_recorridos)
+              const kmExcedido = Math.max(0, part.km_recorridos - part.umbral_km)
+              return (
+                <TableRow key={part.id} className={cfg.rowClass}>
+                  <TableCell className="font-medium">{part.nombre}</TableCell>
+                  <TableCell>{Number(part.umbral_km).toLocaleString()} km</TableCell>
+                  <TableCell>{Number(part.ultimo_mantenimiento_km).toLocaleString()} km</TableCell>
+                  <TableCell>{Number(part.km_actual).toLocaleString()} km</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={cfg.badge}
+                      className={`flex items-center gap-1 w-fit ${status === "warning" ? "border-amber-500 text-amber-600" : status === "normal" ? "border-green-500 text-green-600" : ""}`}
+                    >
+                      <Icon className="h-3 w-3" />
+                      {cfg.label}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2 min-w-[120px]">
+                            <Progress
+                              value={Math.min(pct, 100)}
+                              className={`h-2 w-24 ${cfg.progressClass}`}
+                            />
+                            <span className="text-xs w-8 tabular-nums">{Math.round(pct)}%</span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {status === "critical"
+                            ? `Excedido por ${kmExcedido.toLocaleString()} km`
+                            : `Faltan ${kmRestantes.toLocaleString()} km para mantenimiento`}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  )
+}
+
+function AllUnitsSummary({ units, onSelectUnit }) {
+  const [statuses, setStatuses] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!units.length) return
+    Promise.allSettled(
+      units.map((u) => fetchPartsStatus(u.id).then((parts) => [u.id, parts]))
+    ).then((results) => {
+      const map = {}
+      results.forEach((r) => {
+        if (r.status === "fulfilled") {
+          const [id, parts] = r.value
+          const counts = { critical: 0, warning: 0, normal: 0 }
+          parts.forEach((p) => counts[getStatus(parseFloat(p.porcentaje))]++)
+          map[id] = counts
+        }
+      })
+      setStatuses(map)
+      setLoading(false)
+    })
+  }, [units])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
+        <Loader2 className="h-5 w-5 animate-spin" /> Analizando flota...
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {units.map((unit) => {
+        const c = statuses[unit.id] || { critical: 0, warning: 0, normal: 0 }
+        const hasAlerts = c.critical > 0 || c.warning > 0
+        return (
+          <Card
+            key={unit.id}
+            className={`cursor-pointer hover:shadow-md transition-shadow ${c.critical > 0 ? "border-red-300 dark:border-red-800" : c.warning > 0 ? "border-amber-300 dark:border-amber-700" : ""}`}
+            onClick={() => onSelectUnit(unit.id.toString())}
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center justify-between text-base">
+                <span>{unit.placa}</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">{unit.modelo} · {Number(unit.kilometraje).toLocaleString()} km</p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-3">
+                {c.critical > 0 && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-red-600">
+                    <AlertCircle className="h-3.5 w-3.5" /> {c.critical} vencida{c.critical > 1 ? "s" : ""}
+                  </span>
+                )}
+                {c.warning > 0 && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
+                    <AlertTriangle className="h-3.5 w-3.5" /> {c.warning} por vencer
+                  </span>
+                )}
+                {!hasAlerts && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+                    <CheckCircle className="h-3.5 w-3.5" /> Todo normal
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
 export function UnitPartsManager() {
-  const queryClient = useQueryClient()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [searchTerm, setSearchTerm] = useState("")
   const [unitFilter, setUnitFilter] = useState("all")
-  const [isOpen, setIsOpen] = useState(false)
-
-  // Pre-seleccionar unidad si viene de ?unidad=ID
-  useEffect(() => {
-    const uid = searchParams.get("unidad")
-    if (uid) setUnitFilter(uid)
-  }, [searchParams])
 
   const { data: units = [], isLoading: loadingUnits } = useQuery({
     queryKey: ["units"],
     queryFn: getAllUnits,
   })
 
-  const { data: parts = [], isLoading: loadingParts } = useQuery({
-    queryKey: ["parts"],
-    queryFn: getAllParts,
-  })
-
-  const createMutation = useMutation({
-    mutationFn: createPart,
-    onSuccess: () => {
-      toast.success("Parte registrada correctamente")
-      queryClient.invalidateQueries({ queryKey: ["parts"] })
-      setIsOpen(false)
-      form.reset()
-    },
-    onError: (e) => toast.error(e.message || "Error al registrar parte"),
-  })
-
-  const form = useForm({
-    resolver: zodResolver(formSchema),
-    defaultValues: { unidad_id: "", nombre: "", kilometraje_mantenimiento: "" },
-  })
-
-  const handleOpenCreate = () => {
-    form.reset({
-      unidad_id: unitFilter !== "all" ? unitFilter : "",
-      nombre: "",
-      kilometraje_mantenimiento: "",
-    })
-    setIsOpen(true)
-  }
-
-  const onSubmit = (values) => {
-    createMutation.mutate({
-      unidad_id: parseInt(values.unidad_id),
-      nombre: values.nombre,
-      kilometraje_mantenimiento: values.kilometraje_mantenimiento,
-    })
-  }
+  useEffect(() => {
+    const uid = searchParams.get("unidad")
+    if (uid) setUnitFilter(uid)
+  }, [searchParams])
 
   const selectedUnit = unitFilter !== "all" ? units.find((u) => u.id.toString() === unitFilter) : null
 
-  const filtered = parts.filter((p) => {
-    const unit = units.find((u) => u.id === p.unidad_id)
-    const matchSearch =
-      p.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      unit?.placa?.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchUnit = unitFilter === "all" || p.unidad_id?.toString() === unitFilter
-    return matchSearch && matchUnit
-  })
-
-  const isLoading = loadingUnits || loadingParts
+  if (loadingUnits) {
+    return (
+      <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
+        <Loader2 className="h-5 w-5 animate-spin" /> Cargando unidades...
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
+      {/* Breadcrumb cuando viene de una unidad */}
       {selectedUnit && (
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/unidades")} className="gap-1 text-muted-foreground hover:text-foreground px-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => { setUnitFilter("all"); router.push("/partes-unidades") }}
+            className="gap-1 text-muted-foreground hover:text-foreground px-2"
+          >
             <ArrowLeft className="h-4 w-4" />
             Volver a Unidades
           </Button>
@@ -134,201 +286,35 @@ export function UnitPartsManager() {
           <span className="font-semibold text-sm">{selectedUnit.placa} — {selectedUnit.modelo}</span>
         </div>
       )}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <Input
-          placeholder="Buscar por nombre o placa..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
+
+      {/* Selector de unidad */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <Select value={unitFilter} onValueChange={setUnitFilter}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filtrar por unidad" />
+          <SelectTrigger className="w-[240px]">
+            <SelectValue placeholder="Seleccionar unidad" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas las unidades</SelectItem>
             {units.map((u) => (
               <SelectItem key={u.id} value={u.id.toString()}>
-                {u.placa} - {u.kilometraje?.toLocaleString()} km
+                {u.placa} — {u.modelo}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Button onClick={handleOpenCreate} className="ml-auto">
-          <PlusCircle className="mr-2 h-4 w-4" /> Registrar Nueva Parte
+
+        <Button variant="outline" size="sm" onClick={() => router.push("/configuraciones")}>
+          <Settings className="mr-2 h-4 w-4" />
+          Configurar reglas predictivas
         </Button>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-40 text-muted-foreground gap-2">
-          <Loader2 className="h-5 w-5 animate-spin" /> Cargando partes...
-        </div>
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Unidad</TableHead>
-                <TableHead>Parte</TableHead>
-                <TableHead>Intervalo</TableHead>
-                <TableHead>Último Mantenimiento</TableHead>
-                <TableHead>Km Actual</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Vida Útil</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                    No se encontraron partes registradas.
-                  </TableCell>
-                </TableRow>
-              ) : filtered.map((part) => {
-                const unit = units.find((u) => u.id === part.unidad_id)
-                const pct = calculateRemainingLife(part, units)
-                const status = getStatus(pct)
-                const currentKm = unit?.kilometraje || 0
-                const kmSince = currentKm - (part.ultimo_mantenimiento_km || 0)
-                return (
-                  <TableRow key={part.id} className={status === "critical" ? "bg-red-50 dark:bg-red-950/20" : ""}>
-                    <TableCell className="font-medium">{unit?.placa || `#${part.unidad_id}`}</TableCell>
-                    <TableCell>{part.nombre}</TableCell>
-                    <TableCell>{part.kilometraje_mantenimiento?.toLocaleString()} km</TableCell>
-                    <TableCell>{(part.ultimo_mantenimiento_km || 0).toLocaleString()} km</TableCell>
-                    <TableCell>{currentKm.toLocaleString()} km</TableCell>
-                    <TableCell>
-                      {status === "critical" ? (
-                        <Badge variant="destructive" className="flex items-center gap-1 w-fit">
-                          <AlertCircle className="h-3 w-3" /> Crítico
-                        </Badge>
-                      ) : status === "warning" ? (
-                        <Badge variant="outline" className="flex items-center gap-1 w-fit border-yellow-500 text-yellow-600">
-                          <AlertTriangle className="h-3 w-3" /> Advertencia
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="flex items-center gap-1 w-fit border-green-500 text-green-600">
-                          <CheckCircle className="h-3 w-3" /> Normal
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="flex items-center gap-2">
-                              <Progress value={pct} className="h-2 w-24" />
-                              <span className="text-xs w-8">{Math.round(pct)}%</span>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {kmSince >= part.kilometraje_mantenimiento
-                              ? `Excedido por ${(kmSince - part.kilometraje_mantenimiento).toLocaleString()} km`
-                              : `Faltan ${(part.kilometraje_mantenimiento - kmSince).toLocaleString()} km`}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-
-      {/* Resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          {
-            label: "Crítico",
-            icon: AlertCircle,
-            filter: "critical",
-            cardClass: "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800",
-            iconClass: "h-5 w-5 text-red-500",
-          },
-          {
-            label: "Advertencia",
-            icon: AlertTriangle,
-            filter: "warning",
-            cardClass: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
-            iconClass: "h-5 w-5 text-amber-500",
-          },
-          {
-            label: "Normal",
-            icon: CheckCircle,
-            filter: "normal",
-            cardClass: "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800",
-            iconClass: "h-5 w-5 text-green-500",
-          },
-        ].map(({ label, icon: Icon, filter: f, cardClass, iconClass }) => {
-          const count = filtered.filter((p) => getStatus(calculateRemainingLife(p, units)) === f).length
-          return (
-            <div key={f} className={`p-4 rounded-lg border ${cardClass}`}>
-              <div className="flex items-center gap-2 mb-1">
-                <Icon className={iconClass} />
-                <h3 className="font-medium">{label}</h3>
-              </div>
-              <p className="text-sm text-muted-foreground">{count} partes</p>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Dialog: Crear parte */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Registrar Nueva Parte</DialogTitle>
-            <DialogDescription>
-              Agrega una nueva parte o componente a la unidad seleccionada para seguimiento predictivo.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField control={form.control} name="unidad_id" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Unidad</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar unidad" /></SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {units.map((u) => (
-                        <SelectItem key={u.id} value={u.id.toString()}>
-                          {u.placa} — {u.modelo}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="nombre" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nombre de la Parte</FormLabel>
-                  <FormControl><Input placeholder="Ej: Motor, Frenos" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="kilometraje_mantenimiento" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Intervalo de Mantenimiento (km)</FormLabel>
-                  <FormControl><Input type="number" min="1" placeholder="Ej: 5000" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Registrar
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+      {/* Contenido */}
+      {unitFilter === "all" ? (
+        <AllUnitsSummary units={units} onSelectUnit={setUnitFilter} />
+      ) : selectedUnit ? (
+        <UnitPartsDetail unit={selectedUnit} />
+      ) : null}
     </div>
   )
 }
