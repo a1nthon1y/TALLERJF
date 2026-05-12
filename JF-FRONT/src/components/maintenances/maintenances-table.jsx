@@ -277,11 +277,13 @@ export function MaintenancesTable() {
       if (partsStatus) {
         const partes = Array.isArray(partsStatus) ? partsStatus : (partsStatus?.partes || [])
         setCompUnitParts(partes)
-        // Pre-seleccionar partes críticas y de advertencia (las que motivaron el mantenimiento)
-        const preSelected = partes
+        // Pre-seleccionar partes críticas y de advertencia usando configuracion_parte_id
+        // que es el mismo que el id en partConfigs
+        const alertIds = partes
           .filter(p => ["CRITICO","ADVERTENCIA"].includes(p.estado?.toUpperCase()))
-          .map(p => String(p.configuracion_parte_id || p.id))
-        setCompPartes(preSelected)
+          .map(p => String(p.configuracion_parte_id))
+          .filter(Boolean)
+        setCompPartes(alertIds)
       }
     } catch (err) {
       toast.error(err.message)
@@ -593,7 +595,7 @@ export function MaintenancesTable() {
                           Iniciar trabajo
                         </DropdownMenuItem>
                       )}
-                      {isAdminOrEncargado && ["EN_PROCESO", "PENDIENTE"].includes(maintenance.estado?.toUpperCase()) && (
+                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() === "EN_PROCESO" && (
                         <DropdownMenuItem
                           onClick={() => openCompleteDialog(maintenance)}
                           className="text-emerald-700 focus:text-emerald-700 font-medium"
@@ -889,13 +891,13 @@ export function MaintenancesTable() {
               </div>
 
               {/* Partes/Sistemas reparados */}
-              {(() => {
-                // Para preventivo: usar partes de la unidad con su estado actual
-                // Para correctivo: usar catálogo general de configuracion_partes
+              {partConfigs.length > 0 && (() => {
                 const esPreventivo = completingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO"
-                const listPartes = esPreventivo && compUnitParts.length > 0 ? compUnitParts : partConfigs
-
-                if (listPartes.length === 0) return null
+                // Mapa de estado por configuracion_parte_id (del fetch de partes de la unidad)
+                const estadoMap = {}
+                compUnitParts.forEach(p => {
+                  if (p.configuracion_parte_id) estadoMap[String(p.configuracion_parte_id)] = p
+                })
 
                 return (
                   <div className="space-y-2">
@@ -903,15 +905,15 @@ export function MaintenancesTable() {
                       <p className="text-sm font-medium">Piezas/Sistemas reparados</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {esPreventivo
-                          ? "Marca lo que sí se atendió. Desmarca lo que quedó pendiente."
-                          : "Selecciona las partes atendidas para reiniciar contadores predictivos"}
+                          ? "Las marcadas son las que tenían alerta. Desmarca lo que quedó pendiente o agrega extras."
+                          : "Marca las partes que se atendieron para reiniciar sus contadores predictivos."}
                       </p>
                     </div>
                     <div className="border rounded-md divide-y">
-                      {listPartes.map((p) => {
-                        const pid = String(p.configuracion_parte_id || p.id)
-                        const nombre = p.nombre || p.parte_nombre
-                        const estado = p.estado?.toUpperCase()
+                      {partConfigs.map((p) => {
+                        const pid = String(p.id)
+                        const unitPart = estadoMap[pid]
+                        const estado = unitPart?.estado?.toUpperCase()
                         const checked = compPartes.includes(pid)
                         return (
                           <label key={pid} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40 ${checked ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
@@ -921,39 +923,35 @@ export function MaintenancesTable() {
                                   ? [...compPartes, pid]
                                   : compPartes.filter(x => x !== pid)
                                 setCompPartes(next)
-                                // Auto-generar nota si hay partes sin completar
                                 if (esPreventivo) {
-                                  const pendientes = listPartes
-                                    .filter(lp => !next.includes(String(lp.configuracion_parte_id || lp.id)))
-                                    .map(lp => lp.nombre || lp.parte_nombre)
-                                    .filter(Boolean)
-                                  if (pendientes.length > 0) {
-                                    setCompNota(`Pendiente por completar: ${pendientes.join(", ")}`)
-                                  } else {
-                                    setCompNota("")
-                                  }
+                                  const pendientes = partConfigs
+                                    .filter(pc => estadoMap[String(pc.id)] && !next.includes(String(pc.id)))
+                                    .map(pc => pc.nombre).filter(Boolean)
+                                  setCompNota(pendientes.length > 0 ? `Pendiente por completar: ${pendientes.join(", ")}` : "")
                                 }
                               }}
                             />
-                            <span className="flex-1 text-sm font-medium">{nombre}</span>
+                            <span className="flex-1 text-sm font-medium">{p.nombre}</span>
                             {estado === "CRITICO"     && <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Crítico</Badge>}
                             {estado === "ADVERTENCIA" && <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Alerta</Badge>}
-                            {estado === "OK"          && <Badge variant="outline" className="text-xs">OK</Badge>}
-                            {p.km_restantes != null && (
+                            {estado === "OK"          && <Badge variant="outline" className="text-xs text-green-600">OK</Badge>}
+                            {unitPart?.km_restantes != null && (
                               <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                {p.km_restantes > 0 ? `${Number(p.km_restantes).toLocaleString()} km rest.` : `${Math.abs(p.km_restantes).toLocaleString()} km vencido`}
+                                {unitPart.km_restantes > 0
+                                  ? `${Number(unitPart.km_restantes).toLocaleString()} km rest.`
+                                  : `${Math.abs(unitPart.km_restantes).toLocaleString()} km vencido`}
                               </span>
                             )}
-                            {p.umbral_km && !p.km_restantes && (
+                            {!unitPart && p.umbral_km && (
                               <span className="text-xs text-muted-foreground">{Number(p.umbral_km).toLocaleString()} km</span>
                             )}
                           </label>
                         )
                       })}
                     </div>
-                    {esPreventivo && compPartes.length < listPartes.length && compPartes.length > 0 && (
+                    {esPreventivo && compPartes.length < Object.keys(estadoMap).length && compPartes.length > 0 && (
                       <p className="text-xs text-amber-600">
-                        ⚠ {listPartes.length - compPartes.length} parte(s) sin marcar — se registrarán como pendientes en las notas
+                        ⚠ Hay partes sin marcar — se anotarán como pendientes
                       </p>
                     )}
                   </div>
