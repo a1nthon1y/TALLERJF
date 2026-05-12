@@ -69,7 +69,6 @@ function FlowStepper({ estado }) {
   return (
     <div className="flex items-center gap-1 w-full">
       {steps.map((s, i) => {
-        const cfg = ESTADO_CONFIG[s];
         const done = i <= idx;
         const active = i === idx;
         return (
@@ -431,10 +430,10 @@ function JobCard({ job, onStart, onComplete, onRefresh }) {
           </>
         )}
 
-        {/* Materiales inline (solo EN_PROCESO o COMPLETADO) */}
+        {/* Materiales inline (solo EN_PROCESO, COMPLETADO o CERRADO) */}
         {showMaterials && (
           <div className="pt-2 border-t">
-            <MaterialManager jobId={job.id} readonly={estado === "COMPLETADO" || estado === "CERRADO"} />
+            <MaterialManager jobId={job.id} readonly={estado === "CERRADO"} />
           </div>
         )}
 
@@ -487,8 +486,6 @@ export default function MisTrabajosPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filtro, setFiltro] = useState("ACTIVOS");
 
-  // Dialog estados
-  const [startingJob, setStartingJob] = useState(null);
   const [completingJob, setCompletingJob] = useState(null);
   const [updating, setUpdating] = useState(false);
 
@@ -616,25 +613,6 @@ export default function MisTrabajosPage() {
           ))}
         </div>
       )}
-
-      {/* Dialog: Iniciar (confirmación rápida — sin dialog complejo ya que es "Iniciar") */}
-      <Dialog open={!!startingJob} onOpenChange={() => setStartingJob(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>¿Iniciar este trabajo?</DialogTitle>
-            <DialogDescription>
-              Confirmas que comenzaste a trabajar en la unidad {startingJob?.placa}.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStartingJob(null)}>Cancelar</Button>
-            <Button onClick={() => handleStart(startingJob)} disabled={updating}>
-              {updating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Iniciar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Dialog: Completar */}
       {completingJob && (

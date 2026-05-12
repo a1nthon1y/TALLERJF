@@ -67,6 +67,8 @@ export function MaintenancesTable() {
   const [closingMaintenance, setClosingMaintenance] = useState(null)
   const [closeObs, setCloseObs] = useState("")
   const [isClosing, setIsClosing] = useState(false)
+  const [closeMaterials, setCloseMaterials] = useState([])
+  const [closeMatsLoading, setCloseMatsLoading] = useState(false)
 
   // Eliminar
   const [deletingMaintenance, setDeletingMaintenance] = useState(null)
@@ -161,10 +163,6 @@ export function MaintenancesTable() {
       setIsClosing(false)
     }
   }
-
-  // Cargar materiales cuando se abre el dialog de cierre
-  const [closeMaterials, setCloseMaterials] = useState([])
-  const [closeMatsLoading, setCloseMatsLoading] = useState(false)
 
   const openCloseDialog = (maintenance) => {
     setClosingMaintenance(maintenance)
