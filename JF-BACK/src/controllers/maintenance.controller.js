@@ -21,37 +21,40 @@ async function generarCodigo(tipo, estado = null) {
   return `${prefix}-${yy}${mm}-${seq}`;
 }
 
-// Registrar un mantenimiento (preventivo o correctivo) con kilometraje y TECNICO
+// Registrar un mantenimiento (preventivo o correctivo).
+// Bug #2: el odómetro de la unidad es la única fuente de verdad y SOLO debe ser
+// actualizado por crearReporteLlegada (chofer). Aquí tomamos snapshot, no
+// aceptamos kilometraje_actual del cliente y NO mutamos unidades.kilometraje.
 const createMaintenance = async (req, res) => {
   try {
-    const { unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id, partes_programadas } = req.body;
+    const { unidad_id, tipo, observaciones, tecnico_id, partes_programadas } = req.body;
 
-    // Normalizar tipo a mayúsculas (la DB requiere PREVENTIVO/CORRECTIVO)
     const tipoNorm = (tipo || "CORRECTIVO").toUpperCase();
 
-    // Verificar si la unidad existe
     const unidad = await pool.query("SELECT * FROM unidades WHERE id = $1", [unidad_id]);
     if (unidad.rows.length === 0) {
       return res.status(404).json({ message: "Unidad no encontrada" });
     }
 
+    // Snapshot del odómetro al momento de crear el mantenimiento
+    const kilometrajeSnapshot = unidad.rows[0].kilometraje ?? 0;
+
+    if (tecnico_id) {
+      const tec = await pool.query("SELECT id FROM tecnicos WHERE id = $1", [tecnico_id]);
+      if (tec.rows.length === 0)
+        return res.status(404).json({ message: "Técnico no encontrado" });
+    }
+
     const codigo = await generarCodigo(tipoNorm);
     const partesJSON = JSON.stringify(Array.isArray(partes_programadas) ? partes_programadas.map(Number) : []);
 
-    // Registrar el mantenimiento incluyendo partes_programadas
     const result = await pool.query(
-      `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id, codigo, partes_programadas) 
+      `INSERT INTO mantenimientos (unidad_id, tipo, observaciones, kilometraje_actual, tecnico_id, codigo, partes_programadas)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [unidad_id, tipoNorm, observaciones, kilometraje_actual, tecnico_id || null, codigo, partesJSON]
+      [unidad_id, tipoNorm, observaciones, kilometrajeSnapshot, tecnico_id || null, codigo, partesJSON]
     );
 
-    // Actualizar el kilometraje de la unidad
-    await pool.query(
-      `UPDATE unidades SET kilometraje = $1 WHERE id = $2`,
-      [kilometraje_actual, unidad_id]
-    );
-
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(normalizeMaint(result.rows[0]));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

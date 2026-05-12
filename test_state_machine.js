@@ -65,12 +65,12 @@ async function req(method, path, body, token) {
 
   // ── 3. CREAR PREVENTIVO (PENDIENTE) ───────────────────
   sep("CREAR PREVENTIVO (PENDIENTE)");
-  const NEW_KM = (unit.kilometraje || 0) + 1;
+  // Bug #2: ya no se acepta kilometraje_actual del cliente; se toma del odómetro.
+  const KM_BEFORE = unit.kilometraje || 0;
   r = await req("POST", "/maintenances", {
     unidad_id: unit.id,
     tipo: "PREVENTIVO",
     observaciones: "Test del state machine — preventivo programado",
-    kilometraje_actual: NEW_KM,
     tecnico_id: tech.id,
     partes_programadas: [PARTE_ID],
   }, TOKEN);
@@ -85,6 +85,16 @@ async function req(method, path, body, token) {
   else fail("partes_programadas", `esperado [${PARTE_ID}] obtuvo ${prog0}`);
   if (r.body.estado === "PENDIENTE") ok("Estado inicial = PENDIENTE");
   else fail("Estado inicial", r.body.estado);
+  if (r.body.kilometraje_actual === KM_BEFORE)
+    ok(`Snapshot km tomado del odómetro (${KM_BEFORE})`);
+  else fail("Snapshot km", `esperado ${KM_BEFORE} obtuvo ${r.body.kilometraje_actual}`);
+
+  // Verificar que el odómetro de la unidad NO se modificó (Bug #2)
+  r = await req("GET", "/units", null, TOKEN);
+  const unitAfter = (r.body || []).find(u => u.id === unit.id);
+  if (unitAfter && unitAfter.kilometraje === KM_BEFORE)
+    ok(`Odómetro intacto tras crear (sigue ${KM_BEFORE}) ✅`);
+  else fail("Bug #2: odómetro se sobrescribió", `antes=${KM_BEFORE} ahora=${unitAfter?.kilometraje}`);
 
   // ── 4. EDITAR EN PENDIENTE ────────────────────────────
   sep("EDITAR (PENDIENTE) — agregar nota + reasignar");
@@ -181,9 +191,9 @@ async function req(method, path, body, token) {
   r = await req("GET", `/units/${unit.id}/parts-status`, null, TOKEN);
   const partDesp = (r.body || []).find(p => String(p.id) === String(PARTE_ID));
   info(`ultimo_mantenimiento_km DESPUÉS: ${partDesp?.ultimo_mantenimiento_km}`);
-  if ((partDesp?.ultimo_mantenimiento_km ?? 0) >= NEW_KM)
-    ok(`Contador predictivo reseteado (km=${partDesp.ultimo_mantenimiento_km} >= ${NEW_KM})`);
-  else fail("Contador NO reseteado", `esperaba >= ${NEW_KM}, obtuvo ${partDesp?.ultimo_mantenimiento_km}`);
+  if ((partDesp?.ultimo_mantenimiento_km ?? 0) >= KM_BEFORE)
+    ok(`Contador predictivo reseteado (km=${partDesp.ultimo_mantenimiento_km} >= ${KM_BEFORE})`);
+  else fail("Contador NO reseteado", `esperaba >= ${KM_BEFORE}, obtuvo ${partDesp?.ultimo_mantenimiento_km}`);
 
   // ── 9. MATERIAL EN COMPLETADO — DEBE FALLAR ──────────
   sep("MATERIALES bloqueados en COMPLETADO");

@@ -32,11 +32,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
+// Nota: NO se pide `kilometraje_actual` aquí — el odómetro de la unidad es la única
+// fuente de verdad y solo se actualiza vía /chofer/reportar-llegada (ver AI_SYSTEM_PROMPT).
 const formSchema = z.object({
   unidad_id: z.string().min(1, { message: "La unidad es requerida" }),
   tipo: z.enum(["preventivo", "correctivo"], { message: "El tipo es requerido" }),
   observaciones: z.string().optional(),
-  kilometraje_actual: z.number().min(0, { message: "El kilometraje no puede ser negativo" }),
   tecnico_id: z.string().min(1, { message: "El técnico es requerido" }),
 }).superRefine((data, ctx) => {
   if (data.tipo === "correctivo" && !data.observaciones?.trim()) {
@@ -62,7 +63,6 @@ function MaintenancesContent() {
       unidad_id: "",
       tipo: "preventivo",
       observaciones: "",
-      kilometraje_actual: 0,
       tecnico_id: "",
     },
   })
@@ -74,12 +74,8 @@ function MaintenancesContent() {
     const unidadId = searchParams.get("unidad_id")
     if (crear === "true") {
       const targetUnit = unidadId ? units.find((u) => String(u.id) === unidadId) : units[0]
-      if (targetUnit) {
-        form.setValue("unidad_id", String(targetUnit.id))
-        form.setValue("kilometraje_actual", targetUnit.kilometraje)
-      }
+      if (targetUnit) form.setValue("unidad_id", String(targetUnit.id))
       setIsCreating(true)
-      // Limpiar query params de la URL sin recargar
       router.replace("/mantenimientos", { scroll: false })
     }
   }, [units, searchParams])
@@ -89,11 +85,10 @@ function MaintenancesContent() {
       form.setValue("tecnico_id", String(technicians[0].id))
     }
   }, [technicians])
-  
+
   useEffect(() => {
     if (units && units.length > 0 && !form.getValues("unidad_id")) {
       form.setValue("unidad_id", String(units[0].id))
-      form.setValue("kilometraje_actual", units[0].kilometraje)
     }
   }, [units])
 
@@ -118,14 +113,9 @@ function MaintenancesContent() {
 
   const selectedUnit = units?.find((unit) => String(unit.id) === form.watch("unidad_id"))
   const kilometrajeUnidad = selectedUnit?.kilometraje ?? 0
-  const unidadOperativa = selectedUnit?.estado === "operativo"
 
   const handleCreateMaintenance = async (values) => {
     if (!selectedUnit) { toast.error("Unidad no encontrada"); return }
-    if (unidadOperativa && values.kilometraje_actual <= kilometrajeUnidad) {
-      toast.error(`El kilometraje ingresado debe ser mayor al actual (${kilometrajeUnidad} km)`)
-      return
-    }
 
     // Para preventivo: si no hay observación manual, generar desde partes seleccionadas
     let observaciones = values.observaciones?.trim() || ""
@@ -212,7 +202,7 @@ function MaintenancesContent() {
                         <SelectContent>
                           {units?.map((unit) => (
                             <SelectItem key={unit.id} value={String(unit.id)}>
-                              {unit.placa} - {unit.estado}
+                              {unit.placa}{unit.modelo ? ` — ${unit.modelo}` : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -227,13 +217,13 @@ function MaintenancesContent() {
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       <div className="space-y-1">
-                        <p>Kilometraje actual: {kilometrajeUnidad} km</p>
-                        <p>Estado: {unidadOperativa ? "Operativa" : "En taller"}</p>
-                        {unidadOperativa && (
-                          <p className="text-yellow-600">
-                            * Debe ingresar un kilometraje mayor al actual
-                          </p>
-                        )}
+                        <p>
+                          Kilometraje actual:{" "}
+                          <span className="font-semibold">{Number(kilometrajeUnidad).toLocaleString()} km</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Si está desactualizado, el chofer debe registrar una llegada para corregirlo.
+                        </p>
                       </div>
                     </AlertDescription>
                   </Alert>
@@ -281,25 +271,6 @@ function MaintenancesContent() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="kilometraje_actual"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Kilometraje Actual</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="Ingresa el kilometraje actual"
-                          {...field}
-                          onChange={(e) => field.onChange(Number(e.target.value))}
-                        />
-                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
