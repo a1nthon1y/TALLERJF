@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
-import { PlusCircle, AlertCircle, AlertTriangle, CheckCircle, Loader2 } from "lucide-react"
+import { PlusCircle, AlertCircle, AlertTriangle, CheckCircle, Loader2, ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 import { getAllUnits } from "@/services/unitsService"
 import { makeGetRequest, makePostRequest } from "@/utils/api"
@@ -53,9 +54,17 @@ const getStatus = (pct) => {
 
 export function UnitPartsManager() {
   const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [unitFilter, setUnitFilter] = useState("all")
   const [isOpen, setIsOpen] = useState(false)
+
+  // Pre-seleccionar unidad si viene de ?unidad=ID
+  useEffect(() => {
+    const uid = searchParams.get("unidad")
+    if (uid) setUnitFilter(uid)
+  }, [searchParams])
 
   const { data: units = [], isLoading: loadingUnits } = useQuery({
     queryKey: ["units"],
@@ -83,6 +92,15 @@ export function UnitPartsManager() {
     defaultValues: { unidad_id: "", nombre: "", kilometraje_mantenimiento: "" },
   })
 
+  const handleOpenCreate = () => {
+    form.reset({
+      unidad_id: unitFilter !== "all" ? unitFilter : "",
+      nombre: "",
+      kilometraje_mantenimiento: "",
+    })
+    setIsOpen(true)
+  }
+
   const onSubmit = (values) => {
     createMutation.mutate({
       unidad_id: parseInt(values.unidad_id),
@@ -90,6 +108,8 @@ export function UnitPartsManager() {
       kilometraje_mantenimiento: values.kilometraje_mantenimiento,
     })
   }
+
+  const selectedUnit = unitFilter !== "all" ? units.find((u) => u.id.toString() === unitFilter) : null
 
   const filtered = parts.filter((p) => {
     const unit = units.find((u) => u.id === p.unidad_id)
@@ -104,6 +124,16 @@ export function UnitPartsManager() {
 
   return (
     <div className="space-y-4">
+      {selectedUnit && (
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => router.push("/unidades")} className="gap-1 text-muted-foreground hover:text-foreground px-2">
+            <ArrowLeft className="h-4 w-4" />
+            Volver a Unidades
+          </Button>
+          <span className="text-muted-foreground">/</span>
+          <span className="font-semibold text-sm">{selectedUnit.placa} — {selectedUnit.modelo}</span>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row gap-4">
         <Input
           placeholder="Buscar por nombre o placa..."
@@ -124,7 +154,7 @@ export function UnitPartsManager() {
             ))}
           </SelectContent>
         </Select>
-        <Button onClick={() => setIsOpen(true)} className="ml-auto">
+        <Button onClick={handleOpenCreate} className="ml-auto">
           <PlusCircle className="mr-2 h-4 w-4" /> Registrar Nueva Parte
         </Button>
       </div>

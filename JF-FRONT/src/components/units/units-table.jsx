@@ -261,8 +261,8 @@ export function UnitsTable() {
                           <Edit className="mr-2 h-4 w-4" />
                           <span>Editar</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Link href={`/unidades/${unit.id}/partes`} className="flex items-center">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/partes-unidades?unidad=${unit.id}`} className="flex items-center">
                             <Settings className="mr-2 h-4 w-4" />
                             <span>Gestionar Partes</span>
                           </Link>
