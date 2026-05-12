@@ -37,9 +37,9 @@ router.put("/:id/edit", authenticate, checkRole(["ADMIN", "ENCARGADO"]), mainten
 // Eliminar (solo ADMIN, solo PENDIENTE)
 router.delete("/:id", authenticate, checkRole(["ADMIN"]), maintenanceController.deleteMaintenance);
 
-// Materiales usados en un mantenimiento
+// Materiales usados en un mantenimiento (TECNICO puede agregar/quitar en sus propios trabajos)
 router.get("/:id/materials", authenticate, getMaterials);
-router.post("/:id/materials", authenticate, checkRole(["ADMIN", "ENCARGADO"]), addMaterial);
-router.delete("/:id/materials/:detalleId", authenticate, checkRole(["ADMIN", "ENCARGADO"]), removeMaterial);
+router.post("/:id/materials", authenticate, checkRole(["ADMIN", "ENCARGADO", "TECNICO"]), addMaterial);
+router.delete("/:id/materials/:detalleId", authenticate, checkRole(["ADMIN", "ENCARGADO", "TECNICO"]), removeMaterial);
 
 module.exports = router;

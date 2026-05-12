@@ -57,9 +57,13 @@ export const maintenanceService = {
     }
   },
 
-  async updateMyJobStatus(maintenanceId, estado) {
+  async updateMyJobStatus(maintenanceId, estado, { partes_reparadas = [], notas_tecnico = '' } = {}) {
     try {
-      return await makePutRequest(`/maintenances/${maintenanceId}/my-status`, { estado });
+      return await makePutRequest(`/maintenances/${maintenanceId}/my-status`, {
+        estado,
+        partes_reparadas,
+        notas_tecnico,
+      });
     } catch (error) {
       throw new Error(error.message || 'Error al actualizar estado del trabajo');
     }

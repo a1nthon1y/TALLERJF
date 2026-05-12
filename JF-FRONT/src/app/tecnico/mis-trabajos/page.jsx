@@ -1,19 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { maintenanceService } from "@/services/maintenanceService";
+import { makeGetRequest } from "@/utils/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   Wrench, AlertCircle, Loader2, Play, CheckCircle2, Zap,
-  Gauge, Calendar, ChevronDown, ChevronUp, MapPin,
+  Gauge, Calendar, ChevronDown, ChevronUp, MapPin, Package,
+  Plus, Trash2, ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -45,32 +49,302 @@ function getResumen(observaciones) {
   return "Sin descripción";
 }
 
-const estadoBadge = (estado) => {
-  const e = estado?.toUpperCase();
-  if (e === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">Completado</Badge>;
-  if (e === "REALIZADO")  return <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-xs">En Campo</Badge>;
-  if (e === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-xs">En Proceso</Badge>;
-  if (e === "CERRADO")    return <Badge variant="secondary" className="text-xs">Cerrado</Badge>;
-  return <Badge variant="outline" className="text-xs">Pendiente</Badge>;
+const ESTADO_CONFIG = {
+  PENDIENTE:  { label: "Pendiente",   color: "border-gray-300 bg-gray-50 text-gray-600" },
+  EN_PROCESO: { label: "En Proceso",  color: "border-blue-300 bg-blue-50 text-blue-700" },
+  COMPLETADO: { label: "Completado",  color: "border-green-300 bg-green-50 text-green-700" },
+  CERRADO:    { label: "Cerrado",     color: "border-gray-300 bg-gray-100 text-gray-500" },
+  REALIZADO:  { label: "En Campo",    color: "border-purple-300 bg-purple-50 text-purple-700" },
 };
 
-const FILTROS = [
-  { value: "ACTIVOS",    label: "Activos (mis tareas)" },
-  { value: "TODOS",      label: "Todos" },
-  { value: "PENDIENTE",  label: "Pendiente" },
-  { value: "EN_PROCESO", label: "En Proceso" },
-  { value: "COMPLETADO", label: "Completado" },
-  { value: "CERRADO",    label: "Cerrado" },
-];
+const estadoBadge = (estado) => {
+  const cfg = ESTADO_CONFIG[estado?.toUpperCase()] || ESTADO_CONFIG.PENDIENTE;
+  return <Badge variant="outline" className={`text-xs ${cfg.color}`}>{cfg.label}</Badge>;
+};
+
+// Barra de progreso del flujo
+function FlowStepper({ estado }) {
+  const steps = ["PENDIENTE", "EN_PROCESO", "COMPLETADO", "CERRADO"];
+  const idx = steps.indexOf(estado?.toUpperCase());
+  return (
+    <div className="flex items-center gap-1 w-full">
+      {steps.map((s, i) => {
+        const cfg = ESTADO_CONFIG[s];
+        const done = i <= idx;
+        const active = i === idx;
+        return (
+          <div key={s} className="flex items-center flex-1">
+            <div className={`flex-1 h-1 rounded-full transition-colors ${done ? "bg-primary" : "bg-muted"}`} />
+            {i < steps.length - 1 && (
+              <div className={`h-2 w-2 rounded-full mx-0.5 shrink-0 transition-colors ${done ? "bg-primary" : "bg-muted"} ${active ? "ring-2 ring-primary/30" : ""}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Material manager inline ──────────────────────────────────────────────────
+
+function MaterialManager({ jobId, readonly = false }) {
+  const [materials, setMaterials] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [selectedMat, setSelectedMat] = useState("");
+  const [cantidad, setCantidad] = useState("1");
+  const [saving, setSaving] = useState(false);
+
+  const fetchMaterials = useCallback(() => {
+    maintenanceService.getMaintenanceMaterials(jobId)
+      .then(setMaterials)
+      .catch(() => setMaterials([]))
+      .finally(() => setLoading(false));
+  }, [jobId]);
+
+  useEffect(() => {
+    fetchMaterials();
+    if (!readonly) {
+      makeGetRequest("/materials")
+        .then((data) => setCatalog(Array.isArray(data) ? data : []))
+        .catch(() => setCatalog([]));
+    }
+  }, [jobId, readonly, fetchMaterials]);
+
+  const handleAdd = async () => {
+    if (!selectedMat || !cantidad || Number(cantidad) <= 0) return;
+    setSaving(true);
+    try {
+      await maintenanceService.addMaintenanceMaterial(jobId, Number(selectedMat), Number(cantidad));
+      toast.success("Material registrado");
+      setSelectedMat("");
+      setCantidad("1");
+      setAdding(false);
+      fetchMaterials();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async (detalleId) => {
+    try {
+      await maintenanceService.removeMaintenanceMaterial(jobId, detalleId);
+      toast.success("Material eliminado");
+      fetchMaterials();
+    } catch (e) {
+      toast.error(e.message);
+    }
+  };
+
+  const total = materials.reduce((s, m) => s + Number(m.costo_total || 0), 0);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+          <Package className="h-3.5 w-3.5" /> Materiales utilizados
+        </p>
+        {!readonly && (
+          <Button variant="ghost" size="sm" className="h-6 text-xs gap-1" onClick={() => setAdding((v) => !v)}>
+            <Plus className="h-3 w-3" /> Agregar
+          </Button>
+        )}
+      </div>
+
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Cargando...</p>
+      ) : materials.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic">Sin materiales registrados</p>
+      ) : (
+        <div className="space-y-1">
+          {materials.map((m) => (
+            <div key={m.id} className="flex items-center justify-between text-xs bg-muted/40 rounded px-2 py-1.5">
+              <span className="font-medium">{m.nombre}</span>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>x{m.cantidad}</span>
+                <span className="font-medium text-foreground">S/ {Number(m.costo_total).toFixed(2)}</span>
+                {!readonly && (
+                  <button onClick={() => handleRemove(m.id)} className="text-destructive hover:text-destructive/70 transition-colors">
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end text-xs font-semibold pt-1 border-t">
+            Total: S/ {total.toFixed(2)}
+          </div>
+        </div>
+      )}
+
+      {adding && !readonly && (
+        <div className="flex gap-2 items-end pt-1">
+          <div className="flex-1">
+            <Select value={selectedMat} onValueChange={setSelectedMat}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Seleccionar material..." />
+              </SelectTrigger>
+              <SelectContent>
+                {catalog.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.nombre} (stock: {c.stock})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Input
+            type="number"
+            min="1"
+            value={cantidad}
+            onChange={(e) => setCantidad(e.target.value)}
+            className="w-16 h-8 text-xs"
+            placeholder="Cant."
+          />
+          <Button size="sm" className="h-8 text-xs" onClick={handleAdd} disabled={saving || !selectedMat}>
+            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Agregar"}
+          </Button>
+          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setAdding(false)}>
+            Cancelar
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Dialog de completar trabajo ──────────────────────────────────────────────
+
+function CompleteJobDialog({ job, open, onClose, onDone }) {
+  const [parts, setParts] = useState([]);
+  const [selectedParts, setSelectedParts] = useState([]);
+  const [notas, setNotas] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setSelectedParts([]);
+    setNotas("");
+    makeGetRequest("/configs")
+      .then((data) => setParts(Array.isArray(data) ? data.filter((p) => p.activo) : []))
+      .catch(() => setParts([]))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  const togglePart = (id) => {
+    setSelectedParts((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+  };
+
+  const handleConfirm = async () => {
+    setSaving(true);
+    try {
+      await maintenanceService.updateMyJobStatus(job.id, "COMPLETADO", {
+        partes_reparadas: selectedParts,
+        notas_tecnico: notas,
+      });
+      toast.success("Trabajo marcado como completado — esperando revisión del encargado");
+      onDone();
+      onClose();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardCheck className="h-5 w-5 text-green-600" />
+            Completar trabajo — {job?.placa}
+          </DialogTitle>
+          <DialogDescription>
+            Indica qué componentes fueron reparados/reemplazados y agrega notas finales para el encargado.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Partes reparadas */}
+          <div>
+            <p className="text-sm font-semibold mb-2">Componentes trabajados</p>
+            {loading ? (
+              <p className="text-xs text-muted-foreground">Cargando componentes...</p>
+            ) : parts.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No hay componentes configurados</p>
+            ) : (
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {parts.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`part-${p.id}`}
+                      checked={selectedParts.includes(p.id)}
+                      onCheckedChange={() => togglePart(p.id)}
+                    />
+                    <label htmlFor={`part-${p.id}`} className="text-sm cursor-pointer flex-1">
+                      {p.nombre}
+                      <span className="text-xs text-muted-foreground ml-2">
+                        (intervalo: {Number(p.umbral_km).toLocaleString()} km)
+                      </span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            )}
+            {selectedParts.length > 0 && (
+              <p className="text-xs text-green-600 mt-1">
+                ✓ {selectedParts.length} componente{selectedParts.length > 1 ? "s" : ""} — se resetearán sus contadores predictivos
+              </p>
+            )}
+          </div>
+
+          {/* Materiales — solo lectura, ya se gestionaron inline */}
+          <div>
+            <MaterialManager jobId={job?.id} readonly />
+          </div>
+
+          {/* Notas */}
+          <div>
+            <p className="text-sm font-semibold mb-1">Notas para el encargado (opcional)</p>
+            <Textarea
+              value={notas}
+              onChange={(e) => setNotas(e.target.value)}
+              placeholder="Ej: Se cambió el aceite y filtros, se detectó desgaste en freno trasero derecho..."
+              className="resize-none text-sm"
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleConfirm} disabled={saving} className="bg-green-600 hover:bg-green-700">
+            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            Marcar como completado
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 // ─── Card de trabajo ──────────────────────────────────────────────────────────
 
-function JobCard({ job, onAction }) {
+function JobCard({ job, onStart, onComplete, onRefresh }) {
   const [expanded, setExpanded] = useState(false);
   const parsed = parseObservaciones(job.observaciones);
   const esPreventivo = job.tipo?.toUpperCase() === "PREVENTIVO";
   const estado = job.estado?.toUpperCase();
   const urgent = esPreventivo && (estado === "PENDIENTE" || estado === "EN_PROCESO");
+  const showMaterials = estado === "EN_PROCESO" || estado === "COMPLETADO";
 
   return (
     <Card className={`overflow-hidden transition-colors ${urgent ? "border-red-300 dark:border-red-800" : ""}`}>
@@ -94,12 +368,15 @@ function JobCard({ job, onAction }) {
           <div className="shrink-0">{estadoBadge(job.estado)}</div>
         </div>
 
-        {/* Descripción principal */}
+        {/* Progreso visual */}
+        <FlowStepper estado={estado} />
+
+        {/* Descripción */}
         <p className="text-sm text-foreground/80 font-medium">
           {getResumen(job.observaciones)}
         </p>
 
-        {/* Meta: km + fecha */}
+        {/* Meta */}
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
           {job.kilometraje_actual != null && (
             <span className="flex items-center gap-1">
@@ -121,7 +398,7 @@ function JobCard({ job, onAction }) {
           )}
         </div>
 
-        {/* Expandir detalles */}
+        {/* Detalles expandibles */}
         {(parsed.requerimientos.length > 0 || parsed.observaciones) && (
           <>
             <button
@@ -154,21 +431,37 @@ function JobCard({ job, onAction }) {
           </>
         )}
 
-        {/* Acción */}
+        {/* Materiales inline (solo EN_PROCESO o COMPLETADO) */}
+        {showMaterials && (
+          <div className="pt-2 border-t">
+            <MaterialManager jobId={job.id} readonly={estado === "COMPLETADO" || estado === "CERRADO"} />
+          </div>
+        )}
+
+        {/* Acciones */}
         {estado === "PENDIENTE" && (
-          <Button className="w-full" onClick={() => onAction(job, "EN_PROCESO")}>
+          <Button className="w-full" onClick={() => onStart(job)}>
             <Play className="h-4 w-4 mr-2" /> Iniciar trabajo
           </Button>
         )}
         {estado === "EN_PROCESO" && (
-          <Button className="w-full" onClick={() => onAction(job, "COMPLETADO")}>
-            <CheckCircle2 className="h-4 w-4 mr-2" /> Marcar como completado
+          <Button
+            className="w-full bg-green-600 hover:bg-green-700"
+            onClick={() => onComplete(job)}
+          >
+            <CheckCircle2 className="h-4 w-4 mr-2" /> Completar y reportar al encargado
           </Button>
         )}
-        {(estado === "COMPLETADO" || estado === "CERRADO") && (
+        {estado === "COMPLETADO" && (
+          <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 rounded p-2">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            Trabajo completado — pendiente de revisión y cierre por el encargado
+          </div>
+        )}
+        {estado === "CERRADO" && (
           <div className="flex items-center gap-2 text-xs text-green-600">
             <CheckCircle2 className="h-3.5 w-3.5" />
-            {estado === "COMPLETADO" ? "Completado — esperando revisión del encargado" : "Cerrado y aprobado"}
+            Cerrado y aprobado por el encargado
           </div>
         )}
       </CardContent>
@@ -178,6 +471,15 @@ function JobCard({ job, onAction }) {
 
 // ─── Página ───────────────────────────────────────────────────────────────────
 
+const FILTROS = [
+  { value: "ACTIVOS",    label: "Activos (mis tareas)" },
+  { value: "TODOS",      label: "Todos" },
+  { value: "PENDIENTE",  label: "Pendiente" },
+  { value: "EN_PROCESO", label: "En Proceso" },
+  { value: "COMPLETADO", label: "Completado" },
+  { value: "CERRADO",    label: "Cerrado" },
+];
+
 export default function MisTrabajosPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -185,20 +487,21 @@ export default function MisTrabajosPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filtro, setFiltro] = useState("ACTIVOS");
 
-  const [selectedJob, setSelectedJob] = useState(null);
-  const [targetEstado, setTargetEstado] = useState("");
+  // Dialog estados
+  const [startingJob, setStartingJob] = useState(null);
+  const [completingJob, setCompletingJob] = useState(null);
   const [updating, setUpdating] = useState(false);
 
-  const fetchJobs = () => {
+  const fetchJobs = useCallback(() => {
     setLoading(true);
     maintenanceService
       .getMyJobs()
       .then(setJobs)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(() => { fetchJobs(); }, []);
+  useEffect(() => { fetchJobs(); }, [fetchJobs]);
 
   const filtered = jobs.filter((j) => {
     const matchSearch =
@@ -206,47 +509,38 @@ export default function MisTrabajosPage() {
       j.placa?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       j.modelo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       j.observaciones?.toLowerCase().includes(searchTerm.toLowerCase());
-
     const estado = j.estado?.toUpperCase();
     const matchFiltro =
       filtro === "TODOS" ||
       (filtro === "ACTIVOS" && (estado === "PENDIENTE" || estado === "EN_PROCESO")) ||
       estado === filtro;
-
     return matchSearch && matchFiltro;
   });
 
-  // Ordenar: EN_PROCESO → PENDIENTE → COMPLETADO → CERRADO; preventivos primero
   const sorted = [...filtered].sort((a, b) => {
     const order = { EN_PROCESO: 0, PENDIENTE: 1, COMPLETADO: 2, CERRADO: 3, REALIZADO: 2 };
     const ao = order[a.estado?.toUpperCase()] ?? 9;
     const bo = order[b.estado?.toUpperCase()] ?? 9;
     if (ao !== bo) return ao - bo;
-    const aP = a.tipo?.toUpperCase() === "PREVENTIVO" ? 0 : 1;
-    const bP = b.tipo?.toUpperCase() === "PREVENTIVO" ? 0 : 1;
-    return aP - bP;
+    return (a.tipo?.toUpperCase() === "PREVENTIVO" ? 0 : 1) - (b.tipo?.toUpperCase() === "PREVENTIVO" ? 0 : 1);
   });
 
-  const openAction = (job, estado) => {
-    setSelectedJob(job);
-    setTargetEstado(estado);
-  };
-
-  const handleConfirm = async () => {
-    if (!selectedJob) return;
+  const handleStart = async (job) => {
     setUpdating(true);
     try {
-      await maintenanceService.updateMyJobStatus(selectedJob.id, targetEstado);
-      const label = targetEstado === "EN_PROCESO" ? "iniciado" : "completado";
-      toast.success(`Trabajo marcado como ${label}`);
-      setSelectedJob(null);
+      await maintenanceService.updateMyJobStatus(job.id, "EN_PROCESO");
+      toast.success("Trabajo iniciado");
+      setStartingJob(null);
       fetchJobs();
-    } catch (err) {
-      toast.error(err.message);
+    } catch (e) {
+      toast.error(e.message);
     } finally {
       setUpdating(false);
     }
   };
+
+  const activos = jobs.filter((j) => j.estado === "PENDIENTE" || j.estado === "EN_PROCESO").length;
+  const completados = jobs.filter((j) => j.estado === "COMPLETADO").length;
 
   if (loading) return <PageSkeleton variant="list" rowCount={4} />;
 
@@ -261,13 +555,21 @@ export default function MisTrabajosPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Wrench className="h-6 w-6" /> Mis Trabajos
-        </h1>
-        <p className="text-muted-foreground text-sm">
-          {jobs.filter((j) => j.estado === "PENDIENTE" || j.estado === "EN_PROCESO").length} trabajo{jobs.filter((j) => j.estado === "PENDIENTE" || j.estado === "EN_PROCESO").length !== 1 ? "s" : ""} activo{jobs.filter((j) => j.estado === "PENDIENTE" || j.estado === "EN_PROCESO").length !== 1 ? "s" : ""}
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Wrench className="h-6 w-6" /> Mis Trabajos
+          </h1>
+          <div className="flex gap-3 mt-1 text-sm text-muted-foreground">
+            {activos > 0 && (
+              <span className="text-blue-600 font-medium">{activos} activo{activos > 1 ? "s" : ""}</span>
+            )}
+            {completados > 0 && (
+              <span className="text-amber-600 font-medium">{completados} esperando aprobación</span>
+            )}
+            {activos === 0 && completados === 0 && "Sin trabajos pendientes"}
+          </div>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -304,33 +606,45 @@ export default function MisTrabajosPage() {
       ) : (
         <div className="space-y-3">
           {sorted.map((job) => (
-            <JobCard key={job.id} job={job} onAction={openAction} />
+            <JobCard
+              key={job.id}
+              job={job}
+              onStart={(j) => handleStart(j)}
+              onComplete={(j) => setCompletingJob(j)}
+              onRefresh={fetchJobs}
+            />
           ))}
         </div>
       )}
 
-      {/* Confirm dialog */}
-      <Dialog open={!!selectedJob} onOpenChange={() => setSelectedJob(null)}>
+      {/* Dialog: Iniciar (confirmación rápida — sin dialog complejo ya que es "Iniciar") */}
+      <Dialog open={!!startingJob} onOpenChange={() => setStartingJob(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {targetEstado === "EN_PROCESO" ? "¿Iniciar este trabajo?" : "¿Marcar como completado?"}
-            </DialogTitle>
+            <DialogTitle>¿Iniciar este trabajo?</DialogTitle>
             <DialogDescription>
-              {targetEstado === "EN_PROCESO"
-                ? `Confirmas que comenzaste a trabajar en la unidad ${selectedJob?.placa ?? selectedJob?.unidad_id}.`
-                : `Confirmas que terminaste el trabajo en ${selectedJob?.placa ?? selectedJob?.unidad_id}. El encargado lo revisará y lo aprobará.`}
+              Confirmas que comenzaste a trabajar en la unidad {startingJob?.placa}.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedJob(null)}>Cancelar</Button>
-            <Button onClick={handleConfirm} disabled={updating}>
+            <Button variant="outline" onClick={() => setStartingJob(null)}>Cancelar</Button>
+            <Button onClick={() => handleStart(startingJob)} disabled={updating}>
               {updating && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              Confirmar
+              Iniciar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog: Completar */}
+      {completingJob && (
+        <CompleteJobDialog
+          job={completingJob}
+          open={!!completingJob}
+          onClose={() => setCompletingJob(null)}
+          onDone={fetchJobs}
+        />
+      )}
     </div>
   );
 }

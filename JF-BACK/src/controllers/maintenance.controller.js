@@ -204,17 +204,17 @@ const getMyJobs = async (req, res) => {
 };
 
 // Técnico actualiza el estado de su propio trabajo (solo EN_PROCESO o COMPLETADO)
+// Al completar, puede indicar partes_reparadas y notas_tecnico
 const updateMyJobStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { estado } = req.body;
+    const { estado, partes_reparadas = [], notas_tecnico } = req.body;
     const estadoNorm = estado?.toUpperCase();
 
     if (!["EN_PROCESO", "COMPLETADO"].includes(estadoNorm)) {
       return res.status(400).json({ message: "Solo puedes cambiar el estado a EN_PROCESO o COMPLETADO" });
     }
 
-    // Verificar que el mantenimiento pertenece al técnico logueado
     const tecnicoResult = await pool.query(
       "SELECT id FROM tecnicos WHERE usuario_id = $1",
       [req.user.id]
@@ -228,17 +228,49 @@ const updateMyJobStatus = async (req, res) => {
     if (mantResult.rows.length === 0) {
       return res.status(404).json({ message: "Mantenimiento no encontrado" });
     }
-    if (mantResult.rows[0].tecnico_id !== tecnicoId) {
+    const m = mantResult.rows[0];
+    if (m.tecnico_id !== tecnicoId) {
       return res.status(403).json({ message: "Este mantenimiento no está asignado a ti" });
     }
-    if (mantResult.rows[0].estado === "CERRADO") {
+    if (m.estado === "CERRADO") {
       return res.status(400).json({ message: "No puedes modificar un mantenimiento ya cerrado" });
     }
 
+    // Append notas del técnico a las observaciones si se proveen
+    let finalObs = m.observaciones || "";
+    if (estadoNorm === "COMPLETADO" && notas_tecnico?.trim()) {
+      finalObs = finalObs
+        ? `${finalObs}\n\n--- NOTAS DEL TÉCNICO ---\n${notas_tecnico.trim()}`
+        : `--- NOTAS DEL TÉCNICO ---\n${notas_tecnico.trim()}`;
+    }
+
     const result = await pool.query(
-      "UPDATE mantenimientos SET estado = $1, fecha_realizacion = CASE WHEN $2 = 'COMPLETADO' THEN NOW() ELSE fecha_realizacion END WHERE id = $3 RETURNING *",
-      [estadoNorm, estadoNorm, id]
+      `UPDATE mantenimientos
+       SET estado = $1,
+           fecha_realizacion = CASE WHEN $2 = 'COMPLETADO' THEN NOW() ELSE fecha_realizacion END,
+           observaciones = $3
+       WHERE id = $4 RETURNING *`,
+      [estadoNorm, estadoNorm, finalObs, id]
     );
+
+    // Si completado con partes indicadas, resetear contadores predictivos
+    if (estadoNorm === "COMPLETADO" && Array.isArray(partes_reparadas) && partes_reparadas.length > 0) {
+      for (const p_id of partes_reparadas) {
+        await pool.query(
+          `INSERT INTO estado_partes_unidad (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)
+           VALUES ($1, $2, $3, NOW())
+           ON CONFLICT (unidad_id, configuracion_parte_id)
+           DO UPDATE SET ultimo_mantenimiento_km = EXCLUDED.ultimo_mantenimiento_km,
+                         ultimo_mantenimiento_fecha = NOW()`,
+          [m.unidad_id, p_id, m.kilometraje_actual || 0]
+        );
+        await pool.query(
+          `UPDATE alertas_mantenimiento SET estado = 'RESUELTO' WHERE unidad_id = $1 AND parte_id = $2`,
+          [m.unidad_id, p_id]
+        );
+      }
+    }
+
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });

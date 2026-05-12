@@ -153,12 +153,28 @@ export function MaintenancesTable() {
       toast.success("Mantenimiento cerrado y aprobado")
       setClosingMaintenance(null)
       setCloseObs("")
+      setCloseMaterials([])
       await mutate()
     } catch (error) {
       toast.error(error.message)
     } finally {
       setIsClosing(false)
     }
+  }
+
+  // Cargar materiales cuando se abre el dialog de cierre
+  const [closeMaterials, setCloseMaterials] = useState([])
+  const [closeMatsLoading, setCloseMatsLoading] = useState(false)
+
+  const openCloseDialog = (maintenance) => {
+    setClosingMaintenance(maintenance)
+    setCloseObs("")
+    setCloseMaterials([])
+    setCloseMatsLoading(true)
+    maintenanceService.getMaintenanceMaterials(maintenance.id)
+      .then(setCloseMaterials)
+      .catch(() => setCloseMaterials([]))
+      .finally(() => setCloseMatsLoading(false))
   }
 
   const getStatusBadge = (status) => {
@@ -265,8 +281,32 @@ export function MaintenancesTable() {
   const pendientes = maintenances?.filter((m) => m.estado === "PENDIENTE").length ?? 0
   const enProceso  = maintenances?.filter((m) => m.estado === "EN_PROCESO").length ?? 0
 
+  // Banner de pendientes de aprobación
+  const pendientesAprobacion = (maintenances || []).filter(m => m.estado?.toUpperCase() === "COMPLETADO")
+
   return (
     <div className="space-y-4">
+      {/* Banner: pendientes de aprobación (solo admin/encargado) */}
+      {isAdminOrEncargado && pendientesAprobacion.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <CheckCheck className="h-5 w-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                {pendientesAprobacion.length} trabajo{pendientesAprobacion.length > 1 ? "s" : ""} pendiente{pendientesAprobacion.length > 1 ? "s" : ""} de aprobación
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                {pendientesAprobacion.map(m => m.placa || m.codigo).join(", ")}
+              </p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" className="shrink-0 border-amber-400 text-amber-700 hover:bg-amber-100"
+            onClick={() => setEstadoFilter("COMPLETADO")}>
+            Ver pendientes
+          </Button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Buscar por placa, técnico, observaciones..."
@@ -381,8 +421,8 @@ export function MaintenancesTable() {
                         </DropdownMenuItem>
                       )}
                       {canClose(maintenance.estado) && (
-                        <DropdownMenuItem
-                          onClick={() => { setClosingMaintenance(maintenance); setCloseObs("") }}
+                          <DropdownMenuItem
+                          onClick={() => openCloseDialog(maintenance)}
                           className="text-green-700 focus:text-green-700"
                         >
                           <CheckCheck className="mr-2 h-4 w-4" />
@@ -671,27 +711,64 @@ export function MaintenancesTable() {
       </Dialog>
 
       {/* Dialog: Cerrar / Aprobar mantenimiento */}
-      <Dialog open={!!closingMaintenance} onOpenChange={() => setClosingMaintenance(null)}>
-        <DialogContent>
+      <Dialog open={!!closingMaintenance} onOpenChange={() => { setClosingMaintenance(null); setCloseMaterials([]) }}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Cerrar / Aprobar Mantenimiento</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCheck className="h-5 w-5 text-green-600" />
+              Cerrar / Aprobar Mantenimiento
+            </DialogTitle>
             <DialogDescription>
-              Confirma que el trabajo en la unidad <strong>{closingMaintenance?.placa ?? closingMaintenance?.unidad_id}</strong> fue revisado y está conforme. Esta acción no se puede deshacer.
+              Revisa el trabajo en <strong>{closingMaintenance?.placa ?? closingMaintenance?.unidad_id}</strong>{" "}
+              <span className="font-mono text-xs">{closingMaintenance?.codigo}</span> y confirma que está conforme.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Observaciones del encargado (opcional)</label>
-            <Textarea
-              placeholder="Ej: Trabajo revisado y conforme. Se verificaron frenos y aceite."
-              value={closeObs}
-              onChange={(e) => setCloseObs(e.target.value)}
-              rows={3}
-            />
+
+          <div className="space-y-4">
+            {/* Materiales usados por el técnico */}
+            <div>
+              <p className="text-sm font-semibold mb-2 flex items-center gap-1">
+                <Package className="h-4 w-4" /> Materiales registrados por el técnico
+              </p>
+              {closeMatsLoading ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Cargando...
+                </div>
+              ) : closeMaterials.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">Sin materiales registrados</p>
+              ) : (
+                <div className="space-y-1 bg-muted/30 rounded-md p-2">
+                  {closeMaterials.map((m) => (
+                    <div key={m.id} className="flex justify-between text-xs">
+                      <span>{m.nombre} × {m.cantidad}</span>
+                      <span className="font-medium">S/ {Number(m.costo_total).toFixed(2)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between text-xs font-bold border-t pt-1 mt-1">
+                    <span>Total materiales</span>
+                    <span>S/ {closeMaterials.reduce((s, m) => s + Number(m.costo_total), 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Notas de cierre */}
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Observaciones del encargado (opcional)</label>
+              <Textarea
+                placeholder="Ej: Trabajo revisado y conforme. Se verificaron frenos y aceite."
+                value={closeObs}
+                onChange={(e) => setCloseObs(e.target.value)}
+                rows={3}
+              />
+            </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setClosingMaintenance(null)}>Cancelar</Button>
-            <Button onClick={handleCloseMaintenance} disabled={isClosing}>
-              {isClosing && <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent inline-block" />}
+            <Button onClick={handleCloseMaintenance} disabled={isClosing} className="bg-green-600 hover:bg-green-700">
+              {isClosing && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              <CheckCheck className="h-4 w-4 mr-2" />
               Cerrar y Aprobar
             </Button>
           </DialogFooter>
