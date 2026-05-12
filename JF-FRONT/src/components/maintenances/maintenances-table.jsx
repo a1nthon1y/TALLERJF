@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -288,11 +288,38 @@ export function MaintenancesTable() {
   const pendientes = maintenances?.filter((m) => m.estado === "PENDIENTE").length ?? 0
   const enProceso  = maintenances?.filter((m) => m.estado === "EN_PROCESO").length ?? 0
 
+  // Banner: solicitudes sin técnico (pendientes sin asignar — generalmente del chofer)
+  const sinTecnico = (maintenances || []).filter(
+    m => m.estado?.toUpperCase() === "PENDIENTE" && !m.tecnico_id && !m.tecnico_nombre
+  )
+
   // Banner de pendientes de aprobación
   const pendientesAprobacion = (maintenances || []).filter(m => m.estado?.toUpperCase() === "COMPLETADO")
 
   return (
     <div className="space-y-4">
+      {/* Banner: solicitudes sin técnico asignado (del chofer o sin gestionar) */}
+      {isAdminOrEncargado && sinTecnico.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/20 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-blue-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                {sinTecnico.length} solicitud{sinTecnico.length > 1 ? "es" : ""} sin técnico asignado
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-400">
+                {sinTecnico.map(m => m.placa || m.codigo).join(", ")} — asigna un técnico e inicia el proceso
+              </p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline"
+            className="shrink-0 border-blue-400 text-blue-700 hover:bg-blue-100"
+            onClick={() => setEstadoFilter("PENDIENTE")}>
+            Ver solicitudes
+          </Button>
+        </div>
+      )}
+
       {/* Banner: pendientes de aprobación (solo admin/encargado) */}
       {isAdminOrEncargado && pendientesAprobacion.length > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
@@ -398,7 +425,11 @@ export function MaintenancesTable() {
                 <TableCell className="capitalize">{maintenance.tipo?.toLowerCase()}</TableCell>
                 <TableCell>{getStatusBadge(maintenance.estado)}</TableCell>
                 <TableCell>
-                  {maintenance.tecnico_nombre ?? getTechnicianName(maintenance.tecnico_id)}
+                  {maintenance.tecnico_nombre ?? getTechnicianName(maintenance.tecnico_id) ?? (
+                    <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" /> Sin asignar
+                    </span>
+                  )}
                 </TableCell>
                 <TableCell className="max-w-[180px] hidden lg:table-cell">
                   <p className="text-xs text-muted-foreground line-clamp-2" title={maintenance.observaciones}>
