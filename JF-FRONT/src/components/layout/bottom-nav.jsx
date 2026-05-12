@@ -8,7 +8,7 @@ import {
   Wrench, ClipboardList, MapPin,
   Bus, LayoutDashboard, Hammer, Package,
   FileBarChart, Users, Settings, Building2, UserCircle,
-  MoreHorizontal, X, Route, BarChart3,
+  MoreHorizontal, X, Route, BarChart3, SlidersHorizontal,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -46,14 +46,15 @@ const primaryByRole = {
 // Items extras que van en el drawer "Más" (solo para roles con muchas páginas)
 const moreByRole = {
   ADMIN: [
-    { title: "Dueños",           href: "/duenos",         icon: Building2 },
-    { title: "Choferes",         href: "/choferes",       icon: UserCircle },
-    { title: "Técnicos",         href: "/tecnicos",       icon: Hammer },
-    { title: "Partes Unidades",  href: "/partes-unidades", icon: Settings },
-    { title: "Materiales",       href: "/materiales",     icon: Package },
-    { title: "Rutas",            href: "/rutas",          icon: Route },
-    { title: "Usuarios",         href: "/usuarios",       icon: Users },
-    { title: "Alertas",          href: "/mantenimientos/alertas", icon: BarChart3 },
+    { title: "Dueños",           href: "/duenos",                  icon: Building2 },
+    { title: "Choferes",         href: "/choferes",                icon: UserCircle },
+    { title: "Técnicos",         href: "/tecnicos",                icon: Hammer },
+    { title: "Partes Unidades",  href: "/partes-unidades",         icon: Settings },
+    { title: "Configuraciones",  href: "/configuraciones",         icon: SlidersHorizontal },
+    { title: "Materiales",       href: "/materiales",              icon: Package },
+    { title: "Rutas",            href: "/rutas",                   icon: Route },
+    { title: "Usuarios",         href: "/usuarios",                icon: Users },
+    { title: "Alertas",          href: "/mantenimientos/alertas",  icon: BarChart3 },
   ],
   ENCARGADO: [
     { title: "Dueños",           href: "/duenos",         icon: Building2 },

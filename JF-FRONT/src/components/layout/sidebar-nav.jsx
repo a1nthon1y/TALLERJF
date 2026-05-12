@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
-import { BarChart3, Bus, Wrench, Package, FileBarChart, Users, LogOut, Settings, Building2, ChevronLeft, UserCircle, MapPin, Hammer, ClipboardList, Route } from "lucide-react"
+import { BarChart3, Bus, Wrench, Package, FileBarChart, Users, LogOut, Settings, Building2, ChevronLeft, UserCircle, MapPin, Hammer, ClipboardList, Route, SlidersHorizontal, Bell } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarRail } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
@@ -13,11 +13,13 @@ import { cn } from "@/lib/utils"
 const adminNavItems = [
   { title: "Dashboard", href: "/", icon: BarChart3 },
   { title: "Mantenimientos", href: "/mantenimientos", icon: Wrench },
+  { title: "Alertas", href: "/mantenimientos/alertas", icon: Bell },
   { title: "Unidades", href: "/unidades", icon: Bus },
   { title: "Dueños", href: "/duenos", icon: Building2 },
   { title: "Choferes", href: "/choferes", icon: UserCircle },
   { title: "Técnicos", href: "/tecnicos", icon: Hammer },
   { title: "Partes de Unidades", href: "/partes-unidades", icon: Settings },
+  { title: "Configuraciones", href: "/configuraciones", icon: SlidersHorizontal },
   { title: "Materiales", href: "/materiales", icon: Package },
   { title: "Rutas", href: "/rutas", icon: Route },
   { title: "Reportes", href: "/reportes", icon: FileBarChart },
