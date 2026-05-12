@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle, Play, ClipboardCheck } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -138,6 +138,26 @@ export function MaintenancesTable() {
       toast.error(error.message)
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  // Avance rápido de estado sin abrir el dialog de edición
+  const quickAdvance = async (maintenance, nuevoEstado) => {
+    if (!maintenance.tecnico_id && !maintenance.tecnico_nombre && nuevoEstado !== "PENDIENTE") {
+      toast.error("Asigna un técnico antes de iniciar el trabajo", { description: "Usa Editar para asignarlo." })
+      return
+    }
+    try {
+      await maintenanceService.editMaintenance(maintenance.id, {
+        estado: nuevoEstado,
+        tecnico_id: maintenance.tecnico_id ?? null,
+        observaciones: maintenance.observaciones ?? "",
+        partes_reparadas: [],
+      })
+      toast.success(`Estado cambiado a ${nuevoEstado === "EN_PROCESO" ? "En Proceso" : nuevoEstado}`)
+      await mutate()
+    } catch (error) {
+      toast.error(error.message)
     }
   }
 
@@ -445,26 +465,52 @@ export function MaintenancesTable() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                                      {/* Editar — no disponible para CERRADO (estado final) */}
+                      {/* ── Acción principal según estado actual ── */}
+                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() === "PENDIENTE" && (
+                        <DropdownMenuItem
+                          onClick={() => quickAdvance(maintenance, "EN_PROCESO")}
+                          className="text-blue-700 focus:text-blue-700 font-medium"
+                        >
+                          <Play className="mr-2 h-4 w-4" />
+                          Iniciar trabajo
+                        </DropdownMenuItem>
+                      )}
+                      {isAdminOrEncargado && maintenance.estado?.toUpperCase() === "EN_PROCESO" && (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            openEditDialog(maintenance)
+                            // pre-seleccionar COMPLETADO
+                            setTimeout(() => editForm.setValue("estado", "COMPLETADO"), 50)
+                          }}
+                          className="text-emerald-700 focus:text-emerald-700 font-medium"
+                        >
+                          <ClipboardCheck className="mr-2 h-4 w-4" />
+                          Marcar completado
+                        </DropdownMenuItem>
+                      )}
+                      {canClose(maintenance.estado) && (
+                        <DropdownMenuItem
+                          onClick={() => openCloseDialog(maintenance)}
+                          className="text-green-700 focus:text-green-700 font-medium"
+                        >
+                          <CheckCheck className="mr-2 h-4 w-4" />
+                          Cerrar / Aprobar
+                        </DropdownMenuItem>
+                      )}
+
+                      <DropdownMenuSeparator />
+
+                      {/* ── Acciones secundarias ── */}
                       {isAdminOrEncargado && maintenance.estado?.toUpperCase() !== "CERRADO" && (
                         <DropdownMenuItem onClick={() => openEditDialog(maintenance)}>
                           <Edit className="mr-2 h-4 w-4" />
-                          Editar
+                          Editar detalles
                         </DropdownMenuItem>
                       )}
                       {isAdminOrEncargado && (
                         <DropdownMenuItem onClick={() => openMaterialsDialog(maintenance)}>
                           <Package className="mr-2 h-4 w-4" />
                           Materiales usados
-                        </DropdownMenuItem>
-                      )}
-                      {canClose(maintenance.estado) && (
-                        <DropdownMenuItem
-                          onClick={() => openCloseDialog(maintenance)}
-                          className="text-green-700 focus:text-green-700"
-                        >
-                          <CheckCheck className="mr-2 h-4 w-4" />
-                          Cerrar / Aprobar
                         </DropdownMenuItem>
                       )}
                       {/* Eliminar — solo ADMIN, solo PENDIENTE */}
