@@ -992,12 +992,33 @@ export function MaintenancesTable() {
               )}
 
               {/* PREVENTIVO: Partes/Sistemas reparados (solo aplica a preventivo,
-                  el correctivo no usa partes predictivas — ver page.jsx, partes_programadas: []) */}
-              {completingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO" && partConfigs.length > 0 && (() => {
-                const estadoMap = {}
+                  el correctivo no usa partes predictivas — ver page.jsx, partes_programadas: []).
+
+                  Filtro `activo` (Bug #19): solo se muestran reglas activas para esta unidad
+                  + las que estaban en partes_programadas pero ahora están inactivas
+                  (para no romper trabajos ya planificados). Las inactivas se marcan
+                  visualmente con badge "Inactiva". */}
+              {completingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO" && (() => {
+                const activasMap = {}
                 compUnitParts.forEach(p => {
-                  if (p.configuracion_parte_id) estadoMap[String(p.configuracion_parte_id)] = p
+                  const k = String(p.configuracion_parte_id || p.id)
+                  activasMap[k] = p
                 })
+
+                const partesInactivasEnPlan = compPartes
+                  .filter(pid => !activasMap[String(pid)])
+                  .map(pid => {
+                    const cfg = partConfigs.find(c => String(c.id) === String(pid))
+                    return cfg ? { ...cfg, configuracion_parte_id: cfg.id, _inactiva: true } : null
+                  })
+                  .filter(Boolean)
+
+                const partesAMostrar = [
+                  ...compUnitParts.map(p => ({ ...p, _inactiva: false })),
+                  ...partesInactivasEnPlan,
+                ]
+
+                if (partesAMostrar.length === 0) return null
 
                 return (
                   <div className="space-y-2">
@@ -1008,10 +1029,9 @@ export function MaintenancesTable() {
                       </p>
                     </div>
                     <div className="border rounded-md divide-y">
-                      {partConfigs.map((p) => {
-                        const pid = String(p.id)
-                        const unitPart = estadoMap[pid]
-                        const estado = unitPart?.estado?.toUpperCase()
+                      {partesAMostrar.map((p) => {
+                        const pid = String(p.configuracion_parte_id || p.id)
+                        const estado = p.estado?.toUpperCase()
                         const checked = compPartes.includes(pid)
                         return (
                           <label key={pid} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-muted/40 ${checked ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
@@ -1021,31 +1041,33 @@ export function MaintenancesTable() {
                                   ? [...compPartes, pid]
                                   : compPartes.filter(x => x !== pid)
                                 setCompPartes(next)
-                                const pendientes = partConfigs
-                                  .filter(pc => estadoMap[String(pc.id)] && !next.includes(String(pc.id)))
+                                const pendientes = partesAMostrar
+                                  .filter(pc => !next.includes(String(pc.configuracion_parte_id || pc.id)))
                                   .map(pc => pc.nombre).filter(Boolean)
                                 setCompNota(pendientes.length > 0 ? `Pendiente por completar: ${pendientes.join(", ")}` : "")
                               }}
                             />
                             <span className="flex-1 text-sm font-medium">{p.nombre}</span>
-                            {estado === "CRITICO"     && <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Crítico</Badge>}
-                            {estado === "ADVERTENCIA" && <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Alerta</Badge>}
-                            {estado === "OK"          && <Badge variant="outline" className="text-xs text-green-600">OK</Badge>}
-                            {unitPart?.km_restantes != null && (
-                              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                {unitPart.km_restantes > 0
-                                  ? `${Number(unitPart.km_restantes).toLocaleString()} km rest.`
-                                  : `${Math.abs(unitPart.km_restantes).toLocaleString()} km vencido`}
-                              </span>
+                            {p._inactiva && (
+                              <Badge variant="outline" className="text-xs text-muted-foreground border-dashed" title="Esta regla fue desactivada después de programar el mantenimiento">
+                                Regla inactiva
+                              </Badge>
                             )}
-                            {!unitPart && p.umbral_km && (
-                              <span className="text-xs text-muted-foreground">{Number(p.umbral_km).toLocaleString()} km</span>
+                            {!p._inactiva && estado === "CRITICO"     && <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Crítico</Badge>}
+                            {!p._inactiva && estado === "ADVERTENCIA" && <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Alerta</Badge>}
+                            {!p._inactiva && estado === "OK"          && <Badge variant="outline" className="text-xs text-green-600">OK</Badge>}
+                            {!p._inactiva && p.km_restantes != null && (
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {p.km_restantes > 0
+                                  ? `${Number(p.km_restantes).toLocaleString()} km rest.`
+                                  : `${Math.abs(p.km_restantes).toLocaleString()} km vencido`}
+                              </span>
                             )}
                           </label>
                         )
                       })}
                     </div>
-                    {compPartes.length < Object.keys(estadoMap).length && compPartes.length > 0 && (
+                    {compPartes.length < partesAMostrar.length && compPartes.length > 0 && (
                       <p className="text-xs text-amber-600">
                         ⚠ Hay partes sin marcar — se anotarán como pendientes
                       </p>
@@ -1195,6 +1217,22 @@ export function MaintenancesTable() {
                     completar vía el dialog dedicado de "Completar trabajo". */}
               {editingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO" && (() => {
                 const partesReadonly = editingMaintenance?.estado?.toUpperCase() === "COMPLETADO"
+
+                // Bug #19: incluir partes inactivas que ya estaban programadas
+                // para no perderlas silenciosamente del checklist.
+                const activasIds = new Set(editUnitParts.map(p => String(p.id || p.configuracion_parte_id)))
+                const programadasInactivas = editPartes
+                  .filter(pid => !activasIds.has(String(pid)))
+                  .map(pid => {
+                    const cfg = partConfigs.find(c => String(c.id) === String(pid))
+                    return cfg ? { ...cfg, _inactiva: true } : null
+                  })
+                  .filter(Boolean)
+                const partesAMostrar = [
+                  ...editUnitParts.map(p => ({ ...p, _inactiva: false })),
+                  ...programadasInactivas,
+                ]
+
                 return (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
@@ -1213,13 +1251,13 @@ export function MaintenancesTable() {
                   )}
                   {editUnitPartsLoading ? (
                     <p className="text-xs text-muted-foreground">Cargando estado de partes...</p>
-                  ) : editUnitParts.length === 0 ? (
+                  ) : partesAMostrar.length === 0 ? (
                     <p className="text-xs text-muted-foreground border rounded-md px-3 py-2">
                       No hay partes configuradas para esta unidad
                     </p>
                   ) : (
                     <div className={`border rounded-md divide-y ${partesReadonly ? "opacity-70" : ""}`}>
-                      {editUnitParts.map((p) => {
+                      {partesAMostrar.map((p) => {
                         const pid = String(p.id || p.configuracion_parte_id)
                         const estado = p.estado?.toUpperCase()
                         const checked = editPartes.includes(pid)
@@ -1232,10 +1270,15 @@ export function MaintenancesTable() {
                               )}
                             />
                             <span className="flex-1 text-sm">{p.nombre || p.parte_nombre}</span>
-                            {estado === "CRITICO" && <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Crítico</Badge>}
-                            {estado === "ADVERTENCIA" && <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Alerta</Badge>}
-                            {estado === "OK" && <Badge variant="outline" className="text-xs text-green-600">OK</Badge>}
-                            {p.km_restantes != null && (
+                            {p._inactiva && (
+                              <Badge variant="outline" className="text-xs text-muted-foreground border-dashed" title="Esta regla fue desactivada después de programar el mantenimiento">
+                                Regla inactiva
+                              </Badge>
+                            )}
+                            {!p._inactiva && estado === "CRITICO" && <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Crítico</Badge>}
+                            {!p._inactiva && estado === "ADVERTENCIA" && <Badge className="bg-amber-100 text-amber-700 border-amber-300 text-xs">Alerta</Badge>}
+                            {!p._inactiva && estado === "OK" && <Badge variant="outline" className="text-xs text-green-600">OK</Badge>}
+                            {!p._inactiva && p.km_restantes != null && (
                               <span className="text-xs text-muted-foreground whitespace-nowrap">
                                 {p.km_restantes > 0 ? `${p.km_restantes.toLocaleString()} km restantes` : `${Math.abs(p.km_restantes).toLocaleString()} km vencido`}
                               </span>
