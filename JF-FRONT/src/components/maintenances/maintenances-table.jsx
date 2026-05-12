@@ -128,8 +128,11 @@ export function MaintenancesTable() {
     },
   })
 
-  const openEditDialog = (maintenance) => {
+  const openEditDialog = async (maintenance) => {
     setEditingMaintenance(maintenance)
+    setEditUnitParts([])
+    setEditPartes([])
+
     const est = maintenance.estado?.toUpperCase()
     const estadoNorm = est === "REALIZADO" ? "COMPLETADO" : (["PENDIENTE","EN_PROCESO","COMPLETADO"].includes(est) ? est : "PENDIENTE")
     editForm.reset({
@@ -138,13 +141,20 @@ export function MaintenancesTable() {
       nota_adicional: "",
       partes_reparadas: [],
     })
-    // Pre-cargar partes programadas del mantenimiento
-    const prog = maintenance.partes_programadas
+
+    // Traer el mantenimiento fresco desde el servidor para tener partes_programadas actualizadas
+    let prog = maintenance.partes_programadas
+    try {
+      const fresh = await maintenanceService.getMaintenanceById(maintenance.id)
+      if (fresh) prog = fresh.partes_programadas
+    } catch (_) { /* usa los datos en memoria si falla */ }
+
+    // Parsing defensivo: puede venir como string JSON si el driver no parsea JSONB automáticamente
+    if (typeof prog === "string") { try { prog = JSON.parse(prog) } catch (_) { prog = [] } }
     setEditPartes(Array.isArray(prog) && prog.length > 0 ? prog.map(String) : [])
 
     // Cargar estado real de partes si es preventivo
     if (maintenance.tipo?.toUpperCase() === "PREVENTIVO" && maintenance.unidad_id) {
-      setEditUnitParts([])
       setEditUnitPartsLoading(true)
       getPartsStatus(maintenance.unidad_id)
         .then(data => {
@@ -158,8 +168,6 @@ export function MaintenancesTable() {
         })
         .catch(() => setEditUnitParts([]))
         .finally(() => setEditUnitPartsLoading(false))
-    } else {
-      setEditUnitParts([])
     }
   }
 
@@ -311,7 +319,8 @@ export function MaintenancesTable() {
       }
 
       // Usar partes_programadas del registro fresco (no del objeto en memoria)
-      const programadas = freshMaint?.partes_programadas ?? maintenance.partes_programadas
+      let programadas = freshMaint?.partes_programadas ?? maintenance.partes_programadas
+      if (typeof programadas === "string") { try { programadas = JSON.parse(programadas) } catch (_) { programadas = [] } }
       if (Array.isArray(programadas) && programadas.length > 0) {
         setCompPartes(programadas.map(String))
       } else if (partsStatus) {

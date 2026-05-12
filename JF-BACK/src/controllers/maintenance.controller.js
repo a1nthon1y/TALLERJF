@@ -70,13 +70,21 @@ const getAllMaintenances = async (req, res) => {
       LEFT JOIN tecnicos t ON m.tecnico_id = t.id
       ORDER BY m.fecha_solicitud DESC
     `);
-    res.json(result.rows);
+    res.json(result.rows.map(normalizeMaint));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
 // Obtener un mantenimiento por ID
+// Normaliza partes_programadas a array (puede llegar como string si el driver no parsea JSONB)
+const normalizeMaint = (row) => {
+  if (!row) return row;
+  let pp = row.partes_programadas;
+  if (typeof pp === "string") { try { pp = JSON.parse(pp); } catch (_) { pp = []; } }
+  return { ...row, partes_programadas: Array.isArray(pp) ? pp : [] };
+};
+
 const getMaintenanceById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -87,7 +95,7 @@ const getMaintenanceById = async (req, res) => {
       return res.status(404).json({ message: "Mantenimiento no encontrado" });
     }
 
-    res.json(result.rows[0]);
+    res.json(normalizeMaint(result.rows[0]));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -419,7 +427,7 @@ const editMaintenance = async (req, res) => {
       }
     }
 
-    res.json(result.rows[0]);
+    res.json(normalizeMaint(result.rows[0]));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
