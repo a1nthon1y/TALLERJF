@@ -80,16 +80,6 @@ export async function getDriverUnit(driverId) {
   }
 }
 
-// Obtener partes de una unidad
-export async function getUnitParts(unitId) {
-  try {
-    const data = await makeGetRequest(`/parts/unit/${unitId}`);
-    return data.data;
-  } catch (error) {
-    throw new Error(error.message || 'Error al obtener partes');
-  }
-}
-
 // Estado predictivo de partes por unidad (km recorridos vs umbral)
 export async function getPartsStatus(unitId) {
   try {
