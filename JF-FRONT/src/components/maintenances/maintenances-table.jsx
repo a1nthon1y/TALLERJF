@@ -408,15 +408,20 @@ export function MaintenancesTable() {
       toast.error("Debes registrar al menos un material antes de completar el mantenimiento")
       return
     }
+    const esPreventivo = completingMaintenance.tipo?.toUpperCase() === "PREVENTIVO"
     setIsCompleting(true)
     try {
-      await maintenanceService.editMaintenance(completingMaintenance.id, {
+      const payload = {
         estado: "COMPLETADO",
         tecnico_id: parseInt(tecId),
         nota_adicional: compNota || "",
-        partes_reparadas: compPartes.map(Number),
-        partes_programadas: compPartes.map(Number), // actualizar registro de partes trabajadas
-      })
+      }
+      // Solo el preventivo trabaja con partes predictivas (consistente con el form de creación).
+      if (esPreventivo) {
+        payload.partes_reparadas = compPartes.map(Number)
+        payload.partes_programadas = compPartes.map(Number)
+      }
+      await maintenanceService.editMaintenance(completingMaintenance.id, payload)
       toast.success("Mantenimiento marcado como Completado")
       setCompletingMaintenance(null)
       await mutate()
@@ -972,10 +977,23 @@ export function MaintenancesTable() {
                 </div>
               </div>
 
-              {/* Partes/Sistemas reparados */}
-              {partConfigs.length > 0 && (() => {
-                const esPreventivo = completingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO"
-                // Mapa de estado por configuracion_parte_id (del fetch de partes de la unidad)
+              {/* CORRECTIVO: mostrar el problema reportado en read-only para contexto.
+                  Coherente con el form de creación, donde correctivo solo recoge la descripción
+                  del problema (sin partes predictivas). */}
+              {completingMaintenance?.tipo?.toUpperCase() === "CORRECTIVO" && completingMaintenance?.observaciones && (
+                <div className="space-y-1.5">
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <FileText className="h-4 w-4 text-amber-600" /> Problema reportado
+                  </p>
+                  <div className="rounded-md border bg-amber-50/50 dark:bg-amber-950/10 px-3 py-2 text-sm whitespace-pre-wrap max-h-40 overflow-y-auto">
+                    {completingMaintenance.observaciones.split(/\n\n--- /)[0]}
+                  </div>
+                </div>
+              )}
+
+              {/* PREVENTIVO: Partes/Sistemas reparados (solo aplica a preventivo,
+                  el correctivo no usa partes predictivas — ver page.jsx, partes_programadas: []) */}
+              {completingMaintenance?.tipo?.toUpperCase() === "PREVENTIVO" && partConfigs.length > 0 && (() => {
                 const estadoMap = {}
                 compUnitParts.forEach(p => {
                   if (p.configuracion_parte_id) estadoMap[String(p.configuracion_parte_id)] = p
@@ -986,9 +1004,7 @@ export function MaintenancesTable() {
                     <div>
                       <p className="text-sm font-medium">Piezas/Sistemas reparados</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {esPreventivo
-                          ? "Las marcadas son las que tenían alerta. Desmarca lo que quedó pendiente o agrega extras."
-                          : "Marca las partes que se atendieron para reiniciar sus contadores predictivos."}
+                        Las marcadas son las que tenían alerta. Desmarca lo que quedó pendiente o agrega extras.
                       </p>
                     </div>
                     <div className="border rounded-md divide-y">
@@ -1005,12 +1021,10 @@ export function MaintenancesTable() {
                                   ? [...compPartes, pid]
                                   : compPartes.filter(x => x !== pid)
                                 setCompPartes(next)
-                                if (esPreventivo) {
-                                  const pendientes = partConfigs
-                                    .filter(pc => estadoMap[String(pc.id)] && !next.includes(String(pc.id)))
-                                    .map(pc => pc.nombre).filter(Boolean)
-                                  setCompNota(pendientes.length > 0 ? `Pendiente por completar: ${pendientes.join(", ")}` : "")
-                                }
+                                const pendientes = partConfigs
+                                  .filter(pc => estadoMap[String(pc.id)] && !next.includes(String(pc.id)))
+                                  .map(pc => pc.nombre).filter(Boolean)
+                                setCompNota(pendientes.length > 0 ? `Pendiente por completar: ${pendientes.join(", ")}` : "")
                               }}
                             />
                             <span className="flex-1 text-sm font-medium">{p.nombre}</span>
@@ -1031,7 +1045,7 @@ export function MaintenancesTable() {
                         )
                       })}
                     </div>
-                    {esPreventivo && compPartes.length < Object.keys(estadoMap).length && compPartes.length > 0 && (
+                    {compPartes.length < Object.keys(estadoMap).length && compPartes.length > 0 && (
                       <p className="text-xs text-amber-600">
                         ⚠ Hay partes sin marcar — se anotarán como pendientes
                       </p>
