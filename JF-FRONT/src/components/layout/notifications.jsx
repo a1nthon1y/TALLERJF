@@ -1,41 +1,101 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Bell, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react"
+import { useState, useEffect, useMemo, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { Bell, AlertTriangle, AlertCircle, Loader2, ChevronRight, Truck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { makeGetRequest } from "@/utils/api"
-import { Loader2 } from "lucide-react"
+
+const STORAGE_KEY = "tallerjf:notif:seenIds"
+const POLL_INTERVAL_MS = 60_000 // 1 minuto
+
+const loadSeen = () => {
+  if (typeof window === "undefined") return new Set()
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return new Set(raw ? JSON.parse(raw) : [])
+  } catch { return new Set() }
+}
+
+const saveSeen = (set) => {
+  if (typeof window === "undefined") return
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...set])) } catch {}
+}
 
 export function Notifications() {
+  const router = useRouter()
   const [alerts, setAlerts] = useState([])
-  const [read, setRead] = useState(new Set())
+  const [seenIds, setSeenIds] = useState(() => loadSeen())
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    makeGetRequest("/alerts")
+  const fetchAlerts = useCallback(() => {
+    return makeGetRequest("/alerts")
       .then((data) => setAlerts(Array.isArray(data) ? data : []))
-      .catch(() => setAlerts([]))
-      .finally(() => setLoading(false))
+      .catch(() => { /* silent */ })
   }, [])
 
-  const unreadCount = alerts.filter((a) => !read.has(a.id)).length
+  // Polling: una vez al montar y cada N segundos
+  useEffect(() => {
+    fetchAlerts().finally(() => setLoading(false))
+    const id = setInterval(fetchAlerts, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [fetchAlerts])
 
-  const markAllAsRead = () => setRead(new Set(alerts.map((a) => a.id)))
+  // Refresca al abrir el popover (datos frescos al consultar)
+  useEffect(() => {
+    if (open) fetchAlerts()
+  }, [open, fetchAlerts])
 
-  const markAsRead = (id) => setRead((prev) => new Set([...prev, id]))
+  // Marcar todas como vistas al abrir (UX: si las miraste, ya no son "nuevas")
+  useEffect(() => {
+    if (!open || alerts.length === 0) return
+    const next = new Set(seenIds)
+    let changed = false
+    alerts.forEach((a) => { if (!next.has(a.id)) { next.add(a.id); changed = true } })
+    if (changed) {
+      setSeenIds(next)
+      saveSeen(next)
+    }
+  }, [open, alerts]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const getTypeStyles = (estado) => {
-    if (estado === "ACTIVO") return "border-l-4 border-red-500 bg-red-50 dark:bg-red-950/30"
-    return "border-l-4 border-green-500 bg-green-50 dark:bg-green-950/30"
+  // Limpia seenIds de alertas que ya no existen (para no acumular en localStorage)
+  useEffect(() => {
+    if (alerts.length === 0) return
+    const validIds = new Set(alerts.map(a => a.id))
+    const filtered = new Set([...seenIds].filter(id => validIds.has(id)))
+    if (filtered.size !== seenIds.size) {
+      setSeenIds(filtered)
+      saveSeen(filtered)
+    }
+  }, [alerts]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Agrupar por unidad
+  const groupedByUnit = useMemo(() => {
+    const groups = new Map()
+    alerts.forEach((a) => {
+      const key = a.unidad_id
+      if (!groups.has(key)) {
+        groups.set(key, { unidad_id: a.unidad_id, placa: a.placa, alertas: [] })
+      }
+      groups.get(key).alertas.push(a)
+    })
+    return [...groups.values()].sort((a, b) => b.alertas.length - a.alertas.length)
+  }, [alerts])
+
+  const newCount = alerts.filter((a) => !seenIds.has(a.id)).length
+
+  const handleGoToUnit = (unidadId) => {
+    setOpen(false)
+    router.push(`/mantenimientos?unidad=${unidadId}`)
   }
 
-  const getTypeIcon = (estado) => {
-    if (estado === "ACTIVO")
-      return <AlertCircle className="h-4 w-4 text-red-500 mr-2 shrink-0" />
-    return <CheckCircle className="h-4 w-4 text-green-500 mr-2 shrink-0" />
+  const handleGoToAlert = (alert) => {
+    setOpen(false)
+    // Lleva a crear/gestionar mantenimiento para esa unidad
+    router.push(`/mantenimientos?unidad=${alert.unidad_id}`)
   }
 
   return (
@@ -45,73 +105,107 @@ export function Notifications() {
           variant="outline"
           size="icon"
           className="relative"
-          aria-label={`Notificaciones${unreadCount > 0 ? `, ${unreadCount} sin leer` : ""}`}
+          aria-label={`Notificaciones${newCount > 0 ? `, ${newCount} sin leer` : ""}`}
         >
           <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
+          {newCount > 0 && (
             <span
               aria-hidden="true"
               className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-medium text-white"
             >
-              {unreadCount > 9 ? "9+" : unreadCount}
+              {newCount > 9 ? "9+" : newCount}
             </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0" align="end">
+      <PopoverContent className="w-96 p-0" align="end">
         <div className="flex items-center justify-between border-b p-3">
-          <h4 className="font-medium">Notificaciones</h4>
-          {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" className="h-auto text-xs px-2 py-1" onClick={markAllAsRead}>
-              Marcar todas como leídas
+          <div>
+            <h4 className="font-medium text-sm">Alertas activas</h4>
+            <p className="text-xs text-muted-foreground">
+              {alerts.length === 0
+                ? "Todo en orden"
+                : `${alerts.length} alertas en ${groupedByUnit.length} unidad${groupedByUnit.length === 1 ? "" : "es"}`}
+            </p>
+          </div>
+          {alerts.length > 0 && (
+            <Button variant="ghost" size="sm" className="h-auto text-xs px-2 py-1"
+              onClick={() => router.push("/mantenimientos/alertas")}>
+              Ver todas
             </Button>
           )}
         </div>
-        <div className="max-h-80 overflow-auto">
+
+        <div className="max-h-96 overflow-auto">
           {loading ? (
             <div className="flex items-center justify-center p-6 gap-2 text-muted-foreground text-sm">
               <Loader2 className="h-4 w-4 animate-spin" /> Cargando alertas...
             </div>
           ) : alerts.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground text-sm">
+            <div className="p-8 text-center text-muted-foreground text-sm">
               <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              No hay alertas activas
+              <p>No hay alertas activas</p>
+              <p className="text-xs mt-1">Las alertas aparecerán cuando una unidad supere su umbral</p>
             </div>
           ) : (
-            alerts.map((alert) => {
-              const isUnread = !read.has(alert.id)
+            groupedByUnit.map((group) => {
+              const newInGroup = group.alertas.filter(a => !seenIds.has(a.id)).length
               return (
-                <button
-                  key={alert.id}
-                  type="button"
-                  className={cn(
-                    "w-full text-left flex flex-col p-3 border-b last:border-0 hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    isUnread && "bg-muted/30",
-                    getTypeStyles(alert.estado),
-                  )}
-                  onClick={() => markAsRead(alert.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm flex items-center">
-                      {getTypeIcon(alert.estado)}
-                      {alert.parte || "Alerta de mantenimiento"}
-                    </span>
-                    {isUnread && <span aria-hidden="true" className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />}
+                <div key={group.unidad_id} className="border-b last:border-0">
+                  <button
+                    type="button"
+                    onClick={() => handleGoToUnit(group.unidad_id)}
+                    className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="h-8 w-8 rounded-md bg-red-50 dark:bg-red-950/30 flex items-center justify-center shrink-0">
+                        <Truck className="h-4 w-4 text-red-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{group.placa}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {group.alertas.length} parte{group.alertas.length === 1 ? "" : "s"} con alerta
+                          {newInGroup > 0 && ` · ${newInGroup} nueva${newInGroup === 1 ? "" : "s"}`}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </button>
+
+                  <div className="px-3 pb-2 space-y-1">
+                    {group.alertas.map((a) => {
+                      const isNew = !seenIds.has(a.id)
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => handleGoToAlert(a)}
+                          className={cn(
+                            "w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left text-xs transition-colors",
+                            "hover:bg-muted",
+                            isNew ? "bg-blue-50/60 dark:bg-blue-950/20" : "bg-transparent"
+                          )}
+                        >
+                          <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                          <span className="flex-1 min-w-0 truncate font-medium">{a.parte}</span>
+                          {isNew && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />}
+                        </button>
+                      )
+                    })}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 ml-6">{alert.mensaje}</p>
-                  {alert.placa && (
-                    <p className="text-xs text-muted-foreground mt-0.5 ml-6">Unidad: {alert.placa}</p>
-                  )}
-                </button>
+                </div>
               )
             })
           )}
         </div>
-        <div className="border-t p-2 text-center">
-          <Button variant="ghost" size="sm" className="w-full text-xs" asChild>
-            <a href="/mantenimientos/alertas">Ver todas las alertas</a>
-          </Button>
-        </div>
+
+        {alerts.length > 0 && (
+          <div className="border-t p-2 bg-muted/30">
+            <p className="text-[10px] text-muted-foreground text-center">
+              Click en una unidad o parte para gestionar el mantenimiento
+            </p>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   )
