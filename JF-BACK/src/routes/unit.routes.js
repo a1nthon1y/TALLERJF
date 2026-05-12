@@ -17,6 +17,7 @@ router.get("/:id", authenticate, unitController.getUnitById);
 // Escritura solo ADMIN y ENCARGADO
 router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), unitController.createUnit);
 router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), unitController.updateUnit);
+router.patch("/:id/dueno", authenticate, checkRole(["ADMIN", "ENCARGADO"]), unitController.reassignOwner);
 router.delete("/:id", authenticate, checkRole(["ADMIN"]), unitController.deleteUnit);
 
 module.exports = router;

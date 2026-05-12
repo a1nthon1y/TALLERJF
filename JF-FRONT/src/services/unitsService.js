@@ -1,4 +1,4 @@
-import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
+import { makeGetRequest, makePostRequest, makePutRequest, makePatchRequest, makeDeleteRequest } from '@/utils/api';
 
 // Unidades del OWNER autenticado
 export async function getMyUnits() {
@@ -57,6 +57,16 @@ export async function updateUnit(id, unitData) {
     return data;
   } catch (error) {
     throw new Error(error.message || 'Error al actualizar unidad');
+  }
+}
+
+// Reasignar dueño de una unidad (sin tocar otros campos)
+export async function reassignUnitOwner(unitId, duenoId) {
+  try {
+    const data = await makePatchRequest(`/units/${unitId}/dueno`, { dueno_id: duenoId });
+    return data;
+  } catch (error) {
+    throw new Error(error.message || 'Error al reasignar dueño');
   }
 }
 

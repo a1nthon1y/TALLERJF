@@ -15,11 +15,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Edit, MoreHorizontal, Trash, Loader2, Building2, AlertTriangle, ChevronDown } from "lucide-react"
+import { Edit, MoreHorizontal, Trash, Loader2, Building2, AlertTriangle, ChevronDown, Bus, Plus, X, Search } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { getAllOwners, deleteOwner, createOwner } from "@/services/ownersService"
-import { getAllUnits } from "@/services/unitsService"
+import { getAllUnits, reassignUnitOwner } from "@/services/unitsService"
 import { makeGetRequest } from "@/utils/api"
 
 export function OwnersTable() {
@@ -28,6 +28,10 @@ export function OwnersTable() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [usuarioId, setUsuarioId] = useState("")
+  // Gestionar unidades
+  const [manageOwner, setManageOwner] = useState(null)
+  const [unitSearch, setUnitSearch] = useState("")
+  const [reassigningUnitId, setReassigningUnitId] = useState(null)
 
   const { data: owners = [], isLoading } = useQuery({
     queryKey: ["owners"],
@@ -66,6 +70,20 @@ export function OwnersTable() {
     },
     onError: (e) => toast.error(e.message),
   })
+
+  const reassignMutation = useMutation({
+    mutationFn: ({ unitId, ownerId }) => reassignUnitOwner(unitId, ownerId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["units"] })
+    },
+    onError: (e) => toast.error(e.message),
+    onSettled: () => setReassigningUnitId(null),
+  })
+
+  const handleReassign = (unitId, newOwnerId) => {
+    setReassigningUnitId(unitId)
+    reassignMutation.mutate({ unitId, ownerId: newOwnerId })
+  }
 
   const filtered = owners.filter((o) =>
     o.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -168,6 +186,9 @@ export function OwnersTable() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                       <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => { setManageOwner(owner); setUnitSearch("") }}>
+                        <Bus className="mr-2 h-4 w-4" /> Gestionar unidades
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
                         onClick={() => handleDelete(owner)}
@@ -208,6 +229,154 @@ export function OwnersTable() {
             >
               {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Gestionar unidades del dueño */}
+      <Dialog open={!!manageOwner} onOpenChange={(o) => { if (!o) { setManageOwner(null); setUnitSearch("") } }}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bus className="h-5 w-5" /> Unidades de {manageOwner?.nombre}
+            </DialogTitle>
+            <DialogDescription>
+              Asigna o reasigna unidades a este dueño. Cada unidad debe pertenecer a un solo dueño.
+            </DialogDescription>
+          </DialogHeader>
+
+          {(() => {
+            if (!manageOwner) return null
+            const ownerUnits = allUnits.filter((u) => u.dueno_id === manageOwner.id)
+            const otherUnits = allUnits.filter((u) => u.dueno_id !== manageOwner.id)
+            const term = unitSearch.toLowerCase()
+            const matches = (u) =>
+              !term ||
+              u.placa?.toLowerCase().includes(term) ||
+              u.modelo?.toLowerCase().includes(term)
+
+            const filteredOwn = ownerUnits.filter(matches)
+            const filteredOthers = otherUnits.filter(matches)
+            const ownerNameById = new Map(owners.map(o => [o.id, o.nombre]))
+
+            return (
+              <div className="flex-1 overflow-hidden flex flex-col gap-3 min-h-0">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por placa o modelo..."
+                    value={unitSearch}
+                    onChange={(e) => setUnitSearch(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 overflow-hidden min-h-0">
+                  {/* Columna: unidades del dueño actual */}
+                  <div className="flex flex-col border rounded-md overflow-hidden">
+                    <div className="bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 border-b">
+                      <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                        Asignadas ({ownerUnits.length})
+                      </p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto divide-y">
+                      {filteredOwn.length === 0 ? (
+                        <p className="text-xs text-muted-foreground p-4 text-center">
+                          {ownerUnits.length === 0
+                            ? "Este dueño no tiene unidades asignadas"
+                            : "Sin coincidencias"}
+                        </p>
+                      ) : filteredOwn.map((u) => (
+                        <div key={u.id} className="flex items-center gap-2 p-2.5 hover:bg-muted/40">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{u.placa}</p>
+                            <p className="text-xs text-muted-foreground truncate">{u.modelo}</p>
+                          </div>
+                          {/* Reasignar a otro dueño */}
+                          <Select
+                            value=""
+                            onValueChange={(val) => handleReassign(u.id, parseInt(val))}
+                            disabled={reassigningUnitId === u.id || owners.length <= 1}
+                          >
+                            <SelectTrigger className="h-8 w-auto px-2 text-xs gap-1" aria-label={`Reasignar ${u.placa}`}>
+                              {reassigningUnitId === u.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <>
+                                  <X className="h-3 w-3" />
+                                  <span>Quitar</span>
+                                </>
+                              )}
+                            </SelectTrigger>
+                            <SelectContent>
+                              {owners
+                                .filter(o => o.id !== manageOwner.id)
+                                .map(o => (
+                                  <SelectItem key={o.id} value={String(o.id)}>
+                                    Reasignar a: {o.nombre}
+                                  </SelectItem>
+                                ))}
+                              {owners.length <= 1 && (
+                                <SelectItem value="_none" disabled>No hay otros dueños</SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Columna: unidades de otros dueños (disponibles para reasignar) */}
+                  <div className="flex flex-col border rounded-md overflow-hidden">
+                    <div className="bg-muted/40 px-3 py-2 border-b">
+                      <p className="text-sm font-medium">
+                        De otros dueños ({otherUnits.length})
+                      </p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto divide-y">
+                      {filteredOthers.length === 0 ? (
+                        <p className="text-xs text-muted-foreground p-4 text-center">
+                          {otherUnits.length === 0
+                            ? "No hay otras unidades en el sistema"
+                            : "Sin coincidencias"}
+                        </p>
+                      ) : filteredOthers.map((u) => (
+                        <div key={u.id} className="flex items-center gap-2 p-2.5 hover:bg-muted/40">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{u.placa}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {u.modelo} · Dueño: {ownerNameById.get(u.dueno_id) ?? `#${u.dueno_id}`}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 px-2 text-xs"
+                            disabled={reassigningUnitId === u.id}
+                            onClick={() => handleReassign(u.id, manageOwner.id)}
+                          >
+                            {reassigningUnitId === u.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <>
+                                <Plus className="h-3 w-3 mr-1" />
+                                Asignar
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setManageOwner(null); setUnitSearch("") }}>
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -69,6 +69,15 @@ export const makePutRequest = async (url, data = {}) => {
   }
 };
 
+export const makePatchRequest = async (url, data = {}) => {
+  try {
+    const response = await api.patch(url, data);
+    return response.data;
+  } catch (error) {
+    throw new Error(error.message || 'Error al actualizar los datos');
+  }
+};
+
 export const makeDeleteRequest = async (url) => {
   try {
     const response = await api.delete(url);

@@ -178,6 +178,43 @@ const updateUnit = async (req, res) => {
 };
 
 // ===================================================================
+//  🔁 Reasignar dueño de una unidad (sin tocar otros campos)
+// ===================================================================
+const reassignOwner = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { dueno_id } = req.body;
+
+    if (dueno_id == null) {
+      return res.status(400).json({ message: "dueno_id es obligatorio" });
+    }
+
+    const unitCheck = await pool.query("SELECT id, placa FROM unidades WHERE id = $1", [id]);
+    if (unitCheck.rows.length === 0) {
+      return res.status(404).json({ message: "Unidad no encontrada" });
+    }
+
+    const ownerCheck = await pool.query("SELECT id FROM duenos WHERE id = $1", [dueno_id]);
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ message: "Dueño no encontrado" });
+    }
+
+    const result = await pool.query(
+      "UPDATE unidades SET dueno_id = $1 WHERE id = $2 RETURNING *",
+      [dueno_id, id]
+    );
+
+    res.json({
+      message: "Dueño reasignado correctamente",
+      unidad: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error al reasignar dueño:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// ===================================================================
 //  🗑 Eliminar unidad
 // ===================================================================
 const deleteUnit = async (req, res) => {
@@ -262,6 +299,7 @@ module.exports = {
   getUnitsByOwner,
   getUnitById,
   updateUnit,
+  reassignOwner,
   deleteUnit,
   getMyUnits,
 };
