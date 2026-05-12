@@ -433,7 +433,7 @@ function JobCard({ job, onStart, onComplete, onRefresh }) {
         {/* Materiales inline (solo EN_PROCESO, COMPLETADO o CERRADO) */}
         {showMaterials && (
           <div className="pt-2 border-t">
-            <MaterialManager jobId={job.id} readonly={estado === "CERRADO"} />
+            <MaterialManager jobId={job.id} readonly={["COMPLETADO", "CERRADO"].includes(estado)} />
           </div>
         )}
 

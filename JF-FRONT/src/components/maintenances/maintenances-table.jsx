@@ -556,94 +556,110 @@ export function MaintenancesTable() {
             </DialogDescription>
           </DialogHeader>
 
-          {matLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Lista actual */}
-              {materials.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
-                  No se han registrado materiales para este mantenimiento.
-                </p>
-              ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Material</TableHead>
-                        <TableHead className="text-right">Cantidad</TableHead>
-                        <TableHead className="text-right">Precio unit.</TableHead>
-                        <TableHead className="text-right">Subtotal</TableHead>
-                        <TableHead className="w-[40px]" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {materials.map((m) => (
-                        <TableRow key={m.id}>
-                          <TableCell className="font-medium">{m.nombre}</TableCell>
-                          <TableCell className="text-right">{m.cantidad}</TableCell>
-                          <TableCell className="text-right">S/. {Number(m.precio_unitario).toFixed(2)}</TableCell>
-                          <TableCell className="text-right font-semibold">S/. {Number(m.costo_total).toFixed(2)}</TableCell>
-                          <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => handleRemoveMaterial(m.id, m.material_id, m.cantidad)}
-                              aria-label="Eliminar material"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow className="bg-muted/30">
-                        <TableCell colSpan={3} className="font-semibold text-right">Total</TableCell>
-                        <TableCell className="text-right font-bold text-base">S/. {totalCosto.toFixed(2)}</TableCell>
-                        <TableCell />
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-
-              {/* Agregar material */}
-              <div className="border rounded-md p-3 space-y-2 bg-muted/20">
-                <p className="text-sm font-medium">Agregar material del catálogo</p>
-                <div className="flex gap-2 flex-wrap">
-                  <Select value={addMatId} onValueChange={setAddMatId}>
-                    <SelectTrigger className="flex-1 min-w-[180px]">
-                      <SelectValue placeholder="Seleccionar material..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {catalog.length === 0 ? (
-                        <SelectItem value="_none" disabled>Sin stock disponible</SelectItem>
-                      ) : catalog.map((c) => (
-                        <SelectItem key={c.id} value={String(c.id)}>
-                          {c.nombre} — S/. {Number(c.precio).toFixed(2)} (stock: {c.stock})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={catalog.find(c => c.id === parseInt(addMatId))?.stock ?? 999}
-                    value={addMatQty}
-                    onChange={(e) => setAddMatQty(Number(e.target.value))}
-                    className="w-24"
-                    placeholder="Cant."
-                  />
-                  <Button onClick={handleAddMaterial} disabled={!addMatId || addMatQty < 1 || addingMat}>
-                    {addingMat ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-                    Agregar
-                  </Button>
-                </div>
+          {(() => {
+            const matEstado = materialsMaintenance?.estado?.toUpperCase()
+            const matReadonly = ['COMPLETADO', 'CERRADO'].includes(matEstado)
+            return matLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-4">
+                {/* Aviso solo lectura */}
+                {matReadonly && (
+                  <div className="flex items-center gap-2 rounded-md border border-muted bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                    <CheckCheck className="h-4 w-4 shrink-0" />
+                    Registro cerrado — el mantenimiento está en estado <strong className="ml-1">{matEstado}</strong>
+                  </div>
+                )}
+
+                {/* Lista actual */}
+                {materials.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4 border rounded-md">
+                    No se han registrado materiales para este mantenimiento.
+                  </p>
+                ) : (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Material</TableHead>
+                          <TableHead className="text-right">Cantidad</TableHead>
+                          <TableHead className="text-right">Precio unit.</TableHead>
+                          <TableHead className="text-right">Subtotal</TableHead>
+                          {!matReadonly && <TableHead className="w-[40px]" />}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {materials.map((m) => (
+                          <TableRow key={m.id}>
+                            <TableCell className="font-medium">{m.nombre}</TableCell>
+                            <TableCell className="text-right">{m.cantidad}</TableCell>
+                            <TableCell className="text-right">S/. {Number(m.precio_unitario).toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-semibold">S/. {Number(m.costo_total).toFixed(2)}</TableCell>
+                            {!matReadonly && (
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => handleRemoveMaterial(m.id, m.material_id, m.cantidad)}
+                                  aria-label="Eliminar material"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                        <TableRow className="bg-muted/30">
+                          <TableCell colSpan={matReadonly ? 3 : 3} className="font-semibold text-right">Total</TableCell>
+                          <TableCell className="text-right font-bold text-base">S/. {totalCosto.toFixed(2)}</TableCell>
+                          {!matReadonly && <TableCell />}
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {/* Agregar material — solo si no está cerrado */}
+                {!matReadonly && (
+                  <div className="border rounded-md p-3 space-y-2 bg-muted/20">
+                    <p className="text-sm font-medium">Agregar material del catálogo</p>
+                    <div className="flex gap-2 flex-wrap">
+                      <Select value={addMatId} onValueChange={setAddMatId}>
+                        <SelectTrigger className="flex-1 min-w-[180px]">
+                          <SelectValue placeholder="Seleccionar material..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {catalog.length === 0 ? (
+                            <SelectItem value="_none" disabled>Sin stock disponible</SelectItem>
+                          ) : catalog.map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.nombre} — S/. {Number(c.precio).toFixed(2)} (stock: {c.stock})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={catalog.find(c => c.id === parseInt(addMatId))?.stock ?? 999}
+                        value={addMatQty}
+                        onChange={(e) => setAddMatQty(Number(e.target.value))}
+                        className="w-24"
+                        placeholder="Cant."
+                      />
+                      <Button onClick={handleAddMaterial} disabled={!addMatId || addMatQty < 1 || addingMat}>
+                        {addingMat ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                        Agregar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setMaterialsMaintenance(null)}>Cerrar</Button>

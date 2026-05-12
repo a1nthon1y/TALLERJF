@@ -47,16 +47,20 @@ const addMaterial = async (req, res) => {
 
     const mant = mantCheck.rows[0];
 
-    // Técnico solo puede agregar materiales a su propio trabajo y mientras no esté cerrado
+    // Nadie puede agregar materiales a un mantenimiento COMPLETADO o CERRADO
+    if (['COMPLETADO', 'CERRADO'].includes(mant.estado)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: `No se pueden agregar materiales a un mantenimiento en estado ${mant.estado}. El registro de materiales se cierra al completar el trabajo.`
+      });
+    }
+
+    // Técnico solo puede agregar materiales a su propio trabajo
     if (req.user.rol === 'TECNICO') {
       const tecResult = await client.query("SELECT id FROM tecnicos WHERE usuario_id = $1", [req.user.id]);
       if (tecResult.rows.length === 0 || tecResult.rows[0].id !== mant.tecnico_id) {
         await client.query("ROLLBACK");
         return res.status(403).json({ message: "Solo puedes registrar materiales en tus propios trabajos" });
-      }
-      if (!['PENDIENTE', 'EN_PROCESO', 'COMPLETADO'].includes(mant.estado)) {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ message: "No puedes modificar materiales de un mantenimiento cerrado" });
       }
     }
 
@@ -111,22 +115,28 @@ const removeMaterial = async (req, res) => {
 
     await client.query("BEGIN");
 
-    // Técnico: validar ownership del mantenimiento
+    // Validar estado del mantenimiento (aplica a todos los roles)
+    const mantCheck = await client.query("SELECT tecnico_id, estado FROM mantenimientos WHERE id = $1", [id]);
+    if (mantCheck.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Mantenimiento no encontrado" });
+    }
+    const mant = mantCheck.rows[0];
+
+    // Nadie puede eliminar materiales de un mantenimiento COMPLETADO o CERRADO
+    if (['COMPLETADO', 'CERRADO'].includes(mant.estado)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: `No se pueden modificar materiales de un mantenimiento en estado ${mant.estado}.`
+      });
+    }
+
+    // Técnico: validar ownership
     if (req.user.rol === 'TECNICO') {
-      const mantCheck = await client.query("SELECT tecnico_id, estado FROM mantenimientos WHERE id = $1", [id]);
-      if (mantCheck.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return res.status(404).json({ message: "Mantenimiento no encontrado" });
-      }
-      const mant = mantCheck.rows[0];
       const tecResult = await client.query("SELECT id FROM tecnicos WHERE usuario_id = $1", [req.user.id]);
       if (tecResult.rows.length === 0 || tecResult.rows[0].id !== mant.tecnico_id) {
         await client.query("ROLLBACK");
         return res.status(403).json({ message: "Solo puedes eliminar materiales de tus propios trabajos" });
-      }
-      if (mant.estado === 'CERRADO') {
-        await client.query("ROLLBACK");
-        return res.status(400).json({ message: "No puedes modificar materiales de un mantenimiento cerrado" });
       }
     }
 
