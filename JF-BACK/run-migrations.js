@@ -102,6 +102,10 @@ async function run() {
       ALTER TABLE unidades DROP CONSTRAINT IF EXISTS unidades_tipo_check;
       ALTER TABLE unidades ADD CONSTRAINT unidades_tipo_check
         CHECK (tipo IN ('BUS','CARGA','MINIVAN','VAN','CAMION','OTRO'));
+
+      -- ── unidades: columna activo para soft-disable ─────────────────────
+      ALTER TABLE unidades
+        ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
     `;
     
     console.log("Applying custom migrations...");
