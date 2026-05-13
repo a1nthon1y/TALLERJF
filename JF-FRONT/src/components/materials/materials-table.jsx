@@ -13,10 +13,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Trash2, MoreHorizontal, Package, PackageX, History, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
+import { Edit, Trash2, MoreHorizontal, Package, PackageX, History, ChevronUp, Loader2 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 // useMaterials moved to parent (materiales/page.jsx) to avoid double fetch
 import { materialService } from "@/services/materialService"
-import { makeGetRequest } from "@/utils/api"
+import { makeGetRequest, makePatchRequest } from "@/utils/api"
+import { useMutation } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -48,6 +50,12 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
   const [selectedMaterial, setSelectedMaterial] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const toggleMutation = useMutation({
+    mutationFn: (id) => makePatchRequest(`/materials/${id}/status`, {}),
+    onSuccess: (res) => { toast.success(res.message || "Estado actualizado"); mutate() },
+    onError: (err) => toast.error(err.message || "Error al cambiar estado del material", { duration: 6000 }),
+  })
+
   const [expandedId, setExpandedId] = useState(null)
   const [usageData, setUsageData] = useState({})
   const [usageLoading, setUsageLoading] = useState(false)
@@ -195,13 +203,14 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
               <TableHead>Descripción</TableHead>
               <TableHead>Stock</TableHead>
               <TableHead>Precio</TableHead>
+              <TableHead>Estado</TableHead>
               <TableHead className="w-[80px]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredMaterials.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="py-12 text-center">
+                <TableCell colSpan={6} className="py-12 text-center">
                   <PackageX className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" aria-hidden="true" />
                   <p className="text-muted-foreground text-sm">
                     {searchTerm ? "Sin resultados para esa búsqueda" : "No hay materiales registrados"}
@@ -211,7 +220,7 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
             )}
             {filteredMaterials.map((material) => (
               <>
-                <TableRow key={material.id}>
+                <TableRow key={material.id} className={material.activo === false ? "opacity-60 bg-muted/30" : ""}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Package className="h-4 w-4 text-muted-foreground" />
@@ -225,6 +234,18 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
                     </Badge>
                   </TableCell>
                   <TableCell>S/. {parseFloat(material.precio).toFixed(2)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={material.activo !== false}
+                        onCheckedChange={() => toggleMutation.mutate(material.id)}
+                        disabled={toggleMutation.isPending}
+                      />
+                      <Badge variant={material.activo !== false ? "outline" : "secondary"} className={material.activo !== false ? "border-green-500 text-green-600" : ""}>
+                        {material.activo !== false ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -257,7 +278,7 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
 
                 {expandedId === material.id && (
                   <TableRow key={`${material.id}-usage`} className="bg-muted/40">
-                    <TableCell colSpan={5} className="py-3 px-6">
+                    <TableCell colSpan={6} className="py-3 px-6">
                       <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1">
                         <History className="h-3.5 w-3.5" />
                         Usos de <span className="text-foreground font-semibold">{material.nombre}</span> en mantenimientos

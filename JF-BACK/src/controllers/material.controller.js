@@ -3,7 +3,7 @@ const pool = require("../config/db");
 // Obtener todos los materiales
 const getMaterials = async (req, res) => {
   try {
-    const result = await pool.query("SELECT id, nombre, descripcion, stock, precio, creado_en FROM materiales ORDER BY id ASC");
+    const result = await pool.query("SELECT id, nombre, descripcion, stock, precio, activo, creado_en FROM materiales ORDER BY nombre ASC");
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener los materiales" });
@@ -75,6 +75,26 @@ const deleteMaterial = async (req, res) => {
   }
 };
 
+// Activar / Desactivar material (soft disable)
+const toggleMaterialStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const check = await pool.query("SELECT nombre, activo FROM materiales WHERE id = $1", [id]);
+    if (check.rows.length === 0)
+      return res.status(404).json({ message: "Material no encontrado" });
+
+    const { nombre, activo } = check.rows[0];
+    const result = await pool.query(
+      "UPDATE materiales SET activo = $1 WHERE id = $2 RETURNING activo",
+      [!activo, id]
+    );
+    const estado = result.rows[0].activo ? "activado" : "desactivado";
+    res.json({ message: `Material "${nombre}" ${estado}`, activo: result.rows[0].activo });
+  } catch (error) {
+    res.status(500).json({ error: "Error al cambiar estado del material" });
+  }
+};
+
 // Historial de usos de un material en mantenimientos
 const getMaterialUsage = async (req, res) => {
   try {
@@ -107,6 +127,7 @@ module.exports = {
   getMaterials,
   createMaterial,
   updateMaterial,
+  toggleMaterialStatus,
   deleteMaterial,
   getMaterialUsage,
 };

@@ -111,6 +111,10 @@ async function run() {
       ALTER TABLE choferes
         ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
 
+      -- ── materiales: columna activo para soft-disable ─────────────────────
+      ALTER TABLE materiales
+        ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
+
       -- ── especialidades: catálogo administrable de especialidades ──────────
       CREATE TABLE IF NOT EXISTS especialidades (
         id SERIAL PRIMARY KEY,
