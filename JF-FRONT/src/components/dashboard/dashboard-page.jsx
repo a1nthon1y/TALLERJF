@@ -10,10 +10,7 @@ const Overview = dynamic(() => import("@/components/dashboard/overview").then(m 
 import { RecentMaintenances } from "@/components/dashboard/recent-maintenances"
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { MaintenancePartAlerts } from "@/components/dashboard/maintenance-part-alerts"
-const MaintenanceCalendar = dynamic(() => import("@/components/dashboard/maintenance-calendar").then(m => ({ default: m.MaintenanceCalendar })), {
-  ssr: false,
-  loading: () => <Skeleton className="h-64 w-full" />,
-})
+import { WorkPanel } from "@/components/dashboard/work-panel"
 import Link from "next/link"
 import { CalendarDays, Clock, Wrench, ArrowRight } from "lucide-react"
 import { formatDate } from "@/utils/formatting"
@@ -88,8 +85,8 @@ export function DashboardPage() {
         </Card>
       </div>
 
-      {/* Calendario — ancho completo */}
-      <MaintenanceCalendar />
+      {/* Panel de trabajo — accionable para encargado */}
+      <WorkPanel />
     </div>
   )
 }
