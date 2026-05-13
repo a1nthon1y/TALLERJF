@@ -36,7 +36,6 @@ export function UnitsTable() {
   const { data: units, isLoading, isError, mutate } = useUnits()
   const [searchTerm, setSearchTerm] = useState("")
   const [ownerFilter, setOwnerFilter] = useState("all")
-  const [statusFilter, setStatusFilter] = useState("active")
   const [selectedUnit, setSelectedUnit] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -74,12 +73,7 @@ export function UnitsTable() {
 
       const matchesOwner = ownerFilter === "all" || unit.dueno_id?.toString() === ownerFilter
 
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" && unit.activo !== false) ||
-        (statusFilter === "inactive" && unit.activo === false)
-
-      return matchesSearch && matchesOwner && matchesStatus
+      return matchesSearch && matchesOwner
     })
   }, [units, searchTerm, ownerFilter])
 
@@ -223,16 +217,6 @@ export function UnitsTable() {
                   {owner.name}
                 </SelectItem>
               ))}
-            </SelectContent>
-          </Select>
-          <Select value={statusFilter ?? "all"} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
-              <SelectItem value="active">Activas</SelectItem>
-              <SelectItem value="inactive">Desactivadas</SelectItem>
             </SelectContent>
           </Select>
         </div>
