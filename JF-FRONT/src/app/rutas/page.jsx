@@ -13,7 +13,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MapPin, Plus, Pencil, Trash2, Loader2, MoreHorizontal, Power } from "lucide-react";
+import { MapPin, Plus, Pencil, Trash2, Loader2, MoreHorizontal } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 
@@ -179,13 +181,14 @@ export default function RutasPage() {
               <p className="text-xs text-muted-foreground">Número menor aparece primero en el select del chofer.</p>
             </div>
             {editTarget && (
-              <div className="flex items-center gap-2">
-                <button onClick={() => setForm((f) => ({ ...f, activa: !f.activa }))} className="flex items-center gap-2 text-sm">
-                  {form.activa
-                    ? <ToggleRight className="h-5 w-5 text-green-500" />
-                    : <ToggleLeft className="h-5 w-5 text-muted-foreground" />}
-                  <span>{form.activa ? "Activa" : "Inactiva"}</span>
-                </button>
+              <div className="flex items-center gap-3">
+                <Switch
+                  checked={form.activa}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, activa: v }))}
+                />
+                <Badge variant={form.activa ? "outline" : "secondary"} className={form.activa ? "border-green-500 text-green-600" : ""}>
+                  {form.activa ? "Activa" : "Inactiva"}
+                </Badge>
               </div>
             )}
           </div>
@@ -227,14 +230,15 @@ function RutaRow({ ruta, onEdit, onDelete, onToggle }) {
         {ruta.orden > 0 && (
           <span className="text-xs text-muted-foreground tabular-nums">#{ruta.orden}</span>
         )}
-        <Badge
-          className={ruta.activa
-            ? "text-xs bg-green-100 text-green-700 border-green-300"
-            : "text-xs bg-muted text-muted-foreground"}
-          variant="outline"
-        >
-          {ruta.activa ? "Activa" : "Inactiva"}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Switch checked={ruta.activa} onCheckedChange={onToggle} />
+          <Badge
+            variant={ruta.activa ? "outline" : "secondary"}
+            className={ruta.activa ? "border-green-500 text-green-600 text-xs" : "text-xs"}
+          >
+            {ruta.activa ? "Activa" : "Inactiva"}
+          </Badge>
+        </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0" aria-label="Acciones">
@@ -242,12 +246,10 @@ function RutaRow({ ruta, onEdit, onDelete, onToggle }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onEdit}>
               <Pencil className="mr-2 h-4 w-4" /> Editar
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onToggle}>
-              <Power className="mr-2 h-4 w-4" />
-              {ruta.activa ? "Desactivar" : "Activar"}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
