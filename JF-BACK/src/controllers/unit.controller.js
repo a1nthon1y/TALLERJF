@@ -229,19 +229,6 @@ const toggleUnitStatus = async (req, res) => {
 
     const { placa, activo } = unitCheck.rows[0];
 
-    // Bloquear desactivación si tiene mantenimientos activos
-    if (activo) {
-      const activeCheck = await pool.query(
-        `SELECT COUNT(*) FROM mantenimientos WHERE unidad_id = $1 AND estado IN ('PENDIENTE','EN_PROCESO')`,
-        [id]
-      );
-      if (parseInt(activeCheck.rows[0].count) > 0) {
-        return res.status(400).json({
-          message: `No se puede desactivar la unidad ${placa}: tiene ${activeCheck.rows[0].count} mantenimiento(s) activo(s). Ciérralos primero.`,
-        });
-      }
-    }
-
     const result = await pool.query(
       "UPDATE unidades SET activo = $1 WHERE id = $2 RETURNING activo",
       [!activo, id]
