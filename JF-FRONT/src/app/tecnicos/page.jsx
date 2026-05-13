@@ -264,18 +264,21 @@ export default function TecnicosPage() {
                   <FormLabel className="flex items-center gap-1.5">
                     <Link2 className="h-3.5 w-3.5" /> Cuenta de usuario (opcional)
                   </FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                    value={field.value ? String(field.value) : "none"}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Sin cuenta de usuario" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Sin cuenta de usuario</SelectItem>
+                      <SelectItem value="none">Sin cuenta de usuario</SelectItem>
                       {tecnicoUsersError ? (
-                        <SelectItem value="" disabled>Error al cargar usuarios</SelectItem>
+                        <SelectItem value="error" disabled>Error al cargar usuarios</SelectItem>
                       ) : tecnicoUsers.length === 0 ? (
-                        <SelectItem value="" disabled>No hay usuarios con rol Técnico</SelectItem>
+                        <SelectItem value="empty" disabled>No hay usuarios con rol Técnico</SelectItem>
                       ) : tecnicoUsers.map((u) => (
                         <SelectItem key={u.id} value={String(u.id)}>
                           {u.nombre} ({u.username || u.correo})
