@@ -3,7 +3,7 @@ const pool = require("../config/db");
 const getAll = async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT * FROM especialidades ORDER BY activo DESC, nombre ASC"
+      "SELECT * FROM especialidades ORDER BY nombre ASC"
     );
     res.json(result.rows);
   } catch (error) {
