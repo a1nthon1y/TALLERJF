@@ -509,6 +509,26 @@ export function MaintenancesTable() {
     return matchSearch && matchEstado && matchTipo
   })
 
+  // ── Kanban: variables calculadas aquí para no usar IIFE en JSX ──
+  const KANBAN_COLS = [
+    { key: "PENDIENTE",  label: "Pendiente",  headerCls: "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/20",  dotCls: "bg-yellow-400", countCls: "bg-yellow-100 text-yellow-800" },
+    { key: "EN_PROCESO", label: "En Proceso",  headerCls: "bg-blue-50 border-blue-300 dark:bg-blue-950/20",       dotCls: "bg-blue-500",   countCls: "bg-blue-100 text-blue-800" },
+    { key: "COMPLETADO", label: "Completado",  headerCls: "bg-green-50 border-green-300 dark:bg-green-950/20",    dotCls: "bg-green-500",  countCls: "bg-green-100 text-green-800" },
+    { key: "REALIZADO",  label: "En Campo",    headerCls: "bg-purple-50 border-purple-300 dark:bg-purple-950/20", dotCls: "bg-purple-500", countCls: "bg-purple-100 text-purple-800" },
+  ]
+  const cerradosCount = (maintenances ?? []).filter(m => m.estado?.toUpperCase() === "CERRADO").length
+  const kanbanBase = (maintenances ?? []).filter((m) => {
+    const sl = searchTerm.toLowerCase()
+    const matchSearch = !searchTerm ||
+      m.placa?.toLowerCase().includes(sl) ||
+      m.modelo?.toLowerCase().includes(sl) ||
+      m.tipo?.toLowerCase().includes(sl) ||
+      m.observaciones?.toLowerCase().includes(sl) ||
+      m.tecnico_nombre?.toLowerCase().includes(sl)
+    const matchTipo = tipoFilter === "TODOS" || m.tipo?.toUpperCase() === tipoFilter
+    return matchSearch && matchTipo
+  })
+
   if (isLoadingMaintenances || isLoadingTechnicians) {
     return <PageSkeleton rowCount={5} columnCount={7} />
   }
@@ -652,35 +672,13 @@ export function MaintenancesTable() {
         </div>
       </div>
       {/* ─── Vista Kanban ─── */}
-      {viewMode === "kanban" && (() => {
-        // CERRADO excluido del kanban — es historial, crece sin límite y no requiere acción
-        const kanbanCols = [
-          { key: "PENDIENTE",  label: "Pendiente",  headerCls: "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/20",  dotCls: "bg-yellow-400", countCls: "bg-yellow-100 text-yellow-800" },
-          { key: "EN_PROCESO", label: "En Proceso",  headerCls: "bg-blue-50 border-blue-300 dark:bg-blue-950/20",       dotCls: "bg-blue-500",   countCls: "bg-blue-100 text-blue-800" },
-          { key: "COMPLETADO", label: "Completado",  headerCls: "bg-green-50 border-green-300 dark:bg-green-950/20",    dotCls: "bg-green-500",  countCls: "bg-green-100 text-green-800" },
-          { key: "REALIZADO",  label: "En Campo",    headerCls: "bg-purple-50 border-purple-300 dark:bg-purple-950/20", dotCls: "bg-purple-500", countCls: "bg-purple-100 text-purple-800" },
-        ]
-        const cerradosCount = (maintenances ?? []).filter(m => m.estado?.toUpperCase() === "CERRADO").length
-        // En kanban ignoramos estadoFilter, solo buscamos por texto+tipo
-        const kanbanBase = (maintenances ?? []).filter((m) => {
-          const sl = searchTerm.toLowerCase()
-          const matchSearch = !searchTerm ||
-            m.placa?.toLowerCase().includes(sl) ||
-            m.modelo?.toLowerCase().includes(sl) ||
-            m.tipo?.toLowerCase().includes(sl) ||
-            m.observaciones?.toLowerCase().includes(sl) ||
-            m.tecnico_nombre?.toLowerCase().includes(sl)
-          const matchTipo = tipoFilter === "TODOS" || m.tipo?.toUpperCase() === tipoFilter
-          return matchSearch && matchTipo
-        })
-
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 pb-2">
-            {kanbanCols.map(({ key, label, headerCls, dotCls, countCls }) => {
+      {viewMode === "kanban" && (
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
+            {KANBAN_COLS.map(({ key, label, headerCls, dotCls, countCls }) => {
               const colItems = kanbanBase.filter(m => m.estado?.toUpperCase() === key)
               return (
                 <div key={key} className="flex flex-col gap-2">
-                  {/* Cabecera de columna */}
                   <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${headerCls}`}>
                     <div className="flex items-center gap-2">
                       <span className={`h-2 w-2 rounded-full shrink-0 ${dotCls}`} />
@@ -690,7 +688,6 @@ export function MaintenancesTable() {
                       {colItems.length}
                     </span>
                   </div>
-                  {/* Tarjetas */}
                   <div className="flex flex-col gap-2 min-h-[80px]">
                     {colItems.length === 0 && (
                       <div className="flex items-center justify-center h-16 rounded-lg border border-dashed text-xs text-muted-foreground">
@@ -702,7 +699,6 @@ export function MaintenancesTable() {
                         key={maintenance.id}
                         className="rounded-lg border bg-card p-3 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2"
                       >
-                        {/* Encabezado tarjeta */}
                         <div className="flex items-start justify-between gap-1">
                           <div className="min-w-0">
                             <p className="font-semibold text-sm truncate">{maintenance.placa ?? `U-${maintenance.unidad_id}`}</p>
@@ -754,7 +750,6 @@ export function MaintenancesTable() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                        {/* Tipo + técnico */}
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {getTipoBadge(maintenance.tipo)}
                           {maintenance.tecnico_nombre
@@ -762,7 +757,6 @@ export function MaintenancesTable() {
                             : <span className="text-xs text-yellow-600 font-medium flex items-center gap-0.5"><AlertCircle className="h-3 w-3" />Sin asignar</span>
                           }
                         </div>
-                        {/* Código + fecha */}
                         <div className="flex items-center justify-between">
                           <code className="text-[10px] font-mono bg-muted px-1 py-0.5 rounded text-muted-foreground">
                             {maintenance.codigo ?? `#${maintenance.id}`}
@@ -776,11 +770,10 @@ export function MaintenancesTable() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )
+            })}
           </div>
-        )
-      })}
-          </div>
-          {/* Nota: cerrados solo en tabla */}
           {cerradosCount > 0 && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2 bg-muted/30">
               <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
@@ -795,8 +788,8 @@ export function MaintenancesTable() {
               </button>
             </div>
           )}
-        )
-      })()}
+        </div>
+      )}
 
       {/* ─── Vista Tabla ─── */}
       {viewMode === "tabla" && <div className="rounded-md border">
