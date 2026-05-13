@@ -14,7 +14,8 @@ const MaintenanceCalendar = dynamic(() => import("@/components/dashboard/mainten
   ssr: false,
   loading: () => <Skeleton className="h-64 w-full" />,
 })
-import { CalendarDays, Clock, Wrench } from "lucide-react"
+import Link from "next/link"
+import { CalendarDays, Clock, Wrench, ArrowRight } from "lucide-react"
 import { formatDate } from "@/utils/formatting"
 import { useEffect, useState } from "react"
 
@@ -63,14 +64,22 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-3 shadow-sm hover:shadow-md transition-shadow">
+        <Card className="col-span-3 shadow-sm hover:shadow-md transition-shadow flex flex-col">
           <CardHeader>
-            <CardTitle className="flex items-center">
-              <span className="bg-primary/10 p-1.5 rounded-md mr-2">
-                <Clock className="h-5 w-5 text-primary" />
-              </span>
-              Mantenimientos Recientes
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center">
+                <span className="bg-primary/10 p-1.5 rounded-md mr-2">
+                  <Clock className="h-5 w-5 text-primary" />
+                </span>
+                Mantenimientos Recientes
+              </CardTitle>
+              <Link
+                href="/mantenimientos"
+                className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors"
+              >
+                Ver todos <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
             <CardDescription>Últimos mantenimientos registrados en el sistema</CardDescription>
           </CardHeader>
           <CardContent>

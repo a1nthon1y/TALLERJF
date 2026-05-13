@@ -18,7 +18,7 @@ const adminNavItems = [
   { title: "Dueños", href: "/duenos", icon: Building2 },
   { title: "Choferes", href: "/choferes", icon: UserCircle },
   { title: "Técnicos", href: "/tecnicos", icon: Hammer },
-  { title: "Partes de Unidades", href: "/partes-unidades", icon: Settings },
+  { title: "Estado de Flota", href: "/partes-unidades", icon: Settings },
   { title: "Configuraciones", href: "/configuraciones", icon: SlidersHorizontal },
   { title: "Materiales", href: "/materiales", icon: Package },
   { title: "Rutas", href: "/rutas", icon: Route },

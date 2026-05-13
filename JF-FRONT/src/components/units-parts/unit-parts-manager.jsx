@@ -280,7 +280,7 @@ export function UnitPartsManager() {
             className="gap-1 text-muted-foreground hover:text-foreground px-2"
           >
             <ArrowLeft className="h-4 w-4" />
-            Volver a Unidades
+            Volver al Estado de Flota
           </Button>
           <span className="text-muted-foreground">/</span>
           <span className="font-semibold text-sm">{selectedUnit.placa} — {selectedUnit.modelo}</span>

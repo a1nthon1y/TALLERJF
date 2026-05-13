@@ -264,7 +264,7 @@ export function UnitsTable() {
                         <DropdownMenuItem asChild>
                           <Link href={`/partes-unidades?unidad=${unit.id}`} className="flex items-center">
                             <Settings className="mr-2 h-4 w-4" />
-                            <span>Gestionar Partes</span>
+                            <span>Ver Estado Predictivo</span>
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem 

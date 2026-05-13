@@ -7,8 +7,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertCircle, Bus, Gauge, CheckCircle2, AlertTriangle,
-  ShieldCheck, XCircle, Loader2,
+  ShieldCheck, XCircle, Loader2, MapPin, ClipboardList, History,
 } from "lucide-react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 
 
@@ -240,6 +242,28 @@ export default function DriverDashboard() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
         <p className="text-muted-foreground text-sm">Estado de tus unidades asignadas</p>
+      </div>
+
+      {/* Acciones rápidas */}
+      <div className="grid grid-cols-3 gap-3">
+        <Button asChild variant="outline" className="flex-col h-auto py-3 gap-1.5 hover:border-primary/40 hover:bg-primary/5">
+          <Link href="/chofer/reportar-llegada">
+            <MapPin className="h-5 w-5 text-primary" />
+            <span className="text-xs font-medium">Registrar Llegada</span>
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="flex-col h-auto py-3 gap-1.5 hover:border-orange-400/40 hover:bg-orange-50 dark:hover:bg-orange-950/20">
+          <Link href="/chofer/solicitar-mantenimiento">
+            <ClipboardList className="h-5 w-5 text-orange-500" />
+            <span className="text-xs font-medium">Reportar Falla</span>
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="flex-col h-auto py-3 gap-1.5 hover:border-muted-foreground/30 hover:bg-muted/50">
+          <Link href="/chofer/mis-mantenimientos">
+            <History className="h-5 w-5 text-muted-foreground" />
+            <span className="text-xs font-medium">Ver Historial</span>
+          </Link>
+        </Button>
       </div>
 
       {/* Selector de unidad — chips con semáforo (solo si tiene >1 unidad) */}

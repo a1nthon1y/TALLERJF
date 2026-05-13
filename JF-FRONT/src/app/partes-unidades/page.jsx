@@ -5,8 +5,8 @@ export default function PartesUnidadesPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Partes de Unidades</h1>
-        <p className="text-muted-foreground">Gestiona las partes de cada unidad y sus intervalos de mantenimiento</p>
+        <h1 className="text-2xl font-bold tracking-tight">Estado de Flota</h1>
+        <p className="text-muted-foreground">Estado predictivo de componentes por unidad — km recorridos vs. intervalos de mantenimiento</p>
       </div>
       <Suspense fallback={null}>
         <UnitPartsManager />

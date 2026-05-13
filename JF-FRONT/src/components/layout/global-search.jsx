@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Bus, Wrench, Package, Users, Settings, BarChart3, Bell, ClipboardList } from "lucide-react"
+import { Search, Bus, Wrench, Package, Users, Settings, BarChart3, Bell, ClipboardList, Route, UserCircle, Hammer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   CommandDialog,
@@ -19,22 +19,29 @@ const adminLinks = [
   { name: "Unidades", description: "Gestionar flota de vehículos", url: "/unidades", icon: Bus },
   { name: "Mantenimientos", description: "Ver y gestionar mantenimientos", url: "/mantenimientos", icon: Wrench },
   { name: "Alertas", description: "Alertas de mantenimiento predictivo", url: "/mantenimientos/alertas", icon: Bell },
+  { name: "Estado de Flota", description: "Estado predictivo de partes por unidad", url: "/partes-unidades", icon: Settings },
   { name: "Materiales", description: "Inventario de materiales y stock", url: "/materiales", icon: Package },
   { name: "Usuarios", description: "Administrar cuentas de usuario", url: "/usuarios", icon: Users },
-  { name: "Técnicos", description: "Gestionar técnicos del taller", url: "/tecnicos", icon: Wrench },
+  { name: "Técnicos", description: "Gestionar técnicos del taller", url: "/tecnicos", icon: Hammer },
   { name: "Dueños", description: "Dueños de unidades registrados", url: "/duenos", icon: Users },
-  { name: "Choferes", description: "Choferes asignados a unidades", url: "/choferes", icon: Users },
+  { name: "Choferes", description: "Choferes asignados a unidades", url: "/choferes", icon: UserCircle },
   { name: "Reportes", description: "Reportes de mantenimiento y costos", url: "/reportes", icon: BarChart3 },
-  { name: "Configuración", description: "Umbrales de mantenimiento predictivo", url: "/configuraciones", icon: Settings },
+  { name: "Rutas", description: "Gestionar rutas de transporte", url: "/rutas", icon: Route },
+  { name: "Configuraciones", description: "Umbrales de mantenimiento predictivo", url: "/configuraciones", icon: Settings },
 ]
 
 const encargadoLinks = [
   { name: "Mantenimientos", description: "Ver y gestionar mantenimientos", url: "/mantenimientos", icon: Wrench },
   { name: "Alertas", description: "Alertas de mantenimiento predictivo", url: "/mantenimientos/alertas", icon: Bell },
-  { name: "Materiales", description: "Inventario de materiales y stock", url: "/materiales", icon: Package },
   { name: "Unidades", description: "Ver flota de vehículos", url: "/unidades", icon: Bus },
-  { name: "Técnicos", description: "Gestionar técnicos del taller", url: "/tecnicos", icon: Wrench },
-  { name: "Configuración", description: "Umbrales predictivos", url: "/configuraciones", icon: Settings },
+  { name: "Estado de Flota", description: "Estado predictivo de partes por unidad", url: "/partes-unidades", icon: Settings },
+  { name: "Materiales", description: "Inventario de materiales y stock", url: "/materiales", icon: Package },
+  { name: "Técnicos", description: "Gestionar técnicos del taller", url: "/tecnicos", icon: Hammer },
+  { name: "Dueños", description: "Dueños de unidades registrados", url: "/duenos", icon: Users },
+  { name: "Choferes", description: "Choferes asignados a unidades", url: "/choferes", icon: UserCircle },
+  { name: "Rutas", description: "Gestionar rutas de transporte", url: "/rutas", icon: Route },
+  { name: "Reportes", description: "Reportes de mantenimiento y costos", url: "/reportes", icon: BarChart3 },
+  { name: "Configuraciones", description: "Umbrales predictivos", url: "/configuraciones", icon: Settings },
 ]
 
 const choferLinks = [

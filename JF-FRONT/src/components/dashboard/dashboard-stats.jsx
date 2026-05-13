@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Bus, Clock, Wrench, Package, AlertCircle } from "lucide-react"
@@ -47,10 +48,10 @@ export function DashboardStats() {
   }, [])
 
   const cards = [
-    { title: "Total Unidades",             icon: Bus,     value: stats?.units,     sub: "unidades registradas" },
-    { title: "Mantenimientos Pendientes",  icon: Clock,   value: stats?.pending,   sub: "pendiente o en proceso" },
-    { title: "Mantenimientos Realizados",  icon: Wrench,  value: stats?.completed, sub: "completados en total" },
-    { title: "Materiales en Stock",        icon: Package, value: stats?.stock,     sub: "unidades totales en inventario" },
+    { title: "Total Unidades",             icon: Bus,     value: stats?.units,     sub: "unidades registradas",           href: "/unidades" },
+    { title: "Mantenimientos Pendientes",  icon: Clock,   value: stats?.pending,   sub: "pendiente o en proceso",         href: "/mantenimientos" },
+    { title: "Mantenimientos Realizados",  icon: Wrench,  value: stats?.completed, sub: "completados en total",           href: "/mantenimientos" },
+    { title: "Materiales en Stock",        icon: Package, value: stats?.stock,     sub: "unidades totales en inventario", href: "/materiales" },
   ]
 
   if (error) {
@@ -82,17 +83,19 @@ export function DashboardStats() {
 
   return (
     <>
-      {cards.map(({ title, icon: Icon, value, sub }) => (
-        <Card key={title}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{title}</CardTitle>
-            <Icon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{value ?? 0}</div>
-            <p className="text-xs text-muted-foreground">{sub}</p>
-          </CardContent>
-        </Card>
+      {cards.map(({ title, icon: Icon, value, sub, href }) => (
+        <Link key={title} href={href} className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg">
+          <Card className="transition-shadow group-hover:shadow-md group-hover:border-primary/40 cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">{title}</CardTitle>
+              <Icon className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{value ?? 0}</div>
+              <p className="text-xs text-muted-foreground">{sub}</p>
+            </CardContent>
+          </Card>
+        </Link>
       ))}
     </>
   )

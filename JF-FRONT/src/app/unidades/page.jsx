@@ -13,7 +13,7 @@ export default function UnitsPage() {
         </div>
         <Button asChild variant="outline">
           <Link href="/partes-unidades">
-            <Settings className="mr-2 h-4 w-4" /> Gestionar Partes
+            <Settings className="mr-2 h-4 w-4" /> Estado Predictivo
           </Link>
         </Button>
       </div>
