@@ -1,6 +1,7 @@
 "use client"
 
 import { useForm } from "react-hook-form"
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
@@ -51,6 +52,14 @@ export function ChoferForm({ chofer, onSubmit, onCancel, isLoading }) {
           telefono: "",
         },
   })
+
+  useEffect(() => {
+    form.reset(
+      chofer
+        ? { usuario_id: chofer.usuario_id || undefined, licencia: chofer.licencia || "", telefono: chofer.telefono || "" }
+        : { usuario_id: undefined, licencia: "", telefono: "" }
+    )
+  }, [chofer])
 
   if (isLoadingUsers) {
     return (

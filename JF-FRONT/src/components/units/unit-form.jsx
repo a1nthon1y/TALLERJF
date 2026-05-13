@@ -1,6 +1,7 @@
 "use client"
 
 import { useForm } from "react-hook-form"
+import { useEffect } from "react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Button } from "@/components/ui/button"
@@ -75,6 +76,30 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
           dueno_id: undefined,
         },
   })
+
+  useEffect(() => {
+    form.reset(
+      unit
+        ? {
+            placa: unit.placa || "",
+            modelo: unit.modelo || "",
+            año: unit.año || new Date().getFullYear(),
+            tipo: normalizarTipo(unit.tipo),
+            kilometraje: unit.kilometraje || 0,
+            chofer_id: unit.chofer_id?.toString() || null,
+            dueno_id: unit.dueno_id || undefined,
+          }
+        : {
+            placa: "",
+            modelo: "",
+            año: new Date().getFullYear(),
+            tipo: "",
+            kilometraje: 0,
+            chofer_id: null,
+            dueno_id: undefined,
+          }
+    )
+  }, [unit])
 
   const handleSubmit = (values) => {
     // Convertir chofer_id a número o null
