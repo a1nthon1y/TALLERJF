@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -219,8 +219,8 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
               </TableRow>
             )}
             {filteredMaterials.map((material) => (
-              <>
-                <TableRow key={material.id} className={material.activo === false ? "opacity-60 bg-muted/30" : ""}>
+              <React.Fragment key={material.id}>
+                <TableRow className={material.activo === false ? "opacity-60 bg-muted/30" : ""}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Package className="h-4 w-4 text-muted-foreground" />
@@ -277,7 +277,7 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
                 </TableRow>
 
                 {expandedId === material.id && (
-                  <TableRow key={`${material.id}-usage`} className="bg-muted/40">
+                  <TableRow className="bg-muted/40">
                     <TableCell colSpan={6} className="py-3 px-6">
                       <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1">
                         <History className="h-3.5 w-3.5" />
@@ -320,7 +320,7 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
                     </TableCell>
                   </TableRow>
                 )}
-              </>
+              </React.Fragment>
             ))}
           </TableBody>
         </Table>
