@@ -34,7 +34,7 @@ const getAllUnits = async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT 
-        u.id, u.placa, u.modelo, u.año, u.tipo, u.kilometraje, u.creado_en,
+        u.id, u.placa, u.modelo, u.año, u.tipo, u.kilometraje, u.activo, u.creado_en,
         d.id AS dueno_id,
         us2.nombre AS dueno_nombre,
         us2.correo AS dueno_correo,
@@ -45,7 +45,7 @@ const getAllUnits = async (req, res) => {
       LEFT JOIN choferes c ON u.chofer_id = c.id
       LEFT JOIN usuarios us ON c.usuario_id = us.id
       LEFT JOIN usuarios us2 ON d.usuario_id = us2.id
-      ORDER BY u.creado_en DESC
+      ORDER BY u.activo DESC, u.creado_en DESC
     `);
 
     res.json(result.rows);
@@ -216,6 +216,45 @@ const reassignOwner = async (req, res) => {
 };
 
 // ===================================================================
+//  🔄 Activar / Desactivar unidad (soft disable)
+// ===================================================================
+const toggleUnitStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const unitCheck = await pool.query("SELECT placa, activo FROM unidades WHERE id = $1", [id]);
+    if (unitCheck.rows.length === 0) {
+      return res.status(404).json({ message: "Unidad no encontrada" });
+    }
+
+    const { placa, activo } = unitCheck.rows[0];
+
+    // Bloquear desactivación si tiene mantenimientos activos
+    if (activo) {
+      const activeCheck = await pool.query(
+        `SELECT COUNT(*) FROM mantenimientos WHERE unidad_id = $1 AND estado IN ('PENDIENTE','EN_PROCESO')`,
+        [id]
+      );
+      if (parseInt(activeCheck.rows[0].count) > 0) {
+        return res.status(400).json({
+          message: `No se puede desactivar la unidad ${placa}: tiene ${activeCheck.rows[0].count} mantenimiento(s) activo(s). Ciérralos primero.`,
+        });
+      }
+    }
+
+    const result = await pool.query(
+      "UPDATE unidades SET activo = $1 WHERE id = $2 RETURNING activo",
+      [!activo, id]
+    );
+
+    const nuevoEstado = result.rows[0].activo ? "activada" : "desactivada";
+    res.json({ message: `Unidad ${placa} ${nuevoEstado} correctamente`, activo: result.rows[0].activo });
+  } catch (error) {
+    console.error("Error al cambiar estado de unidad:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 //  🗑 Eliminar unidad
 // ===================================================================
 const deleteUnit = async (req, res) => {
@@ -301,6 +340,7 @@ module.exports = {
   getUnitById,
   updateUnit,
   reassignOwner,
+  toggleUnitStatus,
   deleteUnit,
   getMyUnits,
 };

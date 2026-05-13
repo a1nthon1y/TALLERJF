@@ -90,6 +90,16 @@ export async function getDriverUnit(driverId) {
   }
 }
 
+// Activar / Desactivar unidad (soft disable)
+export async function toggleUnitStatus(unitId) {
+  try {
+    const data = await makePatchRequest(`/units/${unitId}/status`, {});
+    return data;
+  } catch (error) {
+    throw new Error(error.message || 'Error al cambiar estado de la unidad');
+  }
+}
+
 // Estado predictivo de partes por unidad (km recorridos vs umbral)
 export async function getPartsStatus(unitId) {
   try {

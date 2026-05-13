@@ -21,11 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Edit, MoreHorizontal, Trash, Settings, Building2, Plus } from "lucide-react"
+import { Edit, MoreHorizontal, Trash, Settings, Building2, Plus, PowerOff, Power } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { formatNumber } from '@/utils/formatting'
 import { useUnits } from "@/hooks/useUnits"
-import { deleteUnit, createUnit, updateUnit, getUnitById } from "@/services/unitsService"
+import { deleteUnit, createUnit, updateUnit, getUnitById, toggleUnitStatus } from "@/services/unitsService"
 import { toast } from "sonner"
 import { UnitForm } from "./unit-form"
 
@@ -33,6 +34,7 @@ export function UnitsTable() {
   const { data: units, isLoading, isError, mutate } = useUnits()
   const [searchTerm, setSearchTerm] = useState("")
   const [ownerFilter, setOwnerFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("active")
   const [selectedUnit, setSelectedUnit] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
@@ -70,7 +72,12 @@ export function UnitsTable() {
 
       const matchesOwner = ownerFilter === "all" || unit.dueno_id?.toString() === ownerFilter
 
-      return matchesSearch && matchesOwner
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && unit.activo !== false) ||
+        (statusFilter === "inactive" && unit.activo === false)
+
+      return matchesSearch && matchesOwner && matchesStatus
     })
   }, [units, searchTerm, ownerFilter])
 
@@ -102,6 +109,17 @@ export function UnitsTable() {
       setIsDeleting(false)
     } finally {
       setIsDeletingConfirm(false)
+    }
+  }
+
+  // Función para activar/desactivar unidad
+  const handleToggleStatus = async (unit) => {
+    try {
+      const res = await toggleUnitStatus(unit.id)
+      toast.success(res.message || `Unidad ${unit.activo ? "desactivada" : "activada"} correctamente`)
+      await mutate()
+    } catch (error) {
+      toast.error(error.message || "Error al cambiar estado de la unidad", { duration: 6000 })
     }
   }
 
@@ -204,6 +222,16 @@ export function UnitsTable() {
               ))}
             </SelectContent>
           </Select>
+          <Select value={statusFilter ?? "all"} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="active">Activas</SelectItem>
+              <SelectItem value="inactive">Desactivadas</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Button onClick={handleCreateClick}>
           <Plus className="mr-2 h-4 w-4" />
@@ -221,19 +249,20 @@ export function UnitsTable() {
               <TableHead>Kilometraje</TableHead>
               <TableHead>Chofer Asignado</TableHead>
               <TableHead>Dueño</TableHead>
+              <TableHead>Estado</TableHead>
               <TableHead className="w-[80px]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredUnits.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   No se encontraron unidades con los filtros aplicados.
                 </TableCell>
               </TableRow>
             ) : (
               filteredUnits.map((unit) => (
-                <TableRow key={unit.id}>
+                <TableRow key={unit.id} className={unit.activo === false ? "opacity-60 bg-muted/30" : ""}>
                   <TableCell className="font-medium">{unit.placa || 'N/A'}</TableCell>
                   <TableCell>{unit.modelo || 'N/A'}</TableCell>
                   <TableCell>{unit.año || 'N/A'}</TableCell>
@@ -245,6 +274,11 @@ export function UnitsTable() {
                       <Building2 className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
                       {getOwnerName(unit)}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={unit.activo === false ? "secondary" : "default"} className={unit.activo === false ? "" : "bg-green-100 text-green-800 border-green-200"}>
+                      {unit.activo === false ? "Desactivada" : "Activa"}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -267,12 +301,15 @@ export function UnitsTable() {
                             <span>Ver Estado Predictivo</span>
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => handleDeleteClick(unit)}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className={unit.activo === false ? "text-green-600 focus:text-green-700" : "text-amber-600 focus:text-amber-700"}
+                          onClick={() => handleToggleStatus(unit)}
                         >
-                          <Trash className="mr-2 h-4 w-4" />
-                          <span>Eliminar</span>
+                          {unit.activo === false
+                            ? <><Power className="mr-2 h-4 w-4" /><span>Activar</span></>
+                            : <><PowerOff className="mr-2 h-4 w-4" /><span>Desactivar</span></>
+                          }
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
