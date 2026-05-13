@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,7 +29,7 @@ import { deleteChofer, createChofer, updateChofer, getChoferById, toggleChoferSt
 import { toast } from "sonner"
 import { ChoferForm } from "./chofer-form"
 
-export function ChoferesTable({ externalCreateTrigger }) {
+export function ChoferesTable() {
   const { data: choferes, isLoading, isError, mutate } = useChoferes()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedChofer, setSelectedChofer] = useState(null)
@@ -38,12 +38,6 @@ export function ChoferesTable({ externalCreateTrigger }) {
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [choferToEdit, setChoferToEdit] = useState(null)
-
-  const isFirstRender = useRef(true)
-  useEffect(() => {
-    if (isFirstRender.current) { isFirstRender.current = false; return }
-    if (externalCreateTrigger !== undefined) setIsCreating(true)
-  }, [externalCreateTrigger])
 
   const toggleMutation = useMutation({
     mutationFn: (chofer) => toggleChoferStatus(chofer.chofer_id),
