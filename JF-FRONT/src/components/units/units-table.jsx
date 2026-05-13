@@ -21,11 +21,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Edit, MoreHorizontal, Trash, Settings, Building2, Plus, PowerOff, Power } from "lucide-react"
+import { Edit, MoreHorizontal, Trash, Settings, Building2, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import Link from "next/link"
 import { formatNumber } from '@/utils/formatting'
 import { useUnits } from "@/hooks/useUnits"
+import { useMutation } from "@tanstack/react-query"
 import { deleteUnit, createUnit, updateUnit, getUnitById, toggleUnitStatus } from "@/services/unitsService"
 import { toast } from "sonner"
 import { UnitForm } from "./unit-form"
@@ -112,16 +114,17 @@ export function UnitsTable() {
     }
   }
 
-  // Función para activar/desactivar unidad
-  const handleToggleStatus = async (unit) => {
-    try {
-      const res = await toggleUnitStatus(unit.id)
-      toast.success(res.message || `Unidad ${unit.activo ? "desactivada" : "activada"} correctamente`)
-      await mutate()
-    } catch (error) {
-      toast.error(error.message || "Error al cambiar estado de la unidad", { duration: 6000 })
-    }
-  }
+  // Toggle activo con useMutation (patrón estándar del proyecto)
+  const toggleMutation = useMutation({
+    mutationFn: (unit) => toggleUnitStatus(unit.id),
+    onSuccess: (res) => {
+      toast.success(res.message || "Estado actualizado")
+      mutate()
+    },
+    onError: (err) => {
+      toast.error(err.message || "Error al cambiar estado de la unidad", { duration: 6000 })
+    },
+  })
 
   // Función para manejar la creación
   const handleCreateClick = () => {
@@ -276,9 +279,16 @@ export function UnitsTable() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={unit.activo === false ? "secondary" : "default"} className={unit.activo === false ? "" : "bg-green-100 text-green-800 border-green-200"}>
-                      {unit.activo === false ? "Desactivada" : "Activa"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={unit.activo !== false}
+                        onCheckedChange={() => toggleMutation.mutate(unit)}
+                        disabled={toggleMutation.isPending}
+                      />
+                      <Badge variant={unit.activo !== false ? "outline" : "secondary"} className={unit.activo !== false ? "border-green-500 text-green-600" : ""}>
+                        {unit.activo !== false ? "Activa" : "Inactiva"}
+                      </Badge>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -300,16 +310,6 @@ export function UnitsTable() {
                             <Settings className="mr-2 h-4 w-4" />
                             <span>Ver Estado Predictivo</span>
                           </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className={unit.activo === false ? "text-green-600 focus:text-green-700" : "text-amber-600 focus:text-amber-700"}
-                          onClick={() => handleToggleStatus(unit)}
-                        >
-                          {unit.activo === false
-                            ? <><Power className="mr-2 h-4 w-4" /><span>Activar</span></>
-                            : <><PowerOff className="mr-2 h-4 w-4" /><span>Desactivar</span></>
-                          }
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
