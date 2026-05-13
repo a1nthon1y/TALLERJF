@@ -43,6 +43,7 @@ const getAllDrivers = async (req, res) => {
         c.id AS chofer_id,
         c.licencia,
         c.telefono,
+        c.activo,
         c.creado_en,
 
         u.id AS usuario_id,
@@ -51,7 +52,7 @@ const getAllDrivers = async (req, res) => {
 
       FROM choferes c
       LEFT JOIN usuarios u ON c.usuario_id = u.id
-      ORDER BY c.creado_en DESC
+      ORDER BY c.activo DESC, c.creado_en DESC
     `);
 
     res.json(result.rows);
@@ -135,6 +136,34 @@ const updateDriver = async (req, res) => {
   }
 };
 
+
+// ===============================================================
+//  🔄 Activar / Desactivar chofer (soft disable)
+// ===============================================================
+const toggleDriverStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const check = await pool.query(
+      `SELECT c.activo, u.nombre FROM choferes c JOIN usuarios u ON c.usuario_id = u.id WHERE c.id = $1`,
+      [id]
+    );
+    if (check.rows.length === 0)
+      return res.status(404).json({ message: "Chofer no encontrado" });
+
+    const { activo, nombre } = check.rows[0];
+    const result = await pool.query(
+      "UPDATE choferes SET activo = $1 WHERE id = $2 RETURNING activo",
+      [!activo, id]
+    );
+
+    const nuevoEstado = result.rows[0].activo ? "activado" : "desactivado";
+    res.json({ message: `Chofer ${nombre} ${nuevoEstado} correctamente`, activo: result.rows[0].activo });
+  } catch (error) {
+    console.error("Error al cambiar estado del chofer:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
 
 // ===============================================================
 //  🗑 Eliminar chofer
@@ -414,6 +443,7 @@ module.exports = {
   getAllDrivers,
   getDriverById,
   updateDriver,
+  toggleDriverStatus,
   deleteDriver,
   getMiUnidad,
   crearReporteLlegada,

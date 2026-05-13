@@ -106,6 +106,10 @@ async function run() {
       -- ── unidades: columna activo para soft-disable ─────────────────────
       ALTER TABLE unidades
         ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
+
+      -- ── choferes: columna activo para soft-disable ───────────────────────
+      ALTER TABLE choferes
+        ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
     `;
     
     console.log("Applying custom migrations...");

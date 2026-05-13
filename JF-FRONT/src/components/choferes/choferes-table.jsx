@@ -21,8 +21,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Edit, MoreHorizontal, Trash, User } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import { useChoferes } from "@/hooks/useChoferes"
-import { deleteChofer, createChofer, updateChofer, getChoferById } from "@/services/choferesService"
+import { useMutation } from "@tanstack/react-query"
+import { deleteChofer, createChofer, updateChofer, getChoferById, toggleChoferStatus } from "@/services/choferesService"
 import { toast } from "sonner"
 import { ChoferForm } from "./chofer-form"
 
@@ -41,6 +44,17 @@ export function ChoferesTable({ externalCreateTrigger }) {
     if (isFirstRender.current) { isFirstRender.current = false; return }
     if (externalCreateTrigger !== undefined) setIsCreating(true)
   }, [externalCreateTrigger])
+
+  const toggleMutation = useMutation({
+    mutationFn: (chofer) => toggleChoferStatus(chofer.chofer_id),
+    onSuccess: (res) => {
+      toast.success(res.message || "Estado actualizado")
+      mutate()
+    },
+    onError: (err) => {
+      toast.error(err.message || "Error al cambiar estado del chofer", { duration: 6000 })
+    },
+  })
 
   // Filtrar choferes
   const filteredChoferes = useMemo(() => {
@@ -201,23 +215,36 @@ export function ChoferesTable({ externalCreateTrigger }) {
               <TableHead>Correo</TableHead>
               <TableHead>Licencia</TableHead>
               <TableHead>Teléfono</TableHead>
+              <TableHead>Estado</TableHead>
               <TableHead className="w-[80px]">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredChoferes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
                   No se encontraron choferes con los filtros aplicados.
                 </TableCell>
               </TableRow>
             ) : (
               filteredChoferes.map((chofer) => (
-                <TableRow key={chofer.chofer_id}>
+                <TableRow key={chofer.chofer_id} className={chofer.activo === false ? "opacity-60 bg-muted/30" : ""}>
                   <TableCell className="font-medium">{chofer.usuario_nombre || 'N/A'}</TableCell>
                   <TableCell>{chofer.usuario_correo || 'N/A'}</TableCell>
                   <TableCell>{chofer.licencia || 'N/A'}</TableCell>
                   <TableCell>{chofer.telefono || 'Sin teléfono'}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={chofer.activo !== false}
+                        onCheckedChange={() => toggleMutation.mutate(chofer)}
+                        disabled={toggleMutation.isPending}
+                      />
+                      <Badge variant={chofer.activo !== false ? "outline" : "secondary"} className={chofer.activo !== false ? "border-green-500 text-green-600" : ""}>
+                        {chofer.activo !== false ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>

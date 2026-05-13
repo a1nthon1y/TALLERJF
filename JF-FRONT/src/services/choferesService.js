@@ -1,4 +1,4 @@
-import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
+import { makeGetRequest, makePostRequest, makePutRequest, makePatchRequest, makeDeleteRequest } from '@/utils/api';
 
 // Obtener todos los choferes
 export async function getAllChoferes() {
@@ -37,6 +37,16 @@ export async function updateChofer(id, choferData) {
     return data;
   } catch (error) {
     throw new Error(error.message || 'Error al actualizar chofer');
+  }
+}
+
+// Activar / Desactivar chofer (soft disable)
+export async function toggleChoferStatus(id) {
+  try {
+    const data = await makePatchRequest(`/choferes/${id}/status`, {});
+    return data;
+  } catch (error) {
+    throw new Error(error.message || 'Error al cambiar estado del chofer');
   }
 }
 
