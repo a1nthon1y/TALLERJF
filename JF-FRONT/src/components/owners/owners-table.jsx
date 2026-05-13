@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label"
 import { Edit, MoreHorizontal, Trash, Loader2, Building2, AlertTriangle, ChevronDown, Bus, Plus, X, Search } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-import { getAllOwners, deleteOwner, createOwner } from "@/services/ownersService"
+import { getAllOwners, deleteOwner, createOwner, updateOwner } from "@/services/ownersService"
 import { getAllUnits, reassignUnitOwner } from "@/services/unitsService"
 import { makeGetRequest } from "@/utils/api"
 
@@ -26,6 +26,8 @@ export function OwnersTable() {
   const queryClient = useQueryClient()
   const [searchTerm, setSearchTerm] = useState("")
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [editUsuarioId, setEditUsuarioId] = useState("")
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [usuarioId, setUsuarioId] = useState("")
   // Gestionar unidades
@@ -49,6 +51,17 @@ export function OwnersTable() {
       const users = await makeGetRequest("/users")
       return Array.isArray(users) ? users.filter((u) => u.rol === "OWNER" && u.activo !== false) : []
     },
+  })
+
+  const editMutation = useMutation({
+    mutationFn: ({ id, data }) => updateOwner(id, data),
+    onSuccess: () => {
+      toast.success("Dueño actualizado correctamente")
+      queryClient.invalidateQueries({ queryKey: ["owners"] })
+      setEditTarget(null)
+      setEditUsuarioId("")
+    },
+    onError: (e) => toast.error(e.message),
   })
 
   const deleteMutation = useMutation({
@@ -92,6 +105,17 @@ export function OwnersTable() {
 
   const getUnidadesCount = (ownerId) =>
     allUnits.filter((u) => u.dueno_id === ownerId).length
+
+  const handleEdit = (owner) => {
+    setEditTarget(owner)
+    setEditUsuarioId(String(owner.usuario_id ?? ""))
+  }
+
+  const handleEditSubmit = (e) => {
+    e.preventDefault()
+    if (!editUsuarioId) return toast.error("Selecciona un usuario")
+    editMutation.mutate({ id: editTarget.id, data: { usuario_id: parseInt(editUsuarioId) } })
+  }
 
   const handleDelete = (owner) => {
     setDeleteTarget(owner)
@@ -202,9 +226,13 @@ export function OwnersTable() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                       <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => handleEdit(owner)}>
+                        <Edit className="mr-2 h-4 w-4" /> Editar
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setManageOwner(owner); setUnitSearch("") }}>
                         <Bus className="mr-2 h-4 w-4" /> Gestionar unidades
                       </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
                         onClick={() => handleDelete(owner)}
@@ -227,11 +255,13 @@ export function OwnersTable() {
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" /> Eliminar Dueño
             </DialogTitle>
-            <DialogDescription className="space-y-1">
-              <p>Vas a eliminar al dueño <span className="font-semibold">{deleteTarget?.nombre}</span>.</p>
-              <p className="text-amber-600 dark:text-amber-400 text-xs">
-                Solo se puede eliminar si el dueño <strong>no tiene unidades registradas</strong>. Elimina o reasigna sus unidades primero.
-              </p>
+            <DialogDescription asChild>
+              <div className="space-y-1">
+                <span className="block">Vas a eliminar al dueño <span className="font-semibold">{deleteTarget?.nombre}</span>.</span>
+                <span className="block text-amber-600 dark:text-amber-400 text-xs">
+                  Solo se puede eliminar si el dueño <strong>no tiene unidades registradas</strong>. Elimina o reasigna sus unidades primero.
+                </span>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -428,6 +458,56 @@ export function OwnersTable() {
               Cerrar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Editar dueño */}
+      <Dialog open={!!editTarget} onOpenChange={(o) => { if (!o) { setEditTarget(null); setEditUsuarioId("") } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-4 w-4" /> Editar Dueño
+            </DialogTitle>
+            <DialogDescription>
+              Vincula este perfil de dueño a un usuario con rol <strong>OWNER</strong> diferente.
+              El nombre y correo se toman del usuario vinculado.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Usuario actual</Label>
+              <p className="text-sm font-medium text-muted-foreground border rounded px-3 py-2 bg-muted/40">
+                {editTarget?.nombre} — {editTarget?.correo}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-usuario-id">Cambiar a usuario</Label>
+              <Select value={editUsuarioId} onValueChange={setEditUsuarioId}>
+                <SelectTrigger id="edit-usuario-id">
+                  <SelectValue placeholder="Seleccionar usuario..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {ownerUsers.length === 0 ? (
+                    <SelectItem value="" disabled>No hay usuarios OWNER disponibles</SelectItem>
+                  ) : ownerUsers.map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {u.nombre} ({u.username || u.correo})
+                      {String(u.id) === String(editTarget?.usuario_id) ? " — actual" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { setEditTarget(null); setEditUsuarioId("") }}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={editMutation.isPending}>
+                {editMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Guardar cambios
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
