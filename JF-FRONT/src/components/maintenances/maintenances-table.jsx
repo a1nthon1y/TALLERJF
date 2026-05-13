@@ -653,13 +653,14 @@ export function MaintenancesTable() {
       </div>
       {/* ─── Vista Kanban ─── */}
       {viewMode === "kanban" && (() => {
+        // CERRADO excluido del kanban — es historial, crece sin límite y no requiere acción
         const kanbanCols = [
           { key: "PENDIENTE",  label: "Pendiente",  headerCls: "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/20",  dotCls: "bg-yellow-400", countCls: "bg-yellow-100 text-yellow-800" },
           { key: "EN_PROCESO", label: "En Proceso",  headerCls: "bg-blue-50 border-blue-300 dark:bg-blue-950/20",       dotCls: "bg-blue-500",   countCls: "bg-blue-100 text-blue-800" },
           { key: "COMPLETADO", label: "Completado",  headerCls: "bg-green-50 border-green-300 dark:bg-green-950/20",    dotCls: "bg-green-500",  countCls: "bg-green-100 text-green-800" },
           { key: "REALIZADO",  label: "En Campo",    headerCls: "bg-purple-50 border-purple-300 dark:bg-purple-950/20", dotCls: "bg-purple-500", countCls: "bg-purple-100 text-purple-800" },
-          { key: "CERRADO",    label: "Cerrado",     headerCls: "bg-slate-50 border-slate-200 dark:bg-slate-900/30",    dotCls: "bg-slate-400",  countCls: "bg-slate-100 text-slate-600" },
         ]
+        const cerradosCount = (maintenances ?? []).filter(m => m.estado?.toUpperCase() === "CERRADO").length
         // En kanban ignoramos estadoFilter, solo buscamos por texto+tipo
         const kanbanBase = (maintenances ?? []).filter((m) => {
           const sl = searchTerm.toLowerCase()
@@ -775,10 +776,25 @@ export function MaintenancesTable() {
                       </div>
                     ))}
                   </div>
-                </div>
-              )
-            })}
           </div>
+        )
+      })}
+          </div>
+          {/* Nota: cerrados solo en tabla */}
+          {cerradosCount > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2 bg-muted/30">
+              <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
+              <span>
+                {cerradosCount} mantenimiento{cerradosCount !== 1 ? "s" : ""} cerrado{cerradosCount !== 1 ? "s" : ""} no se muestran aquí —
+              </span>
+              <button
+                className="text-primary underline underline-offset-2 hover:no-underline"
+                onClick={() => { setViewMode("tabla"); setEstadoFilter("CERRADO") }}
+              >
+                ver en tabla
+              </button>
+            </div>
+          )}
         )
       })()}
 
