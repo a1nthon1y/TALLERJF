@@ -327,15 +327,17 @@ export function UnitsTable() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>¿Eliminar unidad?</DialogTitle>
-            <DialogDescription className="space-y-2">
-              <p>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+              <span className="block">
                 Vas a eliminar la unidad <strong>{selectedUnit?.placa}</strong>
                 {selectedUnit?.modelo ? ` — ${selectedUnit.modelo}` : ""}.
-              </p>
-              <p className="text-amber-600 dark:text-amber-400 text-xs">
+              </span>
+              <span className="block text-amber-600 dark:text-amber-400 text-xs">
                 Solo se puede eliminar si la unidad <strong>no tiene mantenimientos</strong> registrados.
                 Si tiene historial, primero elimina esos registros desde la sección Mantenimientos.
-              </p>
+              </span>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
