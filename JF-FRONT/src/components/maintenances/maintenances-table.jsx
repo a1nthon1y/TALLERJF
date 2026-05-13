@@ -291,11 +291,28 @@ export function MaintenancesTable() {
 
   const getStatusBadge = (status) => {
     const s = status?.toUpperCase()
-    if (s === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border-green-300 text-xs">Completado</Badge>
-    if (s === "REALIZADO")  return <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-xs">En Campo</Badge>
-    if (s === "CERRADO")    return <Badge variant="secondary" className="text-xs">Cerrado</Badge>
-    if (s === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border-blue-300 text-xs">En Proceso</Badge>
-    return <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">Pendiente</Badge>
+    if (s === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border border-green-300 text-xs font-semibold">Completado</Badge>
+    if (s === "REALIZADO")  return <Badge className="bg-purple-100 text-purple-700 border border-purple-300 text-xs font-semibold">En Campo</Badge>
+    if (s === "CERRADO")    return <Badge className="bg-slate-100 text-slate-600 border border-slate-300 text-xs font-semibold">Cerrado</Badge>
+    if (s === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-xs font-semibold">En Proceso</Badge>
+    return <Badge className="bg-yellow-100 text-yellow-700 border border-yellow-300 text-xs font-semibold">Pendiente</Badge>
+  }
+
+  // Tinte sutil de fila según estado — facilita el escaneo visual sin distraer
+  const getRowClass = (status) => {
+    const s = status?.toUpperCase()
+    if (s === "COMPLETADO") return "bg-green-50/40 dark:bg-green-950/10"
+    if (s === "REALIZADO")  return "bg-purple-50/40 dark:bg-purple-950/10"
+    if (s === "CERRADO")    return "bg-slate-50/60 dark:bg-slate-900/20 opacity-75"
+    if (s === "EN_PROCESO") return "bg-blue-50/40 dark:bg-blue-950/10"
+    return "" // PENDIENTE: fondo neutral
+  }
+
+  // Color del tipo (preventivo = ámbar/programado, correctivo = rojo/urgente)
+  const getTipoBadge = (tipo) => {
+    if (tipo?.toUpperCase() === "PREVENTIVO")
+      return <Badge className="bg-amber-50 text-amber-700 border border-amber-300 text-xs">Preventivo</Badge>
+    return <Badge className="bg-red-50 text-red-700 border border-red-200 text-xs">Correctivo</Badge>
   }
 
   const canClose = (estado) =>
@@ -634,7 +651,7 @@ export function MaintenancesTable() {
               </TableRow>
             )}
             {filteredMaintenances?.map((maintenance) => (
-              <TableRow key={maintenance.id}>
+              <TableRow key={maintenance.id} className={getRowClass(maintenance.estado)}>
                 <TableCell>
                   <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded text-muted-foreground whitespace-nowrap">
                     {maintenance.codigo ?? `#${maintenance.id}`}
@@ -646,7 +663,7 @@ export function MaintenancesTable() {
                     {maintenance.modelo && <p className="text-xs text-muted-foreground">{maintenance.modelo}</p>}
                   </div>
                 </TableCell>
-                <TableCell className="capitalize">{maintenance.tipo?.toLowerCase()}</TableCell>
+                <TableCell>{getTipoBadge(maintenance.tipo)}</TableCell>
                 <TableCell>{getStatusBadge(maintenance.estado)}</TableCell>
                 <TableCell>
                   {maintenance.tecnico_nombre ?? getTechnicianName(maintenance.tecnico_id) ?? (
