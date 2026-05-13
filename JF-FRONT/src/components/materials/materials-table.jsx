@@ -145,10 +145,10 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
   const handleEditClick = (material) => {
     setSelectedMaterial(material)
     form.reset({
-      nombre: material.nombre,
-      descripcion: material.descripcion,
-      stock: material.stock,
-      precio: material.precio.toString(),
+      nombre: material.nombre || "",
+      descripcion: material.descripcion || "",
+      stock: material.stock ?? 0,
+      precio: material.precio != null ? material.precio.toString() : "0.00",
     })
     setIsEditing(true)
   }
@@ -280,7 +280,7 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
                         type="number" 
                         min="0"
                         {...field} 
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : parseInt(e.target.value) || 0)}
                       />
                     </FormControl>
                     <FormMessage />
