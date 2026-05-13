@@ -110,6 +110,21 @@ async function run() {
       -- ── choferes: columna activo para soft-disable ───────────────────────
       ALTER TABLE choferes
         ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
+
+      -- ── especialidades: catálogo administrable de especialidades ──────────
+      CREATE TABLE IF NOT EXISTS especialidades (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(100) NOT NULL UNIQUE,
+        activo BOOLEAN DEFAULT TRUE,
+        creado_en TIMESTAMP DEFAULT NOW()
+      );
+      INSERT INTO especialidades (nombre) VALUES
+        ('Mecánica General'),
+        ('Electricidad Automotriz'),
+        ('Frenos y Suspensión'),
+        ('Motor y Transmisión'),
+        ('Diagnóstico Electrónico')
+      ON CONFLICT (nombre) DO NOTHING;
     `;
     
     console.log("Applying custom migrations...");

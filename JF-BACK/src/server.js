@@ -16,6 +16,7 @@ const technicianRoutes = require("./routes/technician.routes");
 const materialRoutes = require("./routes/material.routes");
 const configRoutes = require("./routes/config.routes");
 const rutasRoutes = require("./routes/rutas.routes");
+const especialidadRoutes = require("./routes/especialidad.routes");
 
 // Inicializar servidor
 const app = express();
@@ -36,6 +37,7 @@ app.use("/api/technicians", technicianRoutes);
 app.use("/api/materials", materialRoutes);
 app.use("/api/config", configRoutes);
 app.use("/api/rutas", rutasRoutes);
+app.use("/api/especialidades", especialidadRoutes);
 
 // Iniciar servidor
 const PORT = process.env.PORT || 4000;

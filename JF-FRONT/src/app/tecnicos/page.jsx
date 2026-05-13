@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { technicianService } from "@/services/technicianService"
 import { makePutRequest, makeGetRequest } from "@/utils/api"
+import { getAllEspecialidades } from "@/services/especialidadesService"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,6 +46,12 @@ export default function TecnicosPage() {
     queryKey: ["tecnicos"],
     queryFn: technicianService.getTechnicians.bind(technicianService),
   })
+
+  const { data: especialidades = [] } = useQuery({
+    queryKey: ["especialidades"],
+    queryFn: getAllEspecialidades,
+  })
+  const especialidadesActivas = especialidades.filter((e) => e.activo)
 
   const [tecnicoUsersError, setTecnicoUsersError] = useState(false)
   useEffect(() => {
@@ -255,7 +262,21 @@ export default function TecnicosPage() {
               <FormField control={form.control} name="especialidad" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Especialidad</FormLabel>
-                  <FormControl><Input placeholder="Ej. Motor y transmisión" {...field} /></FormControl>
+                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione una especialidad" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {especialidadesActivas.length === 0 ? (
+                        <SelectItem value="__empty__" disabled>No hay especialidades disponibles</SelectItem>
+                      ) : especialidadesActivas.map((e) => (
+                        <SelectItem key={e.id} value={e.nombre}>{e.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Gestionadas en Configuraciones → Especialidades</p>
                   <FormMessage />
                 </FormItem>
               )} />

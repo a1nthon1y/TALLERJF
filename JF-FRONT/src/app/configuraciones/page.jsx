@@ -14,10 +14,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { PlusCircle, Edit, Loader2, Settings, Trash2, AlertTriangle, Info, MoreHorizontal } from "lucide-react";
+import { PlusCircle, Edit, Loader2, Settings, Trash2, AlertTriangle, Info, MoreHorizontal, Wrench } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
+import { getAllEspecialidades, createEspecialidad, updateEspecialidad, toggleEspecialidadStatus, deleteEspecialidad } from "@/services/especialidadesService";
+
+const especialidadSchema = z.object({
+  nombre: z.string().min(2, "Nombre requerido (mín. 2 caracteres)"),
+});
 
 const ruleSchema = z.object({
   nombre: z.string().min(2, "Nombre requerido (mín. 2 caracteres)"),
@@ -29,6 +34,53 @@ export default function ConfiguracionesPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+
+  // ── Especialidades ────────────────────────────────────────────────
+  const [espOpen, setEspOpen] = useState(false);
+  const [espEditing, setEspEditing] = useState(null);
+  const [espDeletingId, setEspDeletingId] = useState(null);
+
+  const { data: especialidades = [] } = useQuery({
+    queryKey: ["especialidades"],
+    queryFn: getAllEspecialidades,
+  });
+
+  const espForm = useForm({ resolver: zodResolver(especialidadSchema), defaultValues: { nombre: "" } });
+
+  const espCreateMutation = useMutation({
+    mutationFn: (data) => createEspecialidad(data),
+    onSuccess: () => { toast.success("Especialidad creada"); queryClient.invalidateQueries({ queryKey: ["especialidades"] }); setEspOpen(false); espForm.reset(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const espUpdateMutation = useMutation({
+    mutationFn: ({ id, ...data }) => updateEspecialidad(id, data),
+    onSuccess: () => { toast.success("Especialidad actualizada"); queryClient.invalidateQueries({ queryKey: ["especialidades"] }); setEspOpen(false); setEspEditing(null); espForm.reset(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const espToggleMutation = useMutation({
+    mutationFn: (id) => toggleEspecialidadStatus(id),
+    onSuccess: (res) => { toast.success(res.message); queryClient.invalidateQueries({ queryKey: ["especialidades"] }); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const espDeleteMutation = useMutation({
+    mutationFn: (id) => deleteEspecialidad(id),
+    onSuccess: (res) => { toast.success(res.message); queryClient.invalidateQueries({ queryKey: ["especialidades"] }); setEspDeletingId(null); },
+    onError: (e) => { toast.error(e.message); setEspDeletingId(null); },
+  });
+
+  const openEspDialog = (esp = null) => {
+    setEspEditing(esp);
+    espForm.reset({ nombre: esp?.nombre || "" });
+    setEspOpen(true);
+  };
+
+  const onEspSubmit = (values) => {
+    if (espEditing) espUpdateMutation.mutate({ id: espEditing.id, ...values });
+    else espCreateMutation.mutate(values);
+  };
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [deactivateImpact, setDeactivateImpact] = useState(null);
   const [resolveAlertsOnDeactivate, setResolveAlertsOnDeactivate] = useState(true);
@@ -380,6 +432,121 @@ export default function ConfiguracionesPage() {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Sección: Especialidades de Técnicos ── */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Wrench className="h-5 w-5" /> Especialidades de Técnicos
+            </h2>
+            <p className="text-sm text-muted-foreground">Catálogo de especialidades disponibles al registrar un técnico.</p>
+          </div>
+          <Button onClick={() => openEspDialog()}>
+            <PlusCircle className="mr-2 h-4 w-4" /> Agregar Especialidad
+          </Button>
+        </div>
+
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead className="w-[80px]">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {especialidades.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-center text-muted-foreground">No hay especialidades registradas.</TableCell>
+                </TableRow>
+              ) : especialidades.map((esp) => (
+                <TableRow key={esp.id} className={!esp.activo ? "opacity-60 bg-muted/30" : ""}>
+                  <TableCell className="font-medium">{esp.nombre}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={esp.activo}
+                        onCheckedChange={() => espToggleMutation.mutate(esp.id)}
+                        disabled={espToggleMutation.isPending}
+                      />
+                      <Badge variant={esp.activo ? "outline" : "secondary"} className={esp.activo ? "border-green-500 text-green-600" : ""}>
+                        {esp.activo ? "Activa" : "Inactiva"}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Abrir menú</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => openEspDialog(esp)}>
+                          <Edit className="mr-2 h-4 w-4" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setEspDeletingId(esp.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Dialog: Crear / Editar especialidad */}
+      <Dialog open={espOpen} onOpenChange={(v) => { if (!v) { setEspOpen(false); setEspEditing(null); espForm.reset(); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{espEditing ? "Editar Especialidad" : "Nueva Especialidad"}</DialogTitle>
+            <DialogDescription>Ingresa el nombre de la especialidad técnica.</DialogDescription>
+          </DialogHeader>
+          <Form {...espForm}>
+            <form onSubmit={espForm.handleSubmit(onEspSubmit)} className="space-y-4">
+              <FormField control={espForm.control} name="nombre" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre</FormLabel>
+                  <FormControl><Input placeholder="Ej: Mecánica General" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => { setEspOpen(false); setEspEditing(null); espForm.reset(); }}>Cancelar</Button>
+                <Button type="submit" disabled={espCreateMutation.isPending || espUpdateMutation.isPending}>
+                  {(espCreateMutation.isPending || espUpdateMutation.isPending) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  {espEditing ? "Guardar Cambios" : "Crear"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar eliminación especialidad */}
+      <Dialog open={!!espDeletingId} onOpenChange={(v) => { if (!v) setEspDeletingId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive" /> ¿Eliminar especialidad?</DialogTitle>
+            <DialogDescription>Esta acción no se puede deshacer. Solo se puede eliminar si ningún técnico la tiene asignada.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEspDeletingId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => espDeleteMutation.mutate(espDeletingId)} disabled={espDeleteMutation.isPending}>
+              {espDeleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Eliminar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
