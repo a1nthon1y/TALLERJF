@@ -533,43 +533,43 @@ export function MaintenancesTable() {
 
   return (
     <div className="space-y-4">
-      {/* Banner: solicitudes sin técnico asignado (del chofer o sin gestionar) */}
+      {/* Banner: solicitudes sin técnico — color amarillo = PENDIENTE (coherente con badge) */}
       {isAdminOrEncargado && sinTecnico.length > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/20 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20 px-4 py-3">
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-blue-600 shrink-0" />
+            <AlertCircle className="h-5 w-5 text-yellow-600 shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+              <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">
                 {sinTecnico.length} solicitud{sinTecnico.length > 1 ? "es" : ""} sin técnico asignado
               </p>
-              <p className="text-xs text-blue-700 dark:text-blue-400">
+              <p className="text-xs text-yellow-700 dark:text-yellow-400">
                 {sinTecnico.map(m => m.placa || m.codigo).join(", ")} — asigna un técnico e inicia el proceso
               </p>
             </div>
           </div>
           <Button size="sm" variant="outline"
-            className="shrink-0 border-blue-400 text-blue-700 hover:bg-blue-100"
+            className="shrink-0 border-yellow-400 text-yellow-700 hover:bg-yellow-100"
             onClick={() => setEstadoFilter("SIN_TECNICO")}>
             Ver solicitudes
           </Button>
         </div>
       )}
 
-      {/* Banner: pendientes de aprobación (solo admin/encargado) */}
+      {/* Banner: pendientes de aprobación — color verde = COMPLETADO (coherente con badge) */}
       {isAdminOrEncargado && pendientesAprobacion.length > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-green-300 bg-green-50 dark:bg-green-950/20 px-4 py-3">
           <div className="flex items-center gap-2">
-            <CheckCheck className="h-5 w-5 text-amber-600 shrink-0" />
+            <CheckCheck className="h-5 w-5 text-green-600 shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              <p className="text-sm font-semibold text-green-800 dark:text-green-300">
                 {pendientesAprobacion.length} trabajo{pendientesAprobacion.length > 1 ? "s" : ""} pendiente{pendientesAprobacion.length > 1 ? "s" : ""} de aprobación
               </p>
-              <p className="text-xs text-amber-700 dark:text-amber-400">
+              <p className="text-xs text-green-700 dark:text-green-400">
                 {pendientesAprobacion.map(m => m.placa || m.codigo).join(", ")}
               </p>
             </div>
           </div>
-          <Button size="sm" variant="outline" className="shrink-0 border-amber-400 text-amber-700 hover:bg-amber-100"
+          <Button size="sm" variant="outline" className="shrink-0 border-green-400 text-green-700 hover:bg-green-100"
             onClick={() => setEstadoFilter("COMPLETADO")}>
             Ver pendientes
           </Button>
