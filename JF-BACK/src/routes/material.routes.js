@@ -6,6 +6,7 @@ const checkRole = require("../middlewares/role.middleware");
 
 // Lectura para cualquier autenticado (choferes pueden ver materiales)
 router.get("/", authenticate, materialController.getMaterials);
+router.get("/:id/usage", authenticate, materialController.getMaterialUsage);
 
 // Escritura solo ADMIN y ENCARGADO
 router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), materialController.createMaterial);

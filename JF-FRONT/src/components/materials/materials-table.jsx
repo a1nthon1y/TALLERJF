@@ -13,9 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Trash2, MoreHorizontal, Package, PackageX } from "lucide-react"
+import { Edit, Trash2, MoreHorizontal, Package, PackageX, History, ChevronDown, ChevronUp, Loader2 } from "lucide-react"
 // useMaterials moved to parent (materiales/page.jsx) to avoid double fetch
 import { materialService } from "@/services/materialService"
+import { makeGetRequest } from "@/utils/api"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -47,6 +48,24 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
   const [selectedMaterial, setSelectedMaterial] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
+  const [usageData, setUsageData] = useState({})
+  const [usageLoading, setUsageLoading] = useState(false)
+
+  const handleToggleUsage = async (material) => {
+    if (expandedId === material.id) { setExpandedId(null); return }
+    setExpandedId(material.id)
+    if (usageData[material.id]) return
+    setUsageLoading(true)
+    try {
+      const data = await makeGetRequest(`/materials/${material.id}/usage`)
+      setUsageData((prev) => ({ ...prev, [material.id]: data }))
+    } catch {
+      toast.error("Error al cargar usos del material")
+    } finally {
+      setUsageLoading(false)
+    }
+  }
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -191,43 +210,96 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
               </TableRow>
             )}
             {filteredMaterials.map((material) => (
-              <TableRow key={material.id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Package className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{material.nombre}</span>
-                  </div>
-                </TableCell>
-                <TableCell>{material.descripcion}</TableCell>
-                <TableCell>
-                  <Badge variant={material.stock <= 5 ? "destructive" : "default"}>
-                    {material.stock}
-                  </Badge>
-                </TableCell>
-                <TableCell>S/. {parseFloat(material.precio).toFixed(2)}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Abrir menú</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => handleEditClick(material)}>
-                        <Edit className="mr-2 h-4 w-4" />
-                        Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDeleteClick(material)}>
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Eliminar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
+              <>
+                <TableRow key={material.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Package className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{material.nombre}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>{material.descripcion}</TableCell>
+                  <TableCell>
+                    <Badge variant={material.stock <= 5 ? "destructive" : "default"}>
+                      {material.stock}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>S/. {parseFloat(material.precio).toFixed(2)}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Abrir menú</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleToggleUsage(material)}>
+                          {expandedId === material.id
+                            ? <><ChevronUp className="mr-2 h-4 w-4" />Ocultar usos</>
+                            : <><History className="mr-2 h-4 w-4" />Ver usos</>}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleEditClick(material)}>
+                          <Edit className="mr-2 h-4 w-4" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => handleDeleteClick(material)}>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+
+                {expandedId === material.id && (
+                  <TableRow key={`${material.id}-usage`} className="bg-muted/40">
+                    <TableCell colSpan={5} className="py-3 px-6">
+                      <div className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                        <History className="h-3.5 w-3.5" />
+                        Usos de <span className="text-foreground font-semibold">{material.nombre}</span> en mantenimientos
+                      </div>
+                      {usageLoading && !usageData[material.id] ? (
+                        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Cargando...
+                        </div>
+                      ) : !usageData[material.id] || usageData[material.id].length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Este material no se ha usado en ningún mantenimiento aún.</p>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-muted-foreground border-b">
+                              <th className="text-left pb-1 font-medium">Unidad</th>
+                              <th className="text-left pb-1 font-medium">Tipo</th>
+                              <th className="text-left pb-1 font-medium">Estado</th>
+                              <th className="text-left pb-1 font-medium">Fecha</th>
+                              <th className="text-left pb-1 font-medium">Cant.</th>
+                              <th className="text-left pb-1 font-medium">Costo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {usageData[material.id].map((uso) => (
+                              <tr key={uso.detalle_id} className="border-b last:border-0">
+                                <td className="py-1 pr-4 font-medium">{uso.placa} <span className="text-muted-foreground font-normal">({uso.modelo})</span></td>
+                                <td className="py-1 pr-4 capitalize">{uso.tipo}</td>
+                                <td className="py-1 pr-4">
+                                  <Badge variant="outline" className="text-xs">{uso.estado}</Badge>
+                                </td>
+                                <td className="py-1 pr-4 text-muted-foreground">{uso.fecha_programada ? new Date(uso.fecha_programada).toLocaleDateString("es-PE") : "—"}</td>
+                                <td className="py-1 pr-4">{uso.cantidad}</td>
+                                <td className="py-1">S/. {parseFloat(uso.costo_total).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
             ))}
           </TableBody>
         </Table>

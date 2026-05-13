@@ -75,9 +75,38 @@ const deleteMaterial = async (req, res) => {
   }
 };
 
+// Historial de usos de un material en mantenimientos
+const getMaterialUsage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT
+         dm.id AS detalle_id,
+         dm.cantidad,
+         dm.costo_total,
+         m.id AS mantenimiento_id,
+         m.tipo,
+         m.estado,
+         m.fecha_programada,
+         u.placa,
+         u.modelo
+       FROM detalles_mantenimiento dm
+       JOIN mantenimientos m ON dm.mantenimiento_id = m.id
+       JOIN unidades u ON m.unidad_id = u.id
+       WHERE dm.material_id = $1
+       ORDER BY m.fecha_programada DESC`,
+      [id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener usos del material" });
+  }
+};
+
 module.exports = {
   getMaterials,
   createMaterial,
   updateMaterial,
   deleteMaterial,
+  getMaterialUsage,
 };
