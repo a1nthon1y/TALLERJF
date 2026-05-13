@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle, Play, ClipboardCheck, FileText } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle, Play, ClipboardCheck, FileText, LayoutGrid, List } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -73,6 +73,7 @@ export function MaintenancesTable() {
   const [searchTerm, setSearchTerm] = useState("")
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
   const [tipoFilter, setTipoFilter] = useState("TODOS")
+  const [viewMode, setViewMode] = useState("tabla") // "tabla" | "kanban"
   // Editar unificado
   const [editingMaintenance, setEditingMaintenance] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -583,28 +584,30 @@ export function MaintenancesTable() {
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-xs"
         />
-        <Select value={estadoFilter} onValueChange={setEstadoFilter}>
-          <SelectTrigger className="w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="TODOS">Todos los estados</SelectItem>
-            <SelectItem value="PENDIENTE">
-              Pendiente {pendientes > 0 ? `(${pendientes})` : ""}
-            </SelectItem>
-            {sinTecnico.length > 0 && (
-              <SelectItem value="SIN_TECNICO">
-                Sin técnico ({sinTecnico.length})
+        {viewMode === "tabla" && (
+          <Select value={estadoFilter} onValueChange={setEstadoFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="TODOS">Todos los estados</SelectItem>
+              <SelectItem value="PENDIENTE">
+                Pendiente {pendientes > 0 ? `(${pendientes})` : ""}
               </SelectItem>
-            )}
-            <SelectItem value="EN_PROCESO">
-              En Proceso {enProceso > 0 ? `(${enProceso})` : ""}
-            </SelectItem>
-            <SelectItem value="COMPLETADO">Completado</SelectItem>
-            <SelectItem value="REALIZADO">En Campo</SelectItem>
-            <SelectItem value="CERRADO">Cerrado</SelectItem>
-          </SelectContent>
-        </Select>
+              {sinTecnico.length > 0 && (
+                <SelectItem value="SIN_TECNICO">
+                  Sin técnico ({sinTecnico.length})
+                </SelectItem>
+              )}
+              <SelectItem value="EN_PROCESO">
+                En Proceso {enProceso > 0 ? `(${enProceso})` : ""}
+              </SelectItem>
+              <SelectItem value="COMPLETADO">Completado</SelectItem>
+              <SelectItem value="REALIZADO">En Campo</SelectItem>
+              <SelectItem value="CERRADO">Cerrado</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <Select value={tipoFilter} onValueChange={setTipoFilter}>
           <SelectTrigger className="w-40">
             <SelectValue />
@@ -624,8 +627,163 @@ export function MaintenancesTable() {
             Ver todos
           </Button>
         )}
+        {/* Toggle vista */}
+        <div className="ml-auto flex items-center rounded-md border bg-muted p-0.5 gap-0.5">
+          <Button
+            variant={viewMode === "tabla" ? "default" : "ghost"}
+            size="sm"
+            className="h-7 px-2.5 gap-1.5"
+            onClick={() => setViewMode("tabla")}
+            title="Vista tabla"
+          >
+            <List className="h-3.5 w-3.5" />
+            <span className="text-xs hidden sm:inline">Tabla</span>
+          </Button>
+          <Button
+            variant={viewMode === "kanban" ? "default" : "ghost"}
+            size="sm"
+            className="h-7 px-2.5 gap-1.5"
+            onClick={() => setViewMode("kanban")}
+            title="Vista kanban"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            <span className="text-xs hidden sm:inline">Kanban</span>
+          </Button>
+        </div>
       </div>
-      <div className="rounded-md border">
+      {/* ─── Vista Kanban ─── */}
+      {viewMode === "kanban" && (() => {
+        const kanbanCols = [
+          { key: "PENDIENTE",  label: "Pendiente",  headerCls: "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/20",  dotCls: "bg-yellow-400", countCls: "bg-yellow-100 text-yellow-800" },
+          { key: "EN_PROCESO", label: "En Proceso",  headerCls: "bg-blue-50 border-blue-300 dark:bg-blue-950/20",       dotCls: "bg-blue-500",   countCls: "bg-blue-100 text-blue-800" },
+          { key: "COMPLETADO", label: "Completado",  headerCls: "bg-green-50 border-green-300 dark:bg-green-950/20",    dotCls: "bg-green-500",  countCls: "bg-green-100 text-green-800" },
+          { key: "REALIZADO",  label: "En Campo",    headerCls: "bg-purple-50 border-purple-300 dark:bg-purple-950/20", dotCls: "bg-purple-500", countCls: "bg-purple-100 text-purple-800" },
+          { key: "CERRADO",    label: "Cerrado",     headerCls: "bg-slate-50 border-slate-200 dark:bg-slate-900/30",    dotCls: "bg-slate-400",  countCls: "bg-slate-100 text-slate-600" },
+        ]
+        // En kanban ignoramos estadoFilter, solo buscamos por texto+tipo
+        const kanbanBase = (maintenances ?? []).filter((m) => {
+          const sl = searchTerm.toLowerCase()
+          const matchSearch = !searchTerm ||
+            m.placa?.toLowerCase().includes(sl) ||
+            m.modelo?.toLowerCase().includes(sl) ||
+            m.tipo?.toLowerCase().includes(sl) ||
+            m.observaciones?.toLowerCase().includes(sl) ||
+            m.tecnico_nombre?.toLowerCase().includes(sl)
+          const matchTipo = tipoFilter === "TODOS" || m.tipo?.toUpperCase() === tipoFilter
+          return matchSearch && matchTipo
+        })
+
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 pb-2">
+            {kanbanCols.map(({ key, label, headerCls, dotCls, countCls }) => {
+              const colItems = kanbanBase.filter(m => m.estado?.toUpperCase() === key)
+              return (
+                <div key={key} className="flex flex-col gap-2">
+                  {/* Cabecera de columna */}
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${headerCls}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full shrink-0 ${dotCls}`} />
+                      <span className="text-xs font-semibold">{label}</span>
+                    </div>
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${countCls}`}>
+                      {colItems.length}
+                    </span>
+                  </div>
+                  {/* Tarjetas */}
+                  <div className="flex flex-col gap-2 min-h-[80px]">
+                    {colItems.length === 0 && (
+                      <div className="flex items-center justify-center h-16 rounded-lg border border-dashed text-xs text-muted-foreground">
+                        Sin registros
+                      </div>
+                    )}
+                    {colItems.map((maintenance) => (
+                      <div
+                        key={maintenance.id}
+                        className="rounded-lg border bg-card p-3 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2"
+                      >
+                        {/* Encabezado tarjeta */}
+                        <div className="flex items-start justify-between gap-1">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm truncate">{maintenance.placa ?? `U-${maintenance.unidad_id}`}</p>
+                            {maintenance.modelo && (
+                              <p className="text-xs text-muted-foreground truncate">{maintenance.modelo}</p>
+                            )}
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-6 w-6 p-0 shrink-0" aria-label="Acciones">
+                                <MoreHorizontal className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {isAdminOrEncargado && maintenance.estado?.toUpperCase() === "PENDIENTE" && (
+                                <DropdownMenuItem onClick={() => quickAdvance(maintenance, "EN_PROCESO")} className="text-blue-700 focus:text-blue-700 font-medium">
+                                  <Play className="mr-2 h-3.5 w-3.5" /> Iniciar trabajo
+                                </DropdownMenuItem>
+                              )}
+                              {isAdminOrEncargado && maintenance.estado?.toUpperCase() === "EN_PROCESO" && (
+                                <DropdownMenuItem onClick={() => openCompleteDialog(maintenance)} className="text-emerald-700 focus:text-emerald-700 font-medium">
+                                  <ClipboardCheck className="mr-2 h-3.5 w-3.5" /> Completar trabajo
+                                </DropdownMenuItem>
+                              )}
+                              {canClose(maintenance.estado) && (
+                                <DropdownMenuItem onClick={() => openCloseDialog(maintenance)} className="text-green-700 focus:text-green-700 font-medium">
+                                  <CheckCheck className="mr-2 h-3.5 w-3.5" /> Cerrar / Aprobar
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              {isAdminOrEncargado && !["CERRADO","REALIZADO"].includes(maintenance.estado?.toUpperCase()) && (
+                                <DropdownMenuItem onClick={() => openEditDialog(maintenance)}>
+                                  <Edit className="mr-2 h-3.5 w-3.5" /> Editar detalles
+                                </DropdownMenuItem>
+                              )}
+                              {isAdminOrEncargado && (
+                                <DropdownMenuItem onClick={() => openMaterialsDialog(maintenance)}>
+                                  <Package className="mr-2 h-3.5 w-3.5" /> Materiales usados
+                                </DropdownMenuItem>
+                              )}
+                              {currentUser?.rol === "ADMIN" && maintenance.estado?.toUpperCase() === "PENDIENTE" && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => setDeletingMaintenance(maintenance)} className="text-destructive focus:text-destructive">
+                                    <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        {/* Tipo + técnico */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {getTipoBadge(maintenance.tipo)}
+                          {maintenance.tecnico_nombre
+                            ? <span className="text-xs text-muted-foreground truncate">{maintenance.tecnico_nombre}</span>
+                            : <span className="text-xs text-yellow-600 font-medium flex items-center gap-0.5"><AlertCircle className="h-3 w-3" />Sin asignar</span>
+                          }
+                        </div>
+                        {/* Código + fecha */}
+                        <div className="flex items-center justify-between">
+                          <code className="text-[10px] font-mono bg-muted px-1 py-0.5 rounded text-muted-foreground">
+                            {maintenance.codigo ?? `#${maintenance.id}`}
+                          </code>
+                          {maintenance.fecha_solicitud && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(maintenance.fecha_solicitud).toLocaleDateString("es-PE")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {/* ─── Vista Tabla ─── */}
+      {viewMode === "tabla" && <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
@@ -752,7 +910,7 @@ export function MaintenancesTable() {
             ))}
           </TableBody>
         </Table>
-      </div>
+      </div>}
 
       {/* Dialog: Materiales usados en el mantenimiento */}
       <Dialog open={!!materialsMaintenance} onOpenChange={(v) => { if (!v) setMaterialsMaintenance(null) }}>
