@@ -36,8 +36,13 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
     
-    // Para otros errores, mostrar el mensaje específico
-    const errorMessage = error.response?.data?.error || error.message || 'Error en la petición';
+    // Para otros errores, mostrar el mensaje específico del backend
+    // El backend puede devolver { message: "..." } o { error: "..." } según el endpoint
+    const errorMessage =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      'Error en la petición';
     return Promise.reject(new Error(errorMessage));
   }
 );

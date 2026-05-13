@@ -34,7 +34,7 @@ export default function RutasPage() {
     setLoading(true);
     rutasService.getAll()
       .then((data) => setRutas(Array.isArray(data) ? data : []))
-      .catch(() => toast.error("Error al cargar rutas"))
+      .catch((err) => toast.error(err.message || "Error al cargar rutas"))
       .finally(() => setLoading(false));
   };
 
@@ -76,8 +76,8 @@ export default function RutasPage() {
     try {
       await rutasService.update(r.id, { ...r, activa: !r.activa });
       setRutas((prev) => prev.map((x) => x.id === r.id ? { ...x, activa: !x.activa } : x));
-    } catch {
-      toast.error("Error al actualizar");
+    } catch (err) {
+      toast.error(err.message || "Error al actualizar");
     }
   };
 
@@ -88,8 +88,8 @@ export default function RutasPage() {
       toast.success("Ruta eliminada");
       setDeleteTarget(null);
       load();
-    } catch {
-      toast.error("Error al eliminar");
+    } catch (err) {
+      toast.error(err.message || "Error al eliminar");
     }
   };
 
