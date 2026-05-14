@@ -19,7 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
-import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle, Play, ClipboardCheck, FileText, LayoutGrid, List } from "lucide-react"
+import { Edit, MoreHorizontal, CheckCheck, Package, Trash2, Plus, Loader2, Wrench, AlertCircle, Play, ClipboardCheck, FileText, LayoutGrid, List, Eye, Calendar, Gauge, User, ClipboardList } from "lucide-react"
 import { PageSkeleton } from "@/components/ui/page-skeleton"
 import { useMaintenances } from "@/hooks/useMaintenances"
 import { useTechnicians } from "@/hooks/useTechnicians"
@@ -114,6 +114,11 @@ export function MaintenancesTable() {
   // Eliminar
   const [deletingMaintenance, setDeletingMaintenance] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Ver detalles (solo lectura — disponible para cualquier estado)
+  const [detailMaintenance, setDetailMaintenance] = useState(null)
+  const [detailMaterials, setDetailMaterials] = useState([])
+  const [detailLoading, setDetailLoading] = useState(false)
 
   // Materiales dialog state
   const [materialsMaintenance, setMaterialsMaintenance] = useState(null)
@@ -380,6 +385,18 @@ export function MaintenancesTable() {
     ["ADMIN", "ENCARGADO"].includes(currentUser?.rol) && estado?.toUpperCase() === "COMPLETADO"
 
   const isAdminOrEncargado = ["ADMIN", "ENCARGADO"].includes(currentUser?.rol)
+
+  const openDetailDialog = async (maintenance) => {
+    setDetailMaintenance(maintenance)
+    setDetailMaterials([])
+    setDetailLoading(true)
+    try {
+      const mats = await maintenanceService.getMaintenanceMaterials(maintenance.id)
+      setDetailMaterials(Array.isArray(mats) ? mats : [])
+    } catch { /* no bloquea */ } finally {
+      setDetailLoading(false)
+    }
+  }
 
   const openMaterialsDialog = async (maintenance) => {
     setMaterialsMaintenance(maintenance)
@@ -858,6 +875,12 @@ export function MaintenancesTable() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {/* Ver detalles — primera opción en estados finales */}
+                              {["CERRADO", "REALIZADO"].includes(maintenance.estado?.toUpperCase()) && (
+                                <DropdownMenuItem onClick={() => openDetailDialog(maintenance)} className="font-medium">
+                                  <Eye className="mr-2 h-3.5 w-3.5" /> Ver detalles
+                                </DropdownMenuItem>
+                              )}
                               {isAdminOrEncargado && maintenance.estado?.toUpperCase() === "PENDIENTE" && (
                                 <DropdownMenuItem onClick={() => quickAdvance(maintenance, "EN_PROCESO")} className="text-blue-700 focus:text-blue-700 font-medium">
                                   <Play className="mr-2 h-3.5 w-3.5" /> Iniciar trabajo
@@ -882,6 +905,11 @@ export function MaintenancesTable() {
                               {isAdminOrEncargado && (
                                 <DropdownMenuItem onClick={() => openMaterialsDialog(maintenance)}>
                                   <Package className="mr-2 h-3.5 w-3.5" /> Materiales usados
+                                </DropdownMenuItem>
+                              )}
+                              {!["CERRADO", "REALIZADO"].includes(maintenance.estado?.toUpperCase()) && (
+                                <DropdownMenuItem onClick={() => openDetailDialog(maintenance)}>
+                                  <Eye className="mr-2 h-3.5 w-3.5" /> Ver detalles
                                 </DropdownMenuItem>
                               )}
                               {currentUser?.rol === "ADMIN" && maintenance.estado?.toUpperCase() === "PENDIENTE" && (
@@ -1077,6 +1105,14 @@ export function MaintenancesTable() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {/* ── Ver detalles — siempre visible, primera opción en estados finales ── */}
+                      {["CERRADO", "REALIZADO"].includes(maintenance.estado?.toUpperCase()) && (
+                        <DropdownMenuItem onClick={() => openDetailDialog(maintenance)} className="font-medium">
+                          <Eye className="mr-2 h-4 w-4" />
+                          Ver detalles
+                        </DropdownMenuItem>
+                      )}
+
                       {/* ── Acción principal según estado actual ── */}
                       {isAdminOrEncargado && maintenance.estado?.toUpperCase() === "PENDIENTE" && (
                         <DropdownMenuItem
@@ -1121,6 +1157,13 @@ export function MaintenancesTable() {
                         <DropdownMenuItem onClick={() => openMaterialsDialog(maintenance)}>
                           <Package className="mr-2 h-4 w-4" />
                           Materiales usados
+                        </DropdownMenuItem>
+                      )}
+                      {/* En estados no finales, detalles disponible también */}
+                      {!["CERRADO", "REALIZADO"].includes(maintenance.estado?.toUpperCase()) && (
+                        <DropdownMenuItem onClick={() => openDetailDialog(maintenance)}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          Ver detalles
                         </DropdownMenuItem>
                       )}
                       {/* Eliminar — solo ADMIN, solo PENDIENTE */}
@@ -2084,6 +2127,177 @@ export function MaintenancesTable() {
               {isDeleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Eliminar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog: Ver detalles completos del mantenimiento ── */}
+      <Dialog open={!!detailMaintenance} onOpenChange={(v) => { if (!v) setDetailMaintenance(null) }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 flex-wrap">
+              <ClipboardList className="h-5 w-5 shrink-0" />
+              <span>Detalles — {detailMaintenance?.codigo}</span>
+              {detailMaintenance && (() => {
+                const tipo = detailMaintenance.tipo?.toUpperCase()
+                const estado = detailMaintenance.estado?.toUpperCase()
+                return (
+                  <>
+                    <Badge variant="outline" className={tipo === "PREVENTIVO" ? "border-blue-400 text-blue-600" : "border-orange-400 text-orange-600"}>
+                      {tipo}
+                    </Badge>
+                    <Badge variant={estado === "CERRADO" ? "default" : estado === "REALIZADO" ? "secondary" : "outline"}>
+                      {estado}
+                    </Badge>
+                  </>
+                )
+              })()}
+            </DialogTitle>
+          </DialogHeader>
+
+          {detailMaintenance && (
+            <div className="space-y-5 pt-1">
+
+              {/* ── Info general ── */}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <div className="flex items-start gap-2">
+                  <Wrench className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Unidad</p>
+                    <p className="font-medium">{detailMaintenance.placa ?? `U-${detailMaintenance.unidad_id}`}</p>
+                    {detailMaintenance.modelo && <p className="text-xs text-muted-foreground">{detailMaintenance.modelo}</p>}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <User className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Técnico</p>
+                    <p className="font-medium">{detailMaintenance.tecnico_nombre ?? "Sin asignar"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fecha solicitud</p>
+                    <p className="font-medium">{detailMaintenance.fecha_solicitud ? new Date(detailMaintenance.fecha_solicitud).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Calendar className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Fecha realización</p>
+                    <p className="font-medium">{detailMaintenance.fecha_realizacion ? new Date(detailMaintenance.fecha_realizacion).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 col-span-2">
+                  <Gauge className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Kilometraje al solicitar</p>
+                    <p className="font-medium">{detailMaintenance.kilometraje_actual != null ? `${Number(detailMaintenance.kilometraje_actual).toLocaleString()} km` : "—"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Historial de observaciones ── */}
+              {detailMaintenance.observaciones && (() => {
+                const raw = detailMaintenance.observaciones
+                const SEPS = [
+                  { pattern: /\n\n--- NOTA DEL TÉCNICO ---\n/, label: "Nota del técnico", color: "text-blue-700 dark:text-blue-400", bg: "bg-blue-50/60 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800" },
+                  { pattern: /\n\n--- NOTA DEL ENCARGADO ---\n/, label: "Nota del encargado", color: "text-violet-700 dark:text-violet-400", bg: "bg-violet-50/60 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800" },
+                  { pattern: /\n\n--- CIERRE DEL ENCARGADO ---\n/, label: "Nota de cierre", color: "text-green-700 dark:text-green-400", bg: "bg-green-50/60 dark:bg-green-950/20 border-green-200 dark:border-green-800" },
+                ]
+                const sections = []
+                let remaining = raw
+                SEPS.forEach(({ pattern, label, color, bg }) => {
+                  const match = remaining.search(pattern)
+                  if (match !== -1) {
+                    const before = remaining.slice(0, match)
+                    const after = remaining.slice(match).replace(pattern, "")
+                    if (sections.length === 0 && before.trim()) {
+                      sections.push({ label: "Problema / Descripción inicial", text: before.trim(), color: "text-foreground", bg: "bg-muted/40 border-muted" })
+                    }
+                    const nextSep = SEPS.find(s => after.search(s.pattern) !== -1)
+                    let text = after
+                    if (nextSep) text = after.slice(0, after.search(nextSep.pattern))
+                    sections.push({ label, text: text.trim(), color, bg })
+                    remaining = after
+                  }
+                })
+                if (sections.length === 0) {
+                  sections.push({ label: "Descripción", text: raw.trim(), color: "text-foreground", bg: "bg-muted/40 border-muted" })
+                }
+                return (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium flex items-center gap-1.5">
+                      <FileText className="h-4 w-4 text-muted-foreground" /> Historial
+                    </p>
+                    {sections.map((s, i) => (
+                      <div key={i} className={`rounded-md border px-3 py-2.5 ${s.bg}`}>
+                        <p className={`text-[11px] font-semibold uppercase tracking-wide mb-1 ${s.color}`}>{s.label}</p>
+                        <pre className="text-sm whitespace-pre-wrap font-sans text-foreground">{s.text}</pre>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+
+              {/* ── Materiales usados ── */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Package className="h-4 w-4 text-muted-foreground" /> Materiales utilizados
+                </p>
+                {detailLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Cargando materiales...
+                  </div>
+                ) : detailMaterials.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No se registraron materiales en este mantenimiento.</p>
+                ) : (
+                  <div className="rounded-md border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">Material</th>
+                          <th className="text-center px-3 py-2 font-medium">Cant.</th>
+                          <th className="text-right px-3 py-2 font-medium">Precio unit.</th>
+                          <th className="text-right px-3 py-2 font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailMaterials.map((m, i) => (
+                          <tr key={m.id ?? i} className="border-t">
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{m.nombre}</span>
+                                {m.es_externo && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 border-orange-300 bg-orange-50 text-orange-700">Externo</Badge>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-center">{m.cantidad}</td>
+                            <td className="px-3 py-2 text-right text-muted-foreground">S/. {Number(m.precio_unitario ?? m.precio ?? 0).toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right font-medium">S/. {Number(m.costo_total ?? 0).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-muted/30 border-t">
+                        <tr>
+                          <td colSpan={3} className="px-3 py-2 text-right text-sm font-semibold">Total materiales</td>
+                          <td className="px-3 py-2 text-right font-bold text-sm">
+                            S/. {detailMaterials.reduce((s, m) => s + Number(m.costo_total ?? 0), 0).toFixed(2)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailMaintenance(null)}>Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
