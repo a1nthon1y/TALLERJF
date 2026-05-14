@@ -358,12 +358,54 @@ const crearReporteLlegada = async (req, res) => {
 
 // ===============================================================
 //  ✅ Obtener rutas activas (para el dropdown del chofer)
-//  La tabla `rutas` y su seed se crean en run-migrations.js.
+//
+//  Orden personalizado por chofer:
+//    1. Rutas que el chofer ya usó antes → más frecuentes primero
+//       (desempate: la última usada más recientemente)
+//    2. Rutas nunca usadas por este chofer → alfabético
+//
+//  La unión es por nombre porque `reportes_llegada.origen` guarda el nombre
+//  de la ruta (string libre); no hay FK a rutas.id. Esto permite que rutas
+//  renombradas/eliminadas sigan funcionando sin perder histórico.
 // ===============================================================
 const getRutas = async (req, res) => {
   try {
+    const usuario_id = req.user?.id;
+
+    // Resolver chofer_id desde el JWT (CHOFER → tabla choferes)
+    let chofer_id = null;
+    if (usuario_id) {
+      const c = await pool.query("SELECT id FROM choferes WHERE usuario_id = $1", [usuario_id]);
+      chofer_id = c.rows[0]?.id ?? null;
+    }
+
+    // Si por alguna razón no hay chofer_id (admin probando), fallback alfabético
+    if (!chofer_id) {
+      const fallback = await pool.query(
+        "SELECT id, nombre FROM rutas WHERE activa = true ORDER BY nombre ASC"
+      );
+      return res.json(fallback.rows);
+    }
+
     const result = await pool.query(
-      "SELECT id, nombre FROM rutas WHERE activa = true ORDER BY orden ASC, nombre ASC"
+      `SELECT
+         r.id,
+         r.nombre,
+         COALESCE(uso.veces, 0)        AS veces_usada,
+         uso.ultimo_uso                AS ultimo_uso
+       FROM rutas r
+       LEFT JOIN (
+         SELECT origen, COUNT(*) AS veces, MAX(creado_en) AS ultimo_uso
+         FROM reportes_llegada
+         WHERE chofer_id = $1 AND origen IS NOT NULL
+         GROUP BY origen
+       ) uso ON uso.origen = r.nombre
+       WHERE r.activa = true
+       ORDER BY
+         COALESCE(uso.veces, 0) DESC,
+         uso.ultimo_uso         DESC NULLS LAST,
+         r.nombre               ASC`,
+      [chofer_id]
     );
     res.json(result.rows);
   } catch (error) {

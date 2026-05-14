@@ -2,11 +2,16 @@ const pool = require("../config/db");
 
 // La tabla `rutas` y su seed inicial se crean en run-migrations.js.
 // Aquí solo CRUD; no DDL.
+//
+// NOTA: La columna `rutas.orden` quedó deprecada — el dropdown del chofer
+// se ordena por su historial de uso (ver chofer.controller.js → getRutas).
+// Para rutas (admin) se ordena alfabético. La columna se mantiene en la DB
+// solo para no romper migraciones; ningún endpoint la lee/escribe.
 
 // GET /api/rutas — todas (admin/encargado)
 const getAll = async (req, res) => {
   try {
-    const result = await pool.query("SELECT * FROM rutas ORDER BY orden ASC, nombre ASC");
+    const result = await pool.query("SELECT id, nombre, activa FROM rutas ORDER BY nombre ASC");
     res.json(result.rows);
   } catch (err) {
     res.status(500).json({ error: "Error al obtener rutas" });
@@ -16,15 +21,15 @@ const getAll = async (req, res) => {
 // POST /api/rutas
 const create = async (req, res) => {
   try {
-    const { nombre, orden = 0 } = req.body;
+    const { nombre } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ message: "El nombre de la ruta es requerido." });
 
     const dup = await pool.query("SELECT id FROM rutas WHERE LOWER(nombre) = LOWER($1)", [nombre.trim()]);
     if (dup.rows.length > 0) return res.status(409).json({ message: `Ya existe una ruta con el nombre "${nombre.trim()}".` });
 
     const result = await pool.query(
-      "INSERT INTO rutas (nombre, orden) VALUES ($1, $2) RETURNING *",
-      [nombre.trim(), orden]
+      "INSERT INTO rutas (nombre) VALUES ($1) RETURNING id, nombre, activa",
+      [nombre.trim()]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -36,12 +41,12 @@ const create = async (req, res) => {
 const update = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, activa, orden } = req.body;
+    const { nombre, activa } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ message: "El nombre de la ruta es requerido." });
 
     const result = await pool.query(
-      "UPDATE rutas SET nombre=$1, activa=$2, orden=$3 WHERE id=$4 RETURNING *",
-      [nombre.trim(), activa ?? true, orden ?? 0, id]
+      "UPDATE rutas SET nombre=$1, activa=$2 WHERE id=$3 RETURNING id, nombre, activa",
+      [nombre.trim(), activa ?? true, id]
     );
     if (result.rows.length === 0) return res.status(404).json({ message: "Ruta no encontrada." });
     res.json(result.rows[0]);

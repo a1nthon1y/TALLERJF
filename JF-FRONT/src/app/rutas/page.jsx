@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -31,15 +31,10 @@ const rutaSchema = z.object({
     .trim()
     .min(2, { message: "El nombre debe tener al menos 2 caracteres." })
     .max(120, { message: "Máximo 120 caracteres." }),
-  orden: z.coerce
-    .number({ invalid_type_error: "El orden debe ser un número." })
-    .int({ message: "El orden debe ser entero." })
-    .min(0, { message: "El orden no puede ser negativo." })
-    .default(0),
   activa: z.boolean().default(true),
 });
 
-const EMPTY_VALUES = { nombre: "", orden: 0, activa: true };
+const EMPTY_VALUES = { nombre: "", activa: true };
 
 export default function RutasPage() {
   const [rutas, setRutas] = useState([]);
@@ -74,7 +69,7 @@ export default function RutasPage() {
 
   const openEdit = (r) => {
     setEditTarget(r);
-    form.reset({ nombre: r.nombre, orden: r.orden ?? 0, activa: r.activa });
+    form.reset({ nombre: r.nombre, activa: r.activa });
     setDialogOpen(true);
   };
 
@@ -198,26 +193,6 @@ export default function RutasPage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="orden"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground">Orden (opcional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={0}
-                        placeholder="0"
-                        {...field}
-                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormDescription>Número menor aparece primero en el select del chofer.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
               {editTarget && (
                 <FormField
                   control={form.control}
@@ -271,9 +246,6 @@ function RutaRow({ ruta, onEdit, onDelete, onToggle }) {
       <CardContent className="flex items-center gap-3 px-4 py-3">
         <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
         <span className="flex-1 text-sm font-medium">{ruta.nombre}</span>
-        {ruta.orden > 0 && (
-          <span className="text-xs text-muted-foreground tabular-nums">#{ruta.orden}</span>
-        )}
         <div className="flex items-center gap-2">
           <Switch checked={ruta.activa} onCheckedChange={onToggle} />
           <Badge
