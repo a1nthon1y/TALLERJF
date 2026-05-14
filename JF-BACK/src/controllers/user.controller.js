@@ -2,11 +2,33 @@ const pool = require("../config/db");
 const bcrypt = require("bcryptjs");
 const { generateUsername } = require("../utils/usernameGenerator");
 
+// Helpers de validación de datos personales (compartidos por create/update).
+//   - Teléfono peruano: 9 dígitos comenzando con 9 (formato móvil estándar).
+//   - DNI: 8 dígitos numéricos (DNI peruano oficial).
+// Ambos son OPCIONALES — si no se envían (vacío/null) la validación pasa.
+const validarTelefono = (telefono) => {
+  if (telefono === null || telefono === undefined || telefono === "") return null;
+  const limpio = String(telefono).trim();
+  if (!/^9\d{8}$/.test(limpio)) {
+    return "El teléfono debe tener 9 dígitos y comenzar con 9 (formato móvil peruano).";
+  }
+  return null;
+};
+const validarDni = (dni) => {
+  if (dni === null || dni === undefined || dni === "") return null;
+  const limpio = String(dni).trim();
+  if (!/^\d{8}$/.test(limpio)) {
+    return "El DNI debe tener exactamente 8 dígitos numéricos.";
+  }
+  return null;
+};
+const normalizar = (v) => (v === undefined || v === null || v === "") ? null : String(v).trim();
+
 // Obtener lista de usuarios
 const getUsers = async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, nombre, username, correo, rol, activo, creado_en FROM usuarios ORDER BY id ASC"
+      "SELECT id, nombre, username, correo, telefono, dni, rol, activo, creado_en FROM usuarios ORDER BY id ASC"
     );
     res.json(result.rows);
   } catch (error) {
@@ -29,11 +51,16 @@ const suggestUsername = async (req, res) => {
 // Crear usuario (solo admin)
 const createUser = async (req, res) => {
   try {
-    const { nombre, correo, username: usernameInput, password, rol, activo } = req.body;
+    const { nombre, correo, username: usernameInput, password, rol, activo, telefono, dni } = req.body;
 
     if (!nombre || !password || !rol) {
       return res.status(400).json({ message: "Nombre, contraseña y rol son obligatorios para crear un usuario." });
     }
+
+    const telErr = validarTelefono(telefono);
+    if (telErr) return res.status(400).json({ message: telErr });
+    const dniErr = validarDni(dni);
+    if (dniErr) return res.status(400).json({ message: dniErr });
 
     let username;
     if (usernameInput && usernameInput.trim()) {
@@ -53,13 +80,22 @@ const createUser = async (req, res) => {
       }
     }
 
+    // DNI único en toda la base (un DNI = una persona = un usuario).
+    const dniNorm = normalizar(dni);
+    if (dniNorm) {
+      const dup = await pool.query("SELECT id FROM usuarios WHERE dni = $1", [dniNorm]);
+      if (dup.rows.length > 0) {
+        return res.status(409).json({ message: `Ya existe un usuario registrado con el DNI ${dniNorm}.` });
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO usuarios (nombre, username, correo, password, rol, activo, creado_en)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
-       RETURNING id, nombre, username, correo, rol, activo, creado_en`,
-      [nombre, username, correo || null, hashedPassword, rol, activo ?? true]
+      `INSERT INTO usuarios (nombre, username, correo, telefono, dni, password, rol, activo, creado_en)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+       RETURNING id, nombre, username, correo, telefono, dni, rol, activo, creado_en`,
+      [nombre, username, correo || null, normalizar(telefono), dniNorm, hashedPassword, rol, activo ?? true]
     );
 
     res.status(201).json({ message: "Usuario creado exitosamente", user: result.rows[0] });
@@ -72,9 +108,14 @@ const createUser = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, correo, username: usernameInput, rol, password } = req.body;
+    const { nombre, correo, username: usernameInput, rol, password, telefono, dni } = req.body;
 
-    // Verificar unicidad de username si cambió
+    const telErr = validarTelefono(telefono);
+    if (telErr) return res.status(400).json({ message: telErr });
+    const dniErr = validarDni(dni);
+    if (dniErr) return res.status(400).json({ message: dniErr });
+
+    // Unicidad de username (si cambió)
     if (usernameInput) {
       const existing = await pool.query(
         "SELECT id FROM usuarios WHERE username = $1 AND id != $2",
@@ -85,16 +126,31 @@ const updateUser = async (req, res) => {
       }
     }
 
+    // Unicidad de DNI (si se envía)
+    const dniNorm = normalizar(dni);
+    if (dniNorm) {
+      const dup = await pool.query("SELECT id FROM usuarios WHERE dni = $1 AND id != $2", [dniNorm, id]);
+      if (dup.rows.length > 0) {
+        return res.status(409).json({ message: `Ya existe otro usuario registrado con el DNI ${dniNorm}.` });
+      }
+    }
+
+    const telNorm = normalizar(telefono);
+
     let query, params;
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
-      query = `UPDATE usuarios SET nombre=$1, username=$2, correo=$3, rol=$4, password=$5
-               WHERE id=$6 RETURNING id, nombre, username, correo, rol, activo, creado_en`;
-      params = [nombre, usernameInput?.trim() || null, correo || null, rol, hashedPassword, id];
+      query = `UPDATE usuarios
+                  SET nombre=$1, username=$2, correo=$3, telefono=$4, dni=$5, rol=$6, password=$7
+                WHERE id=$8
+            RETURNING id, nombre, username, correo, telefono, dni, rol, activo, creado_en`;
+      params = [nombre, usernameInput?.trim() || null, correo || null, telNorm, dniNorm, rol, hashedPassword, id];
     } else {
-      query = `UPDATE usuarios SET nombre=$1, username=$2, correo=$3, rol=$4
-               WHERE id=$5 RETURNING id, nombre, username, correo, rol, activo, creado_en`;
-      params = [nombre, usernameInput?.trim() || null, correo || null, rol, id];
+      query = `UPDATE usuarios
+                  SET nombre=$1, username=$2, correo=$3, telefono=$4, dni=$5, rol=$6
+                WHERE id=$7
+            RETURNING id, nombre, username, correo, telefono, dni, rol, activo, creado_en`;
+      params = [nombre, usernameInput?.trim() || null, correo || null, telNorm, dniNorm, rol, id];
     }
 
     const result = await pool.query(query, params);

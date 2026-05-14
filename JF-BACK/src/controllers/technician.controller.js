@@ -1,10 +1,18 @@
 const pool = require("../config/db");
 
 // Obtener lista de técnicos
+//   `dni` y `telefono` viven en `usuarios` (single source of truth);
+//   se traen vía JOIN cuando hay usuario vinculado.
 const getTechnicians = async (req, res) => {
   try {
     const result = await pool.query(
-      "SELECT id, nombre, dni, especialidad, activo, usuario_id, creado_en FROM tecnicos ORDER BY id ASC"
+      `SELECT t.id, t.nombre, t.especialidad, t.activo, t.usuario_id, t.creado_en,
+              u.dni AS usuario_dni,
+              u.telefono AS usuario_telefono,
+              u.correo AS usuario_correo
+         FROM tecnicos t
+         LEFT JOIN usuarios u ON t.usuario_id = u.id
+        ORDER BY t.id ASC`
     );
     res.json(result.rows);
   } catch (error) {
@@ -56,9 +64,12 @@ async function validarUsuarioVinculable({ usuario_id, excludeId = null }) {
 }
 
 // Crear nuevo técnico
+//   `dni` ya no se acepta aquí — vive en `usuarios` y se gestiona desde
+//   la página de Usuarios. Si llega en el body, se ignora (compat con
+//   frontends en transición).
 const createTechnician = async (req, res) => {
   try {
-    const { nombre, dni, especialidad, activo, usuario_id } = req.body;
+    const { nombre, especialidad, activo, usuario_id } = req.body;
 
     if (usuario_id) {
       const v = await validarUsuarioVinculable({ usuario_id });
@@ -66,8 +77,8 @@ const createTechnician = async (req, res) => {
     }
 
     const result = await pool.query(
-      "INSERT INTO tecnicos (nombre, dni, especialidad, activo, usuario_id, creado_en) VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *",
-      [nombre, dni, especialidad, activo ?? true, usuario_id || null]
+      "INSERT INTO tecnicos (nombre, especialidad, activo, usuario_id, creado_en) VALUES ($1, $2, $3, $4, NOW()) RETURNING *",
+      [nombre, especialidad, activo ?? true, usuario_id || null]
     );
 
     res.status(201).json({ message: "Técnico creado exitosamente", tecnico: result.rows[0] });
@@ -80,7 +91,8 @@ const createTechnician = async (req, res) => {
 const updateTechnician = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, dni, especialidad, usuario_id } = req.body;
+    const { nombre, especialidad, usuario_id } = req.body;
+    // NOTA: `dni` ya no se acepta aquí — vive en `usuarios`.
 
     if (usuario_id) {
       const v = await validarUsuarioVinculable({ usuario_id, excludeId: id });
@@ -88,8 +100,8 @@ const updateTechnician = async (req, res) => {
     }
 
     const result = await pool.query(
-      "UPDATE tecnicos SET nombre = $1, dni = $2, especialidad = $3, usuario_id = $4 WHERE id = $5 RETURNING *",
-      [nombre, dni, especialidad, usuario_id || null, id]
+      "UPDATE tecnicos SET nombre = $1, especialidad = $2, usuario_id = $3 WHERE id = $4 RETURNING *",
+      [nombre, especialidad, usuario_id || null, id]
     );
 
     if (result.rows.length === 0) {

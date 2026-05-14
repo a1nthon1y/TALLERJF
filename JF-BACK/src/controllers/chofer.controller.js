@@ -56,7 +56,9 @@ async function validarUsuarioVinculable({ usuario_id, rolEsperado, tabla, exclud
 // ===============================================================
 const createDriver = async (req, res) => {
   try {
-    const { usuario_id, licencia, telefono } = req.body;
+    const { usuario_id, licencia } = req.body;
+    // NOTA: `telefono` ya no se acepta aquí. El teléfono vive en `usuarios`
+    // — se gestiona desde la página de Usuarios, no desde Choferes.
 
     if (!usuario_id || !licencia) {
       return res.status(400).json({ message: "usuario_id y licencia son obligatorios" });
@@ -67,11 +69,11 @@ const createDriver = async (req, res) => {
 
     const result = await pool.query(
       `
-      INSERT INTO choferes (usuario_id, licencia, telefono)
-      VALUES ($1, $2, $3)
+      INSERT INTO choferes (usuario_id, licencia)
+      VALUES ($1, $2)
       RETURNING *
       `,
-      [usuario_id, licencia, telefono || null]
+      [usuario_id, licencia]
     );
 
     res.status(201).json({
@@ -95,13 +97,14 @@ const getAllDrivers = async (req, res) => {
       SELECT
         c.id AS chofer_id,
         c.licencia,
-        c.telefono,
         c.activo,
         c.creado_en,
 
         u.id AS usuario_id,
         u.nombre AS usuario_nombre,
-        u.correo AS usuario_correo
+        u.correo AS usuario_correo,
+        u.telefono AS usuario_telefono,
+        u.dni AS usuario_dni
 
       FROM choferes c
       LEFT JOIN usuarios u ON c.usuario_id = u.id
@@ -129,12 +132,13 @@ const getDriverById = async (req, res) => {
       SELECT
         c.id AS chofer_id,
         c.licencia,
-        c.telefono,
         c.creado_en,
 
         u.id AS usuario_id,
         u.nombre AS usuario_nombre,
-        u.correo AS usuario_correo
+        u.correo AS usuario_correo,
+        u.telefono AS usuario_telefono,
+        u.dni AS usuario_dni
 
       FROM choferes c
       LEFT JOIN usuarios u ON c.usuario_id = u.id
@@ -162,7 +166,8 @@ const getDriverById = async (req, res) => {
 const updateDriver = async (req, res) => {
   try {
     const { id } = req.params;
-    const { usuario_id, licencia, telefono } = req.body;
+    const { usuario_id, licencia } = req.body;
+    // NOTA: `telefono` ya no se acepta aquí. El teléfono vive en `usuarios`.
 
     if (usuario_id) {
       const v = await validarUsuarioVinculable({
@@ -177,11 +182,11 @@ const updateDriver = async (req, res) => {
     const result = await pool.query(
       `
       UPDATE choferes
-      SET usuario_id = $1, licencia = $2, telefono = $3
-      WHERE id = $4
+      SET usuario_id = $1, licencia = $2
+      WHERE id = $3
       RETURNING *
       `,
-      [usuario_id, licencia, telefono, id]
+      [usuario_id, licencia, id]
     );
 
     if (result.rows.length === 0) {

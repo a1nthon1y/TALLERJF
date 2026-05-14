@@ -41,6 +41,10 @@ const formSchema = z.object({
   username: z.string().min(1, { message: "El usuario es requerido" })
              .regex(/^[a-z0-9]+$/, { message: "Solo letras minúsculas y números" }),
   correo:   z.string().email({ message: "Ingrese un correo válido" }).optional().or(z.literal("")),
+  telefono: z.string().regex(/^9\d{8}$/, { message: "9 dígitos comenzando con 9" })
+             .optional().or(z.literal("")),
+  dni:      z.string().regex(/^\d{8}$/, { message: "8 dígitos numéricos" })
+             .optional().or(z.literal("")),
   rol:      z.string().min(1, { message: "El rol es requerido" }),
   activo:   z.boolean(),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres" }).optional().or(z.literal("")),
@@ -62,7 +66,7 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
 
   const form = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: { nombre: "", username: "", correo: "", rol: "", activo: true, password: "" },
+    defaultValues: { nombre: "", username: "", correo: "", telefono: "", dni: "", rol: "", activo: true, password: "" },
   })
 
   useEffect(() => {
@@ -131,6 +135,8 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
         nombre:   values.nombre,
         username: values.username,
         correo:   values.correo || undefined,
+        telefono: values.telefono || undefined,
+        dni:      values.dni || undefined,
         rol:      values.rol,
         activo:   values.activo,
       }
@@ -151,6 +157,8 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
       nombre:   u.nombre,
       username: u.username ?? "",
       correo:   u.correo   ?? "",
+      telefono: u.telefono ?? "",
+      dni:      u.dni      ?? "",
       rol:      u.rol,
       activo:   u.activo,
       password: "",
@@ -306,6 +314,41 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {/* Datos personales centralizados — los perfiles (chofer/tecnico/dueno)
+                  los leen desde aquí; no se duplican en sus tablas. */}
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="telefono" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Teléfono <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
+                    <FormControl>
+                      <Input
+                        inputMode="numeric"
+                        maxLength={9}
+                        placeholder="987654321"
+                        {...field}
+                        onChange={e => field.onChange(e.target.value.replace(/\D/g, ""))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="dni" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>DNI <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
+                    <FormControl>
+                      <Input
+                        inputMode="numeric"
+                        maxLength={8}
+                        placeholder="12345678"
+                        {...field}
+                        onChange={e => field.onChange(e.target.value.replace(/\D/g, ""))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
 
               <FormField control={form.control} name="rol" render={({ field }) => (
                 <FormItem>

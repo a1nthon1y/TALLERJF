@@ -42,6 +42,12 @@ const formSchema = z.object({
   username: z.string().min(1, { message: "El usuario es requerido" })
              .regex(/^[a-z0-9]+$/, { message: "Solo letras minúsculas y números, sin espacios" }),
   correo:   z.string().email({ message: "Ingrese un correo válido" }).optional().or(z.literal("")),
+  // Datos personales centralizados en `usuarios` (single source of truth).
+  // Ambos opcionales — pero si se ingresan, se valida formato peruano.
+  telefono: z.string().regex(/^9\d{8}$/, { message: "El teléfono debe tener 9 dígitos y comenzar con 9." })
+             .optional().or(z.literal("")),
+  dni:      z.string().regex(/^\d{8}$/, { message: "El DNI debe tener exactamente 8 dígitos." })
+             .optional().or(z.literal("")),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres" }),
   rol:      z.string().min(1, { message: "El rol es requerido" }),
   activo:   z.boolean().default(true),
@@ -57,7 +63,7 @@ export default function UsersPage() {
 
   const form = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: { nombre: "", username: "", correo: "", password: "", rol: "CHOFER", activo: true },
+    defaultValues: { nombre: "", username: "", correo: "", telefono: "", dni: "", password: "", rol: "CHOFER", activo: true },
   })
 
   const nombre = form.watch("nombre")
@@ -81,6 +87,8 @@ export default function UsersPage() {
         nombre:   values.nombre,
         username: values.username,
         correo:   values.correo || undefined,
+        telefono: values.telefono || undefined,
+        dni:      values.dni || undefined,
         password: values.password,
         rol:      values.rol,
         activo:   values.activo,
@@ -155,6 +163,40 @@ export default function UsersPage() {
                     <FormMessage />
                   </FormItem>
                 )} />
+
+                {/* Teléfono y DNI en una fila */}
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField control={form.control} name="telefono" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Teléfono <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
+                      <FormControl>
+                        <Input
+                          inputMode="numeric"
+                          maxLength={9}
+                          placeholder="987654321"
+                          {...field}
+                          onChange={e => field.onChange(e.target.value.replace(/\D/g, ""))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={form.control} name="dni" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>DNI <span className="text-muted-foreground font-normal">(opcional)</span></FormLabel>
+                      <FormControl>
+                        <Input
+                          inputMode="numeric"
+                          maxLength={8}
+                          placeholder="12345678"
+                          {...field}
+                          onChange={e => field.onChange(e.target.value.replace(/\D/g, ""))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </div>
 
                 {/* Contraseña */}
                 <FormField control={form.control} name="password" render={({ field }) => (

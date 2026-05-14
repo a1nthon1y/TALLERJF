@@ -122,6 +122,40 @@ async function run() {
       ALTER TABLE materiales
         ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
 
+      -- ── usuarios: datos de contacto centralizados ───────────────────────
+      --   Antes:  choferes.telefono y tecnicos.dni vivian dispersos por tabla.
+      --   Ahora:  todo dato personal (telefono, dni) vive en usuarios.
+      --           Single source of truth. Los perfiles (chofer/tecnico/dueno)
+      --           solo se vinculan al usuario y leen estos datos por JOIN.
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS telefono VARCHAR(15);
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS dni VARCHAR(15);
+
+      -- Backfill: mover datos legacy de choferes.telefono a usuarios.telefono
+      --   Solo donde el usuario aún no tiene teléfono (no sobreescribe) y el
+      --   chofer tenía uno. Idempotente: en runs siguientes, ya no hay datos.
+      UPDATE usuarios u
+      SET    telefono = c.telefono
+      FROM   choferes c
+      WHERE  c.usuario_id = u.id
+        AND  c.telefono IS NOT NULL
+        AND  c.telefono <> ''
+        AND  (u.telefono IS NULL OR u.telefono = '');
+
+      -- Backfill: mover datos legacy de tecnicos.dni a usuarios.dni
+      UPDATE usuarios u
+      SET    dni = t.dni
+      FROM   tecnicos t
+      WHERE  t.usuario_id = u.id
+        AND  t.dni IS NOT NULL
+        AND  t.dni <> ''
+        AND  (u.dni IS NULL OR u.dni = '');
+
+      -- DROP de columnas legacy (single source of truth en usuarios)
+      ALTER TABLE choferes DROP COLUMN IF EXISTS telefono;
+      ALTER TABLE tecnicos DROP COLUMN IF EXISTS dni;
+
       -- ── especialidades: catálogo administrable de especialidades ──────────
       CREATE TABLE IF NOT EXISTS especialidades (
         id SERIAL PRIMARY KEY,

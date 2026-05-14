@@ -69,7 +69,8 @@ export function ChoferesTable() {
         (chofer.usuario_nombre?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (chofer.licencia?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (chofer.usuario_correo?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-        (chofer.telefono?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+        (chofer.usuario_telefono?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (chofer.usuario_dni?.toLowerCase() || '').includes(searchTerm.toLowerCase())
 
       return matchesSearch
     })
@@ -236,7 +237,9 @@ export function ChoferesTable() {
                   <TableCell className="font-medium">{chofer.usuario_nombre || 'N/A'}</TableCell>
                   <TableCell>{chofer.usuario_correo || 'N/A'}</TableCell>
                   <TableCell>{chofer.licencia || 'N/A'}</TableCell>
-                  <TableCell>{chofer.telefono || 'Sin teléfono'}</TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {chofer.usuario_telefono || <span className="font-sans text-muted-foreground italic text-xs">Sin teléfono</span>}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Switch

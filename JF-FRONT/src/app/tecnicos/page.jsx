@@ -28,9 +28,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, Hammer, Link2 } from "lucide-react"
 import { toast } from "sonner"
 
+// El DNI vive en `usuarios` (centralizado) — se muestra read-only debajo
+// del select de usuario. Aquí solo lo operacional del técnico.
 const formSchema = z.object({
   nombre: z.string().min(2, "Nombre requerido"),
-  dni: z.string().min(8, "DNI debe tener al menos 8 caracteres").max(20),
   especialidad: z.string().min(2, "Especialidad requerida"),
   activo: z.boolean().default(true),
   usuario_id: z.string().optional(),
@@ -125,18 +126,18 @@ export default function TecnicosPage() {
 
   const form = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: { nombre: "", dni: "", especialidad: "", activo: true, usuario_id: "" },
+    defaultValues: { nombre: "", especialidad: "", activo: true, usuario_id: "" },
   })
 
   const openCreate = () => {
     setEditing(null)
-    form.reset({ nombre: "", dni: "", especialidad: "", activo: true, usuario_id: "" })
+    form.reset({ nombre: "", especialidad: "", activo: true, usuario_id: "" })
     setIsOpen(true)
   }
 
   const openEdit = (t) => {
     setEditing(t)
-    form.reset({ nombre: t.nombre, dni: t.dni, especialidad: t.especialidad, activo: t.activo, usuario_id: t.usuario_id ? String(t.usuario_id) : "" })
+    form.reset({ nombre: t.nombre, especialidad: t.especialidad, activo: t.activo, usuario_id: t.usuario_id ? String(t.usuario_id) : "" })
     setIsOpen(true)
   }
 
@@ -149,7 +150,6 @@ export default function TecnicosPage() {
   const onSubmit = (values) => {
     const payload = {
       nombre: values.nombre,
-      dni: values.dni,
       especialidad: values.especialidad,
       activo: values.activo,
       usuario_id: values.usuario_id ? parseInt(values.usuario_id) : null,
@@ -161,10 +161,14 @@ export default function TecnicosPage() {
     }
   }
 
+  // Reactivo: usuario seleccionado en el select para mostrar sus datos.
+  const usuarioIdSeleccionado = form.watch("usuario_id")
+  const usuarioSeleccionado = allTecnicoUsers.find((u) => String(u.id) === String(usuarioIdSeleccionado))
+
   const filtered = tecnicos.filter((t) =>
     t.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     t.especialidad?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.dni?.includes(searchTerm)
+    (t.usuario_dni ?? "").includes(searchTerm)
   )
 
   const isPending = createMutation.isPending || updateMutation.isPending
@@ -203,6 +207,7 @@ export default function TecnicosPage() {
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>DNI</TableHead>
+                <TableHead>Teléfono</TableHead>
                 <TableHead>Especialidad</TableHead>
                 <TableHead>Cuenta</TableHead>
                 <TableHead>Estado</TableHead>
@@ -212,14 +217,19 @@ export default function TecnicosPage() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                     No se encontraron técnicos
                   </TableCell>
                 </TableRow>
               ) : filtered.map((t) => (
                 <TableRow key={t.id}>
                   <TableCell className="font-medium">{t.nombre}</TableCell>
-                  <TableCell className="font-mono text-sm">{t.dni}</TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {t.usuario_dni || <span className="text-muted-foreground italic text-xs">—</span>}
+                  </TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {t.usuario_telefono || <span className="text-muted-foreground italic text-xs">—</span>}
+                  </TableCell>
                   <TableCell>{t.especialidad}</TableCell>
                   <TableCell>
                     {t.usuario_id ? (
@@ -332,13 +342,32 @@ export default function TecnicosPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="dni" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>DNI</FormLabel>
-                  <FormControl><Input placeholder="Ej. 12345678" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
+              {/* Datos personales (DNI, teléfono) leídos del usuario vinculado.
+                  Para editarlos: Usuarios → Editar usuario. */}
+              {usuarioSeleccionado && (
+                <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Datos del usuario vinculado
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="text-muted-foreground">DNI: </span>
+                      <span className={usuarioSeleccionado.dni ? "font-mono" : "text-muted-foreground italic"}>
+                        {usuarioSeleccionado.dni || "—"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Teléfono: </span>
+                      <span className={usuarioSeleccionado.telefono ? "font-mono" : "text-muted-foreground italic"}>
+                        {usuarioSeleccionado.telefono || "—"}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground pt-1">
+                    Para modificar, edita el usuario desde la página Usuarios.
+                  </p>
+                </div>
+              )}
               <FormField control={form.control} name="especialidad" render={({ field }) => {
                 // Si el técnico que se edita tiene una especialidad ahora
                 // inactiva, la incluimos para no romper la edición pero la

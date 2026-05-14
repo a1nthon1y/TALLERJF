@@ -366,6 +366,23 @@ Frontend (`chofer-form`, `tecnicos/page`, `owners-table`):
 - Si se está editando un perfil cuya cuenta vinculada quedó **inactiva**, el dropdown la mantiene visible con sufijo `(inactivo)` y un banner ámbar arriba ("Esta cuenta está desactivada — el perfil seguirá vinculado pero el usuario no podrá iniciar sesión").
 - Al desactivar un usuario, el backend devuelve `advertencias` describiendo el impacto en el perfil vinculado (ver §15.1).
 
+### 16.1 Datos personales centralizados en `usuarios`
+
+**Single source of truth**: cualquier dato que pertenece a la persona (no al rol que cumple) vive **solo** en `usuarios`. Los perfiles (`choferes`, `tecnicos`, `duenos`) lo leen vía JOIN.
+
+| Dato | Tabla | Por qué ahí |
+|---|---|---|
+| `nombre`, `correo`, `telefono`, `dni` | `usuarios` | Datos de la persona — no cambian si cambia su rol |
+| `licencia` | `choferes` | Operacional del rol chofer |
+| `especialidad` | `tecnicos` | Operacional del rol técnico |
+
+Reglas:
+- **Backend**: `user.controller.createUser/updateUser` aceptan y validan `telefono` (regex `^9\d{8}$`, opcional, formato móvil PE) y `dni` (regex `^\d{8}$`, opcional, único en la tabla). Los SELECTs de `chofer.controller`, `technician.controller` y `unit.controller` proyectan estos campos como `usuario_telefono`, `usuario_dni`, `chofer_telefono`, `dueno_telefono` vía JOIN con `usuarios`. **Nunca** los aceptan en su propio `INSERT/UPDATE`.
+- **Frontend**: los formularios de Choferes (`chofer-form.jsx`) y Técnicos (`tecnicos/page.jsx`) **no tienen inputs** para `telefono` ni `dni`. Muestran un panel read-only con los datos del usuario seleccionado y un mensaje "Para modificar, edita el usuario desde la página Usuarios". Las tablas (`choferes-table`, `tecnicos/page`) muestran `usuario_telefono`/`usuario_dni` con fallback `—` cuando son null.
+- **Migración**: `run-migrations.js` agrega `usuarios.telefono` y `usuarios.dni` (idempotente con `IF NOT EXISTS`), copia los datos legacy desde `choferes.telefono` y `tecnicos.dni`, y luego hace `DROP COLUMN IF EXISTS` en las tablas viejas. Sin pérdida de datos en producción siempre que la migración corra antes que el nuevo código.
+
+Si en el futuro se centralizan más datos (dirección, fecha de nacimiento), seguir el mismo patrón: agregar columna en `usuarios`, editar solo desde Usuarios, leer por JOIN en perfiles, panel read-only en sus forms.
+
 ### 17. Reportes (PDF / Excel) — arquitectura "Report Library"
 
 Generación de reportes vive en una **librería de componentes reutilizables** — no se reinventa por cada nuevo reporte.

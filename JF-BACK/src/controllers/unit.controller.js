@@ -55,8 +55,9 @@ const getAllUnits = async (req, res) => {
         d.id AS dueno_id,
         us2.nombre AS dueno_nombre,
         us2.correo AS dueno_correo,
-        d.telefono AS dueno_telefono,
-        us.id AS chofer_usuario_id, us.nombre AS chofer_nombre, us.correo AS chofer_correo
+        us2.telefono AS dueno_telefono,
+        us.id AS chofer_usuario_id, us.nombre AS chofer_nombre, us.correo AS chofer_correo,
+        us.telefono AS chofer_telefono
       FROM unidades u
       LEFT JOIN duenos d ON u.dueno_id = d.id
       LEFT JOIN choferes c ON u.chofer_id = c.id
@@ -88,12 +89,13 @@ const getUnitsByOwner = async (req, res) => {
         d.id AS dueno_id,
         us2.nombre AS dueno_nombre,
         us2.correo AS dueno_correo,
-        d.telefono AS dueno_telefono,
+        us2.telefono AS dueno_telefono,
 
         -- datos del chofer
         c.id AS chofer_id,
         us.nombre AS chofer_nombre,
-        us.correo AS chofer_correo
+        us.correo AS chofer_correo,
+        us.telefono AS chofer_telefono
 
       FROM unidades u
       LEFT JOIN duenos d ON u.dueno_id = d.id
@@ -132,14 +134,14 @@ const getUnitById = async (req, res) => {
         d.id AS dueno_id,
         us2.nombre AS dueno_nombre,
         us2.correo AS dueno_correo,
-        d.telefono AS dueno_telefono,
+        us2.telefono AS dueno_telefono,
 
         -- chofer
         c.id AS chofer_id,
         us.nombre AS chofer_nombre,
         us.correo AS chofer_correo,
         c.licencia,
-        c.telefono AS chofer_telefono
+        us.telefono AS chofer_telefono
 
       FROM unidades u
       LEFT JOIN duenos d ON u.dueno_id = d.id
