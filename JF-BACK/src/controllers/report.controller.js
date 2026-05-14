@@ -124,8 +124,68 @@ const getMaintenanceReport = async (req, res) => {
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-// 2. ESTADO DE CUENTA DEL DUEÑO (owner)
-//    Cada fila es un mantenimiento de sus unidades, con costo desglosado.
+// 2a. MANTENIMIENTOS DEL DUEÑO (owner) — array crudo para la vista
+//     funcional /dueno/mantenimientos. NO es un "reporte exportable":
+//     devuelve materiales como JSON anidado para que la UI pueda expandir
+//     cada fila y mostrar el detalle. Para la versión PDF/Excel ver
+//     getOwnerStatement más abajo.
+// ════════════════════════════════════════════════════════════════════════════
+const getMyUnitsReport = async (req, res) => {
+  try {
+    const usuario_id = req.user.id;
+
+    const dueno = await pool.query("SELECT id FROM duenos WHERE usuario_id = $1", [usuario_id]);
+    if (dueno.rows.length === 0) {
+      return res.status(404).json({ message: "No se encontró perfil de dueño asociado a tu usuario." });
+    }
+    const dueno_id = dueno.rows[0].id;
+
+    const result = await pool.query(
+      `SELECT
+         m.id                                                     AS mantenimiento_id,
+         m.codigo,
+         u.placa                                                  AS unidad,
+         u.modelo,
+         m.tipo,
+         m.estado,
+         m.fecha_solicitud,
+         m.fecha_realizacion,
+         m.observaciones,
+         m.kilometraje_actual,
+         t.nombre                                                 AS tecnico_nombre,
+         COALESCE(mat_resumen.costo_total, 0)                     AS costo_total,
+         COALESCE(mat_resumen.materiales, '[]'::json)             AS materiales
+       FROM mantenimientos m
+       JOIN unidades u           ON m.unidad_id = u.id
+       LEFT JOIN tecnicos t      ON m.tecnico_id = t.id
+       LEFT JOIN (
+         SELECT dm.mantenimiento_id,
+                json_agg(json_build_object(
+                  'nombre',          mat.nombre,
+                  'cantidad',        dm.cantidad,
+                  'precio_unitario', mat.precio,
+                  'costo_total',     dm.costo_total
+                )) AS materiales,
+                SUM(dm.costo_total) AS costo_total
+         FROM detalles_mantenimiento dm
+         JOIN materiales mat ON dm.material_id = mat.id
+         GROUP BY dm.mantenimiento_id
+       ) mat_resumen ON mat_resumen.mantenimiento_id = m.id
+       WHERE u.dueno_id = $1
+       ORDER BY m.fecha_solicitud DESC`,
+      [dueno_id]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Error en getMyUnitsReport:", error);
+    res.status(500).json({ message: "Error al obtener mantenimientos del dueño" });
+  }
+};
+
+// ════════════════════════════════════════════════════════════════════════════
+// 2b. ESTADO DE CUENTA DEL DUEÑO (owner) — formato wrapper para PDF/Excel.
+//     Cada fila es un mantenimiento de sus unidades, con costo desglosado.
 // ════════════════════════════════════════════════════════════════════════════
 const getOwnerStatement = async (req, res) => {
   try {
@@ -877,6 +937,7 @@ const getTechnicianMyJobs = async (req, res) => {
 
 module.exports = {
   getMaintenanceReport,
+  getMyUnitsReport,
   getOwnerStatement,
   getTechnicianProductivity,
   getDriverUnitReport,

@@ -18,7 +18,10 @@ router.get("/top-units",               authenticate, adminOnly, reportController
 router.get("/predictive-compliance",   authenticate, adminOnly, reportController.getPredictiveCompliance);
 router.get("/arrivals-log",            authenticate, adminOnly, reportController.getArrivalsLog);
 
-// ── Reportes para owner (estado de cuenta de SUS unidades) ─────────────────
+// ── Reportes para owner ────────────────────────────────────────────────────
+// /my-units    → array crudo (vista funcional /dueno/mantenimientos)
+// /owner-*     → wrapper para PDF/Excel (vista /dueno/reportes)
+router.get("/my-units",         authenticate, checkRole(["OWNER"]), reportController.getMyUnitsReport);
 router.get("/owner-statement",  authenticate, checkRole(["OWNER"]), reportController.getOwnerStatement);
 router.get("/owner-upcoming",   authenticate, checkRole(["OWNER"]), reportController.getOwnerUpcomingMaintenance);
 
