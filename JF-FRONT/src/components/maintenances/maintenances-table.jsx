@@ -98,7 +98,7 @@ export function MaintenancesTable() {
   const [searchTerm, setSearchTerm] = useState("")
   const [estadoFilter, setEstadoFilter] = useState("TODOS")
   const [tipoFilter, setTipoFilter] = useState("TODOS")
-  const [viewMode, setViewMode] = useState("tabla") // "tabla" | "kanban"
+  const [viewMode, setViewMode] = useState("kanban") // "tabla" | "kanban"
   // Editar unificado
   const [editingMaintenance, setEditingMaintenance] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
