@@ -19,6 +19,7 @@ const primaryByRole = {
     { title: "Llegada",   href: "/chofer/reportar-llegada",        icon: MapPin },
     { title: "Falla",     href: "/chofer/solicitar-mantenimiento", icon: ClipboardList },
     { title: "Historial", href: "/chofer/mis-mantenimientos",      icon: Wrench },
+    { title: "Reportes",  href: "/chofer/reportes",                icon: FileBarChart },
   ],
   TECNICO: [
     { title: "Inicio",       href: "/tecnico/dashboard",  icon: LayoutDashboard },
@@ -28,6 +29,7 @@ const primaryByRole = {
     { title: "Inicio",    href: "/dueno/dashboard",       icon: LayoutDashboard },
     { title: "Unidades",  href: "/dueno/mis-unidades",    icon: Bus },
     { title: "Historial", href: "/dueno/mantenimientos",  icon: Wrench },
+    { title: "Reportes",  href: "/dueno/reportes",        icon: FileBarChart },
   ],
   ADMIN: [
     { title: "Inicio",    href: "/",               icon: LayoutDashboard },

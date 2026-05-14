@@ -92,4 +92,33 @@ export const makeDeleteRequest = async (url) => {
   }
 };
 
+/**
+ * Descarga un archivo binario (PDF/Excel/etc.) preservando autenticación,
+ * el filename que sugiere el backend (Content-Disposition) y disparando el
+ * "save as" del navegador. No bloquea la UI.
+ */
+export const downloadFile = async (url, params = {}, fallbackName = "archivo") => {
+  try {
+    const response = await api.get(url, { params, responseType: "blob" });
+    const blob = new Blob([response.data], { type: response.headers["content-type"] });
+
+    // Intentar extraer filename del Content-Disposition
+    let filename = fallbackName;
+    const cd = response.headers["content-disposition"];
+    const match = cd && /filename="?([^";]+)"?/i.exec(cd);
+    if (match?.[1]) filename = match[1];
+
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(objectUrl);
+  } catch (error) {
+    throw new Error(error.message || "Error al descargar el archivo");
+  }
+};
+
 export default api;

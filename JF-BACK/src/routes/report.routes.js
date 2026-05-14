@@ -4,13 +4,40 @@ const reportController = require("../controllers/report.controller");
 const authenticate = require("../middlewares/auth.middleware");
 const checkRole = require("../middlewares/role.middleware");
 
-// Reporte de todos los mantenimientos (admin/encargado).
-router.get("/maintenances", authenticate, checkRole(["ADMIN", "ENCARGADO"]), reportController.getMaintenanceReport);
+// Convención: todos los reportes aceptan ?formato=json|xlsx|pdf
+// y filtros vía query string (ver report.controller.js para cada uno).
 
-// Reporte del OWNER autenticado: mantenimientos de todas sus unidades.
-router.get("/my-units", authenticate, checkRole(["OWNER"]), reportController.getMyUnitsReport);
+// ── Reportes administrativos ───────────────────────────────────────────────
+// Mantenimientos por período (con filtros: desde, hasta, tipo, estado, dueno_id, unidad_id, tecnico_id)
+router.get(
+  "/maintenances",
+  authenticate,
+  checkRole(["ADMIN", "ENCARGADO"]),
+  reportController.getMaintenanceReport
+);
 
-// Reporte del CHOFER autenticado: solo su unidad asignada.
-router.get("/my-unit", authenticate, checkRole(["CHOFER"]), reportController.getMyUnitReports);
+// Productividad por técnico (filtros: desde, hasta, tecnico_id)
+router.get(
+  "/technician-productivity",
+  authenticate,
+  checkRole(["ADMIN", "ENCARGADO"]),
+  reportController.getTechnicianProductivity
+);
+
+// ── Reportes para owner (estado de cuenta de SUS unidades) ─────────────────
+router.get(
+  "/owner-statement",
+  authenticate,
+  checkRole(["OWNER"]),
+  reportController.getOwnerStatement
+);
+
+// ── Reporte para chofer (su unidad asignada) ───────────────────────────────
+router.get(
+  "/my-unit",
+  authenticate,
+  checkRole(["CHOFER"]),
+  reportController.getDriverUnitReport
+);
 
 module.exports = router;

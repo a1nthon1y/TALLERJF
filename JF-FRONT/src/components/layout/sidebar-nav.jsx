@@ -49,6 +49,7 @@ const choferNavItems = [
   { title: "Registrar Llegada", href: "/chofer/reportar-llegada",        icon: MapPin },
   { title: "Reportar Falla",    href: "/chofer/solicitar-mantenimiento", icon: ClipboardList },
   { title: "Mis Solicitudes",   href: "/chofer/mis-mantenimientos",      icon: Wrench },
+  { title: "Mis Reportes",      href: "/chofer/reportes",                icon: FileBarChart },
 ]
 
 const tecnicoNavItems = [
@@ -60,6 +61,7 @@ const ownerNavItems = [
   { title: "Panel", href: "/dueno/dashboard", icon: BarChart3 },
   { title: "Mis Unidades", href: "/dueno/mis-unidades", icon: Bus },
   { title: "Mantenimientos", href: "/dueno/mantenimientos", icon: ClipboardList },
+  { title: "Mis Reportes", href: "/dueno/reportes", icon: FileBarChart },
 ]
 
 export function SidebarNav() {
