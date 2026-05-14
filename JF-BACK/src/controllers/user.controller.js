@@ -143,12 +143,74 @@ const toggleUserStatus = async (req, res) => {
       }
     }
 
+    // Recolectamos advertencias informativas del impacto cuando el admin
+    // está APAGANDO una cuenta (no al activar). No bloquean: solo informan.
+    // El usuario desactivado no podrá hacer login y, gracias a las
+    // validaciones en createChofer/createTechnician/createOwner, tampoco
+    // podrá ser vinculado a nuevos perfiles. Los perfiles existentes
+    // permanecen para preservar historial.
+    const advertencias = [];
+    if (activo === false && t.activo === true) {
+      advertencias.push(
+        `${t.nombre} no podrá iniciar sesión hasta que reactives su cuenta.`
+      );
+      if (t.rol === "CHOFER") {
+        const ch = await pool.query("SELECT id FROM choferes WHERE usuario_id = $1", [id]);
+        if (ch.rows.length > 0) {
+          const ch_id = ch.rows[0].id;
+          const u = await pool.query(
+            "SELECT COUNT(*)::int AS total FROM unidades WHERE chofer_id = $1 AND activo = TRUE",
+            [ch_id]
+          );
+          if (u.rows[0].total > 0) {
+            advertencias.push(
+              `Está asignado a ${u.rows[0].total} unidad(es) activa(s). Mientras esté desactivado no podrá registrar llegadas ni reportar fallas. La asignación se mantiene.`
+            );
+          }
+        }
+      }
+      if (t.rol === "TECNICO") {
+        const tec = await pool.query("SELECT id FROM tecnicos WHERE usuario_id = $1", [id]);
+        if (tec.rows.length > 0) {
+          const tec_id = tec.rows[0].id;
+          const m = await pool.query(
+            "SELECT COUNT(*)::int AS total FROM mantenimientos WHERE tecnico_id = $1 AND estado IN ('PENDIENTE','EN_PROCESO')",
+            [tec_id]
+          );
+          if (m.rows[0].total > 0) {
+            advertencias.push(
+              `Tiene ${m.rows[0].total} mantenimiento(s) activo(s) asignado(s). Considera reasignarlos a otro técnico antes de desactivarlo.`
+            );
+          }
+        }
+      }
+      if (t.rol === "OWNER") {
+        const d = await pool.query("SELECT id FROM duenos WHERE usuario_id = $1", [id]);
+        if (d.rows.length > 0) {
+          const d_id = d.rows[0].id;
+          const u = await pool.query(
+            "SELECT COUNT(*)::int AS total FROM unidades WHERE dueno_id = $1",
+            [d_id]
+          );
+          if (u.rows[0].total > 0) {
+            advertencias.push(
+              `Es dueño de ${u.rows[0].total} unidad(es). El historial se conserva, pero no podrá entrar al panel del dueño hasta reactivarlo.`
+            );
+          }
+        }
+      }
+    }
+
     const result = await pool.query(
       "UPDATE usuarios SET activo=$1 WHERE id=$2 RETURNING id, nombre, username, correo, rol, activo, creado_en",
       [activo, id]
     );
 
-    res.json({ message: `Usuario ${activo ? "activado" : "desactivado"} correctamente`, user: result.rows[0] });
+    res.json({
+      message: `Usuario ${activo ? "activado" : "desactivado"} correctamente`,
+      user: result.rows[0],
+      advertencias,
+    });
   } catch (error) {
     res.status(500).json({ error: "Error al actualizar estado del usuario" });
   }

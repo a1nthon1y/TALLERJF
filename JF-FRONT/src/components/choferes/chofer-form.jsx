@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useUsers } from "@/hooks/useUsers"
-import { Loader2 } from "lucide-react"
+import { useChoferes } from "@/hooks/useChoferes"
+import { AlertTriangle, Loader2 } from "lucide-react"
 
 // Teléfono Perú: 9 dígitos exactos, comenzando en 9 (móvil) o 0 dígitos (vacío permitido)
 const TELEFONO_PE_REGEX = /^9\d{8}$/
@@ -46,10 +47,37 @@ const formSchema = z.object({
 
 export function ChoferForm({ chofer, onSubmit, onCancel, isLoading }) {
   const { data: users, isLoading: isLoadingUsers } = useUsers()
+  const { data: choferes } = useChoferes()
 
-  // Filtrar usuarios que no sean choferes o que no tengan chofer asignado
-  // Por ahora, mostrar todos los usuarios con rol CHOFER que no tengan chofer asignado
-  const availableUsers = users?.filter((user) => user.rol === "CHOFER") || []
+  // Usuarios elegibles:
+  //  1. Rol CHOFER
+  //  2. Activos (no apagados desde Usuarios)
+  //  3. NO vinculados ya a otro chofer (excepto el actual cuando se edita)
+  // Cuando se edita, agregamos al usuario actualmente vinculado al final
+  // de la lista aunque esté inactivo o ya esté usado, para que el select
+  // no quede vacío y muestre el nombre real.
+  const usuariosOcupados = new Set(
+    (choferes ?? [])
+      .filter((c) => !chofer || c.chofer_id !== chofer.id)
+      .map((c) => c.usuario_id)
+      .filter(Boolean)
+  )
+  const availableUsers = (users ?? [])
+    .filter((u) => u && u.rol === "CHOFER" && u.activo !== false && !usuariosOcupados.has(u.id))
+
+  const usuarioVinculadoActual = chofer
+    ? (users ?? []).find((u) => u.id === chofer.usuario_id)
+    : null
+  const usuarioVinculadoInactivo = usuarioVinculadoActual && usuarioVinculadoActual.activo === false
+
+  // Si estamos editando y el usuario actual no está en la lista (porque
+  // está inactivo o ya marcado como ocupado), lo añadimos al final para
+  // poder mostrarlo en el select.
+  const showCurrent = chofer && usuarioVinculadoActual &&
+    !availableUsers.some((u) => u.id === usuarioVinculadoActual.id)
+  const finalUsers = showCurrent
+    ? [...availableUsers, usuarioVinculadoActual]
+    : availableUsers
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -102,19 +130,33 @@ export function ChoferForm({ chofer, onSubmit, onCancel, isLoading }) {
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {availableUsers.map((user) => (
-                    <SelectItem key={user.id} value={user.id.toString()}>
-                      {user.nombre} ({user.correo})
-                    </SelectItem>
-                  ))}
+                  {finalUsers.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+                      No hay usuarios CHOFER disponibles. Crea uno desde Usuarios o reactiva uno existente.
+                    </div>
+                  ) : (
+                    finalUsers.map((user) => (
+                      <SelectItem key={user.id} value={user.id.toString()}>
+                        {user.nombre} ({user.correo}){user.activo === false ? " — Inactivo" : ""}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
               <FormDescription>
-                {chofer 
+                {chofer
                   ? "El usuario no puede ser cambiado una vez creado el chofer"
-                  : "Seleccione un usuario con rol CHOFER"}
+                  : "Solo aparecen usuarios con rol CHOFER, activos y sin perfil vinculado"}
               </FormDescription>
               <FormMessage />
+              {usuarioVinculadoInactivo && (
+                <div className="mt-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>
+                    El usuario vinculado a este chofer está <strong>desactivado</strong>. No podrá iniciar sesión hasta que lo reactives desde Usuarios.
+                  </span>
+                </div>
+              )}
             </FormItem>
           )}
         />

@@ -2,6 +2,55 @@ const pool = require("../config/db");
 const { generarCodigo } = require("./maintenance.controller");
 const { evaluarMotorPredictivo } = require("../services/predictive-engine");
 
+// ───────────────────────────────────────────────────────────────────────
+// Helper: valida que el usuario candidato pueda vincularse a un perfil
+//   - debe existir
+//   - debe tener el rol esperado
+//   - debe estar activo (sin sentido vincular cuentas apagadas)
+//   - no debe estar ya vinculado a otro registro de la misma tabla
+//     (excludeId permite saltarse esta verificación al editar el mismo perfil)
+// ───────────────────────────────────────────────────────────────────────
+async function validarUsuarioVinculable({ usuario_id, rolEsperado, tabla, excludeId = null }) {
+  const userQ = await pool.query(
+    "SELECT id, nombre, rol, activo FROM usuarios WHERE id = $1",
+    [usuario_id]
+  );
+  if (userQ.rows.length === 0) {
+    return { ok: false, status: 404, message: `El usuario seleccionado (id ${usuario_id}) no existe.` };
+  }
+  const u = userQ.rows[0];
+  if (u.rol !== rolEsperado) {
+    return {
+      ok: false,
+      status: 400,
+      message: `El usuario "${u.nombre}" tiene rol ${u.rol}, no ${rolEsperado}. Crea uno con el rol correcto desde Usuarios.`,
+    };
+  }
+  if (!u.activo) {
+    return {
+      ok: false,
+      status: 409,
+      code: "USUARIO_DESACTIVADO",
+      message: `El usuario "${u.nombre}" está desactivado. Reactívalo desde Usuarios antes de vincularlo.`,
+    };
+  }
+  // Verificar que no esté ya vinculado a otro registro de la misma tabla
+  const params = excludeId ? [usuario_id, excludeId] : [usuario_id];
+  const dupQ = await pool.query(
+    `SELECT id FROM ${tabla} WHERE usuario_id = $1 ${excludeId ? "AND id != $2" : ""}`,
+    params
+  );
+  if (dupQ.rows.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      code: "USUARIO_YA_VINCULADO",
+      message: `El usuario "${u.nombre}" ya está vinculado a otro registro de ${tabla}. Un usuario solo puede tener un perfil del mismo tipo.`,
+    };
+  }
+  return { ok: true, usuario: u };
+}
+
 // ===============================================================
 //  ✅ Crear chofer
 // ===============================================================
@@ -12,6 +61,9 @@ const createDriver = async (req, res) => {
     if (!usuario_id || !licencia) {
       return res.status(400).json({ message: "usuario_id y licencia son obligatorios" });
     }
+
+    const v = await validarUsuarioVinculable({ usuario_id, rolEsperado: "CHOFER", tabla: "choferes" });
+    if (!v.ok) return res.status(v.status).json({ code: v.code, message: v.message });
 
     const result = await pool.query(
       `
@@ -111,6 +163,16 @@ const updateDriver = async (req, res) => {
   try {
     const { id } = req.params;
     const { usuario_id, licencia, telefono } = req.body;
+
+    if (usuario_id) {
+      const v = await validarUsuarioVinculable({
+        usuario_id,
+        rolEsperado: "CHOFER",
+        tabla: "choferes",
+        excludeId: id,
+      });
+      if (!v.ok) return res.status(v.status).json({ code: v.code, message: v.message });
+    }
 
     const result = await pool.query(
       `

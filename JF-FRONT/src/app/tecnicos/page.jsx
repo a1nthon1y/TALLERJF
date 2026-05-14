@@ -58,10 +58,17 @@ export default function TecnicosPage() {
   const especialidadesActivas = especialidades.filter((e) => e.activo)
 
   const [tecnicoUsersError, setTecnicoUsersError] = useState(false)
+  // Guardamos TODOS los usuarios TECNICO (sin filtrar) para tener el nombre del
+  // vinculado aunque esté inactivo (usado en la columna "Cuenta vinculada"
+  // y al editar un técnico). El filtrado de usuarios elegibles se hace luego
+  // según contexto (crear vs editar).
+  const [allTecnicoUsers, setAllTecnicoUsers] = useState([])
   useEffect(() => {
     makeGetRequest("/users")
       .then((users) => {
-        setTecnicoUsers(Array.isArray(users) ? users.filter((u) => u.rol === "TECNICO" && u.activo !== false) : [])
+        const list = Array.isArray(users) ? users.filter((u) => u.rol === "TECNICO") : []
+        setAllTecnicoUsers(list)
+        setTecnicoUsers(list.filter((u) => u.activo !== false))
       })
       .catch(() => setTecnicoUsersError(true))
   }, [])
@@ -208,10 +215,20 @@ export default function TecnicosPage() {
                   <TableCell>{t.especialidad}</TableCell>
                   <TableCell>
                     {t.usuario_id ? (
-                      <Badge variant="outline" className="border-blue-400 text-blue-600 gap-1">
-                        <Link2 className="h-3 w-3" />
-                        {tecnicoUsers.find((u) => u.id === t.usuario_id)?.username || `#${t.usuario_id}`}
-                      </Badge>
+                      (() => {
+                        const u = allTecnicoUsers.find((x) => x.id === t.usuario_id)
+                        const inactivo = u && u.activo === false
+                        return (
+                          <Badge
+                            variant="outline"
+                            className={`gap-1 ${inactivo ? "border-amber-400 text-amber-700" : "border-blue-400 text-blue-600"}`}
+                            title={inactivo ? "El usuario vinculado está desactivado y no puede iniciar sesión" : ""}
+                          >
+                            <Link2 className="h-3 w-3" />
+                            {u?.username || `#${t.usuario_id}`}{inactivo ? " (inactivo)" : ""}
+                          </Badge>
+                        )
+                      })()
                     ) : (
                       <span className="text-xs text-muted-foreground">Sin cuenta</span>
                     )}
@@ -353,13 +370,32 @@ export default function TecnicosPage() {
                       <SelectItem value="none">Sin cuenta de usuario</SelectItem>
                       {tecnicoUsersError ? (
                         <SelectItem value="error" disabled>Error al cargar usuarios</SelectItem>
-                      ) : tecnicoUsers.length === 0 ? (
-                        <SelectItem value="empty" disabled>No hay usuarios con rol Técnico</SelectItem>
-                      ) : tecnicoUsers.map((u) => (
-                        <SelectItem key={u.id} value={String(u.id)}>
-                          {u.nombre} ({u.username || u.correo})
-                        </SelectItem>
-                      ))}
+                      ) : (() => {
+                        // Usuarios ya vinculados a otro técnico (excepto el actual al editar)
+                        const ocupados = new Set(
+                          (tecnicos ?? [])
+                            .filter((t) => !editing || t.id !== editing.id)
+                            .map((t) => t.usuario_id)
+                            .filter(Boolean)
+                        )
+                        const elegibles = tecnicoUsers.filter((u) => !ocupados.has(u.id))
+                        // Si editamos y el usuario actual no está en la lista (porque
+                        // está inactivo o ya marcado como ocupado), lo añadimos al final
+                        // para no romper el select.
+                        const usuarioActual = editing
+                          ? allTecnicoUsers.find((u) => u.id === editing.usuario_id)
+                          : null
+                        const showCurrent = usuarioActual && !elegibles.some((u) => u.id === usuarioActual.id)
+                        const finalUsers = showCurrent ? [...elegibles, usuarioActual] : elegibles
+                        if (finalUsers.length === 0) {
+                          return <SelectItem value="empty" disabled>No hay usuarios TECNICO disponibles</SelectItem>
+                        }
+                        return finalUsers.map((u) => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.nombre} ({u.username || u.correo}){u.activo === false ? " — Inactivo" : ""}
+                          </SelectItem>
+                        ))
+                      })()}
                     </SelectContent>
                   </Select>
                   <FormMessage />

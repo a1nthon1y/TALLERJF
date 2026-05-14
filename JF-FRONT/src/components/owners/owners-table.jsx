@@ -45,13 +45,35 @@ export function OwnersTable() {
     queryFn: getAllUnits,
   })
 
-  const { data: ownerUsers = [] } = useQuery({
-    queryKey: ["users-owner"],
+  // Traemos TODOS los usuarios OWNER (sin filtrar por activo) para poder mostrar
+  // el nombre del usuario vinculado en la tabla aunque esté desactivado. El
+  // filtrado para los selects se hace según contexto (crear vs editar).
+  const { data: allOwnerUsers = [] } = useQuery({
+    queryKey: ["users-owner-all"],
     queryFn: async () => {
       const users = await makeGetRequest("/users")
-      return Array.isArray(users) ? users.filter((u) => u.rol === "OWNER" && u.activo !== false) : []
+      return Array.isArray(users) ? users.filter((u) => u.rol === "OWNER") : []
     },
   })
+
+  // Helper: usuarios elegibles para vincular (rol OWNER + activos + sin perfil de
+  // dueño todavía). Cuando se edita, se permite el usuario actual aunque ya esté
+  // marcado como ocupado o esté inactivo, agregándolo al final.
+  const elegiblesParaCrear = (excludeOwnerId = null) => {
+    const ocupados = new Set(
+      (owners ?? [])
+        .filter((o) => excludeOwnerId == null || o.id !== excludeOwnerId)
+        .map((o) => o.usuario_id)
+        .filter(Boolean)
+    )
+    const base = allOwnerUsers.filter((u) => u.activo !== false && !ocupados.has(u.id))
+    if (excludeOwnerId != null) {
+      const owner = (owners ?? []).find((o) => o.id === excludeOwnerId)
+      const actual = owner ? allOwnerUsers.find((u) => u.id === owner.usuario_id) : null
+      if (actual && !base.some((u) => u.id === actual.id)) return [...base, actual]
+    }
+    return base
+  }
 
   const editMutation = useMutation({
     mutationFn: ({ id, data }) => updateOwner(id, data),
@@ -487,14 +509,19 @@ export function OwnersTable() {
                   <SelectValue placeholder="Seleccionar usuario..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {ownerUsers.length === 0 ? (
-                    <SelectItem value="" disabled>No hay usuarios OWNER disponibles</SelectItem>
-                  ) : ownerUsers.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.nombre} ({u.username || u.correo})
-                      {String(u.id) === String(editTarget?.usuario_id) ? " — actual" : ""}
-                    </SelectItem>
-                  ))}
+                  {(() => {
+                    const opciones = elegiblesParaCrear(editTarget?.id)
+                    if (opciones.length === 0) {
+                      return <SelectItem value="" disabled>No hay otros usuarios OWNER disponibles</SelectItem>
+                    }
+                    return opciones.map((u) => (
+                      <SelectItem key={u.id} value={String(u.id)}>
+                        {u.nombre} ({u.username || u.correo})
+                        {String(u.id) === String(editTarget?.usuario_id) ? " — actual" : ""}
+                        {u.activo === false ? " — Inactivo" : ""}
+                      </SelectItem>
+                    ))
+                  })()}
                 </SelectContent>
               </Select>
             </div>
@@ -528,13 +555,17 @@ export function OwnersTable() {
                   <SelectValue placeholder="Seleccionar usuario..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {ownerUsers.length === 0 ? (
-                    <SelectItem value="" disabled>No hay usuarios con rol OWNER disponibles</SelectItem>
-                  ) : ownerUsers.map((u) => (
-                    <SelectItem key={u.id} value={String(u.id)}>
-                      {u.nombre} ({u.username || u.correo})
-                    </SelectItem>
-                  ))}
+                  {(() => {
+                    const opciones = elegiblesParaCrear()
+                    if (opciones.length === 0) {
+                      return <SelectItem value="" disabled>No hay usuarios OWNER disponibles (todos están inactivos o ya vinculados)</SelectItem>
+                    }
+                    return opciones.map((u) => (
+                      <SelectItem key={u.id} value={String(u.id)}>
+                        {u.nombre} ({u.username || u.correo})
+                      </SelectItem>
+                    ))
+                  })()}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">

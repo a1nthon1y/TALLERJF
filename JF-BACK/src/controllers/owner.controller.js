@@ -1,17 +1,55 @@
 const pool = require("../config/db");
 
+// Verifica que el usuario candidato exista, tenga rol OWNER, esté activo
+// y no esté ya vinculado a otro registro de duenos. Devuelve { ok, status, code?, message? }.
+async function validarUsuarioVinculable({ usuario_id, excludeId = null }) {
+  const userQ = await pool.query(
+    "SELECT id, nombre, rol, activo FROM usuarios WHERE id = $1",
+    [usuario_id]
+  );
+  if (userQ.rows.length === 0) {
+    return { ok: false, status: 404, message: `El usuario seleccionado (id ${usuario_id}) no existe.` };
+  }
+  const u = userQ.rows[0];
+  if (u.rol !== "OWNER") {
+    return {
+      ok: false,
+      status: 400,
+      message: `El usuario "${u.nombre}" tiene rol ${u.rol}; debe tener rol OWNER para vincularse a un dueño.`,
+    };
+  }
+  if (!u.activo) {
+    return {
+      ok: false,
+      status: 409,
+      code: "USUARIO_DESACTIVADO",
+      message: `El usuario "${u.nombre}" está desactivado. Reactívalo desde Usuarios antes de vincularlo.`,
+    };
+  }
+  const params = excludeId ? [usuario_id, excludeId] : [usuario_id];
+  const dupQ = await pool.query(
+    `SELECT id FROM duenos WHERE usuario_id = $1 ${excludeId ? "AND id != $2" : ""}`,
+    params
+  );
+  if (dupQ.rows.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      code: "USUARIO_YA_VINCULADO",
+      message: `El usuario "${u.nombre}" ya está vinculado a otro dueño. Un usuario solo puede tener un perfil de dueño.`,
+    };
+  }
+  return { ok: true };
+}
+
 // 🔹 Crear un nuevo dueño (asociado a un usuario existente)
 const createOwner = async (req, res) => {
   try {
     const { usuario_id } = req.body;
 
-    // Verificar que el usuario exista
-    const userCheck = await pool.query("SELECT id FROM usuarios WHERE id = $1", [usuario_id]);
-    if (userCheck.rows.length === 0) {
-      return res.status(404).json({ message: `El usuario seleccionado (id ${usuario_id}) no existe.` });
-    }
+    const v = await validarUsuarioVinculable({ usuario_id });
+    if (!v.ok) return res.status(v.status).json({ code: v.code, message: v.message });
 
-    // Insertar el nuevo dueño
     const result = await pool.query(
       "INSERT INTO duenos (usuario_id, creado_en) VALUES ($1, NOW()) RETURNING *",
       [usuario_id]
@@ -70,11 +108,8 @@ const updateOwner = async (req, res) => {
     const { id } = req.params;
     const { usuario_id } = req.body;
 
-    // Verificar que el usuario exista
-    const userCheck = await pool.query("SELECT id FROM usuarios WHERE id = $1", [usuario_id]);
-    if (userCheck.rows.length === 0) {
-      return res.status(404).json({ message: `El usuario seleccionado (id ${usuario_id}) no existe.` });
-    }
+    const v = await validarUsuarioVinculable({ usuario_id, excludeId: id });
+    if (!v.ok) return res.status(v.status).json({ code: v.code, message: v.message });
 
     const result = await pool.query(
       "UPDATE duenos SET usuario_id = $1 WHERE id = $2 RETURNING *",

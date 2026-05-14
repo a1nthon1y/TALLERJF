@@ -93,6 +93,12 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
     try {
       const res = await userService.toggleUserStatus(u.id, !u.activo)
       toast.success(res?.message || `Usuario ${u.activo ? "desactivado" : "activado"}`)
+      // El backend devuelve advertencias al desactivar (rol, perfiles vinculados,
+      // mantenimientos activos). Las mostramos como toasts warning con duración
+      // larga para que el admin las pueda leer.
+      if (Array.isArray(res?.advertencias)) {
+        res.advertencias.forEach((adv) => toast.warning(adv, { duration: 9000 }))
+      }
       await mutate()
     } catch (error) {
       toast.error(error.message || "Error al cambiar estado")

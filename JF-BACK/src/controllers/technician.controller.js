@@ -12,22 +12,57 @@ const getTechnicians = async (req, res) => {
   }
 };
 
+// Verifica que el usuario candidato exista, tenga el rol esperado, esté activo
+// y no esté ya vinculado a otro técnico (excludeId omite la verificación al editar
+// el mismo registro). Devuelve { ok, status, code?, message? }.
+async function validarUsuarioVinculable({ usuario_id, excludeId = null }) {
+  const userQ = await pool.query(
+    "SELECT id, nombre, rol, activo FROM usuarios WHERE id = $1",
+    [usuario_id]
+  );
+  if (userQ.rows.length === 0) {
+    return { ok: false, status: 404, message: `El usuario seleccionado (id ${usuario_id}) no existe.` };
+  }
+  const u = userQ.rows[0];
+  if (u.rol !== "TECNICO") {
+    return {
+      ok: false,
+      status: 400,
+      message: `El usuario "${u.nombre}" tiene rol ${u.rol}; debe tener rol TECNICO para vincularse a un técnico.`,
+    };
+  }
+  if (!u.activo) {
+    return {
+      ok: false,
+      status: 409,
+      code: "USUARIO_DESACTIVADO",
+      message: `El usuario "${u.nombre}" está desactivado. Reactívalo desde Usuarios antes de vincularlo.`,
+    };
+  }
+  const params = excludeId ? [usuario_id, excludeId] : [usuario_id];
+  const dupQ = await pool.query(
+    `SELECT id FROM tecnicos WHERE usuario_id = $1 ${excludeId ? "AND id != $2" : ""}`,
+    params
+  );
+  if (dupQ.rows.length > 0) {
+    return {
+      ok: false,
+      status: 409,
+      code: "USUARIO_YA_VINCULADO",
+      message: `El usuario "${u.nombre}" ya está vinculado a otro técnico. Un usuario solo puede tener un perfil de técnico.`,
+    };
+  }
+  return { ok: true };
+}
+
 // Crear nuevo técnico
 const createTechnician = async (req, res) => {
   try {
     const { nombre, dni, especialidad, activo, usuario_id } = req.body;
 
-    // Verificar que el usuario existe y tiene rol TECNICO si se provee
     if (usuario_id) {
-      const userCheck = await pool.query("SELECT rol, nombre FROM usuarios WHERE id = $1", [usuario_id]);
-      if (userCheck.rows.length === 0) {
-        return res.status(404).json({ message: `El usuario seleccionado (id ${usuario_id}) no existe.` });
-      }
-      if (userCheck.rows[0].rol !== "TECNICO") {
-        return res.status(400).json({
-          message: `El usuario "${userCheck.rows[0].nombre}" tiene rol ${userCheck.rows[0].rol}; debe tener rol TECNICO para vincularse a un técnico.`,
-        });
-      }
+      const v = await validarUsuarioVinculable({ usuario_id });
+      if (!v.ok) return res.status(v.status).json({ code: v.code, message: v.message });
     }
 
     const result = await pool.query(
@@ -47,17 +82,9 @@ const updateTechnician = async (req, res) => {
     const { id } = req.params;
     const { nombre, dni, especialidad, usuario_id } = req.body;
 
-    // Verificar que el usuario existe y tiene rol TECNICO si se provee
     if (usuario_id) {
-      const userCheck = await pool.query("SELECT rol, nombre FROM usuarios WHERE id = $1", [usuario_id]);
-      if (userCheck.rows.length === 0) {
-        return res.status(404).json({ message: `El usuario seleccionado (id ${usuario_id}) no existe.` });
-      }
-      if (userCheck.rows[0].rol !== "TECNICO") {
-        return res.status(400).json({
-          message: `El usuario "${userCheck.rows[0].nombre}" tiene rol ${userCheck.rows[0].rol}; debe tener rol TECNICO para vincularse a un técnico.`,
-        });
-      }
+      const v = await validarUsuarioVinculable({ usuario_id, excludeId: id });
+      if (!v.ok) return res.status(v.status).json({ code: v.code, message: v.message });
     }
 
     const result = await pool.query(
