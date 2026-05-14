@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { BarChart3, Bus, Wrench, Package, FileBarChart, Users, LogOut, Settings, Building2, ChevronLeft, UserCircle, MapPin, Hammer, ClipboardList, Route, SlidersHorizontal, Bell } from "lucide-react"
 import { useState, useEffect } from "react"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuItem } from "@/components/ui/sidebar"
@@ -127,10 +128,14 @@ export function SidebarNav() {
             "flex items-center py-3",
             isCollapsed ? "justify-center" : "px-4"
           )}>
-            <Bus className={cn(
-              "text-sidebar-primary shrink-0",
-              isCollapsed ? "h-6 w-6" : "h-5 w-5"
-            )} />
+            <Image
+              src="/icon.png"
+              alt="ExpresoJF Logo"
+              width={isCollapsed ? 36 : 32}
+              height={isCollapsed ? 36 : 32}
+              className="shrink-0 rounded-md object-contain"
+              priority
+            />
             {!isCollapsed && (
               <div className="ml-3">
                 <div className="font-semibold text-lg text-sidebar-foreground">ExpresoJF</div>

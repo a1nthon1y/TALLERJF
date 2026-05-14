@@ -6,7 +6,7 @@ import { Notifications } from "./notifications"
 import { UserMenu } from "./user-menu"
 import { Breadcrumbs } from "./breadcrumbs"
 import { cn } from "@/lib/utils"
-import { Bus } from "lucide-react"
+import Image from "next/image"
 
 export function Header({ className }) {
   return (
@@ -14,7 +14,7 @@ export function Header({ className }) {
       <header className={cn("flex h-14 items-center gap-3 border-b bg-background px-4", className)}>
         {/* Logo solo visible en mobile (sidebar oculto) */}
         <div className="flex items-center gap-2 md:hidden">
-          <Bus className="h-5 w-5 text-primary shrink-0" />
+          <Image src="/icon.png" alt="ExpresoJF Logo" width={28} height={28} className="rounded-md object-contain" priority />
           <span className="font-semibold text-sm">ExpresoJF</span>
         </div>
 
