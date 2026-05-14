@@ -25,10 +25,6 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { PlusCircle, MoreHorizontal, Edit, Trash2, Loader2, Hammer, Link2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -264,11 +260,11 @@ export default function TecnicosPage() {
       )}
 
       {/* Dialog: Confirmar eliminación */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar técnico?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar técnico?</DialogTitle>
+            <DialogDescription asChild>
               <div>
                 <span>Estás por eliminar a </span>
                 <span className="font-semibold">{deleteTarget?.nombre}</span>
@@ -277,21 +273,21 @@ export default function TecnicosPage() {
                   Si el técnico tiene mantenimientos en su historial, el sistema no permitirá eliminarlo — usa "Desactivar" en su lugar.
                 </div>
               </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
               onClick={() => deleteMutation.mutate(deleteTarget?.id)}
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: Crear / Editar */}
       <Dialog open={isOpen} onOpenChange={(v) => { if (!v) closeDialog() }}>
