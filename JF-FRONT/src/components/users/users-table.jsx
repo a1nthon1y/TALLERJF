@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Edit, Power, MoreHorizontal } from "lucide-react"
+import { Edit, Trash, MoreHorizontal, Loader2 } from "lucide-react"
 // useUsers moved to parent (usuarios/page.jsx) to avoid double fetch
 import { userService } from "@/services/userService"
 import { toast } from "sonner"
@@ -56,6 +56,9 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedUser, setSelectedUser] = useState(null)
   const [isEditing, setIsEditing]   = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [togglingId, setTogglingId] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -86,14 +89,35 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
   }) : []
 
   const handleToggleStatus = async (u) => {
+    setTogglingId(u.id)
     try {
-      await userService.toggleUserStatus(u.id, !u.activo)
-      toast.success(`Usuario ${u.activo ? "desactivado" : "activado"}`)
+      const res = await userService.toggleUserStatus(u.id, !u.activo)
+      toast.success(res?.message || `Usuario ${u.activo ? "desactivado" : "activado"}`)
       await mutate()
     } catch (error) {
-      toast.error(error.message)
+      toast.error(error.message || "Error al cambiar estado")
+    } finally {
+      setTogglingId(null)
     }
   }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+    try {
+      const res = await userService.deleteUser(deleteTarget.id)
+      toast.success(res?.message || `Usuario "${deleteTarget.nombre}" eliminado`)
+      setDeleteTarget(null)
+      await mutate()
+    } catch (error) {
+      toast.error(error.message || "No se pudo eliminar el usuario")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const isAdmin = authUser?.rol === "ADMIN"
+  const isSelf  = (u) => String(u.id) === String(authUser?.id)
 
   const handleUpdateUser = async (values) => {
     try {
@@ -160,13 +184,20 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
               </TableRow>
             )}
             {filteredUsers.map(u => (
-              <TableRow key={u.id}>
+              <TableRow key={u.id} className={u.activo === false ? "opacity-60 bg-muted/30" : ""}>
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar>
                       <AvatarFallback>{u.nombre.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
-                    <span className="font-medium">{u.nombre}</span>
+                    <span className="font-medium">
+                      {u.nombre}
+                      {isSelf(u) && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground font-normal">
+                          (tú)
+                        </span>
+                      )}
+                    </span>
                   </div>
                 </TableCell>
                 <TableCell>
@@ -179,9 +210,20 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={u.activo ? "success" : "destructive"}>
-                    {u.activo ? "Activo" : "Inactivo"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={u.activo !== false}
+                      onCheckedChange={() => handleToggleStatus(u)}
+                      disabled={togglingId === u.id || isSelf(u)}
+                      aria-label={u.activo ? "Desactivar usuario" : "Activar usuario"}
+                    />
+                    <Badge
+                      variant={u.activo !== false ? "outline" : "secondary"}
+                      className={u.activo !== false ? "border-green-500 text-green-600" : ""}
+                    >
+                      {u.activo !== false ? "Activo" : "Inactivo"}
+                    </Badge>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
@@ -197,10 +239,17 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
                       <DropdownMenuItem onClick={() => handleEditClick(u)}>
                         <Edit className="mr-2 h-4 w-4" /> Editar
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleStatus(u)}>
-                        <Power className="mr-2 h-4 w-4" />
-                        {u.activo ? "Desactivar" : "Activar"}
-                      </DropdownMenuItem>
+                      {isAdmin && !isSelf(u) && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setDeleteTarget(u)}
+                          >
+                            <Trash className="mr-2 h-4 w-4" /> Eliminar
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -296,6 +345,37 @@ export function UsersTable({ users, isLoading, isError, mutate }) {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de confirmación de eliminación */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar usuario?</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2">
+                <div>
+                  Vas a eliminar a <span className="font-semibold">{deleteTarget?.nombre}</span>{" "}
+                  <span className="font-mono text-xs">({deleteTarget?.username})</span>.
+                </div>
+                <div className="text-amber-600 dark:text-amber-400 text-xs">
+                  Esta acción es permanente y no se puede deshacer. Si el usuario tiene actividad
+                  histórica (unidades, mantenimientos o reportes), el sistema bloqueará la
+                  eliminación — usa "Desactivar" en ese caso.
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isDeleting}>
+              {isDeleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Eliminar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

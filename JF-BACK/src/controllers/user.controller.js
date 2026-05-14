@@ -113,13 +113,40 @@ const toggleUserStatus = async (req, res) => {
     const { id } = req.params;
     const { activo } = req.body;
 
+    // Reglas:
+    //   - Un admin no puede auto-desactivarse (se quedaría sin sesión).
+    //   - No se puede desactivar al último ADMIN activo (la app perdería su único admin).
+    if (String(req.user.id) === String(id) && activo === false) {
+      return res.status(400).json({
+        message: "No puedes desactivar tu propia cuenta mientras estás en sesión.",
+      });
+    }
+
+    const target = await pool.query(
+      "SELECT id, nombre, rol, activo FROM usuarios WHERE id = $1",
+      [id]
+    );
+    if (target.rows.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+    const t = target.rows[0];
+
+    if (t.rol === "ADMIN" && activo === false && t.activo === true) {
+      const otrosAdmins = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM usuarios WHERE rol = 'ADMIN' AND activo = TRUE AND id != $1",
+        [id]
+      );
+      if (otrosAdmins.rows[0].total === 0) {
+        return res.status(400).json({
+          message: `No se puede desactivar a "${t.nombre}": es el único administrador activo del sistema. Crea o activa otro administrador antes de desactivar a este.`,
+        });
+      }
+    }
+
     const result = await pool.query(
       "UPDATE usuarios SET activo=$1 WHERE id=$2 RETURNING id, nombre, username, correo, rol, activo, creado_en",
       [activo, id]
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Usuario no encontrado." });
-    }
 
     res.json({ message: `Usuario ${activo ? "activado" : "desactivado"} correctamente`, user: result.rows[0] });
   } catch (error) {
@@ -127,4 +154,120 @@ const toggleUserStatus = async (req, res) => {
   }
 };
 
-module.exports = { getUsers, suggestUsername, createUser, updateUser, toggleUserStatus };
+// Eliminar usuario (DELETE permanente).
+//
+// Reglas de negocio (en orden de validación):
+//   1. No te puedes auto-eliminar.
+//   2. Si es ADMIN, debe quedar al menos otro ADMIN (cualquier estado activo) en el sistema.
+//   3. Si tiene perfil OWNER con unidades vinculadas → bloquear (sugerir desactivar).
+//   4. Si tiene perfil CHOFER con mantenimientos / reportes / unidad asignada → bloquear.
+//   5. Si tiene perfil TECNICO con mantenimientos asignados → bloquear.
+//   6. Cualquier perfil "vacío" (owner/chofer/tecnico sin actividad) se elimina junto con el usuario.
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (String(req.user.id) === String(id)) {
+      return res.status(400).json({
+        message: "No puedes eliminar tu propia cuenta mientras estás en sesión.",
+      });
+    }
+
+    const target = await pool.query(
+      "SELECT id, nombre, rol FROM usuarios WHERE id = $1",
+      [id]
+    );
+    if (target.rows.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+    const u = target.rows[0];
+
+    // Regla 2: último admin
+    if (u.rol === "ADMIN") {
+      const otrosAdmins = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM usuarios WHERE rol = 'ADMIN' AND id != $1",
+        [id]
+      );
+      if (otrosAdmins.rows[0].total === 0) {
+        return res.status(400).json({
+          message: `No se puede eliminar a "${u.nombre}": es el único administrador del sistema. Crea otro administrador antes de eliminar a este.`,
+        });
+      }
+    }
+
+    // Regla 3: OWNER con unidades
+    if (u.rol === "OWNER") {
+      const owner = await pool.query("SELECT id FROM duenos WHERE usuario_id = $1", [id]);
+      if (owner.rows.length > 0) {
+        const dueno_id = owner.rows[0].id;
+        const unidades = await pool.query(
+          "SELECT COUNT(*)::int AS total FROM unidades WHERE dueno_id = $1",
+          [dueno_id]
+        );
+        if (unidades.rows[0].total > 0) {
+          return res.status(400).json({
+            message: `No se puede eliminar a "${u.nombre}": tiene ${unidades.rows[0].total} unidad(es) registrada(s) como dueño. Reasigna las unidades a otro dueño o usa "Desactivar" para conservar el historial.`,
+          });
+        }
+      }
+    }
+
+    // Regla 4: CHOFER con actividad
+    if (u.rol === "CHOFER") {
+      const chofer = await pool.query("SELECT id FROM choferes WHERE usuario_id = $1", [id]);
+      if (chofer.rows.length > 0) {
+        const chofer_id = chofer.rows[0].id;
+        const unidadAsignada = await pool.query(
+          "SELECT COUNT(*)::int AS total FROM unidades WHERE chofer_id = $1",
+          [chofer_id]
+        );
+        if (unidadAsignada.rows[0].total > 0) {
+          return res.status(400).json({
+            message: `No se puede eliminar a "${u.nombre}": tiene ${unidadAsignada.rows[0].total} unidad(es) asignada(s). Reasigna esas unidades antes de eliminar al chofer.`,
+          });
+        }
+        const reportes = await pool.query(
+          "SELECT COUNT(*)::int AS total FROM reportes_llegada WHERE chofer_id = $1",
+          [chofer_id]
+        );
+        if (reportes.rows[0].total > 0) {
+          return res.status(400).json({
+            message: `No se puede eliminar a "${u.nombre}": tiene ${reportes.rows[0].total} reporte(s) de llegada en su historial. Usa "Desactivar" para conservar el historial.`,
+          });
+        }
+      }
+    }
+
+    // Regla 5: TECNICO con mantenimientos
+    if (u.rol === "TECNICO") {
+      const tec = await pool.query("SELECT id FROM tecnicos WHERE usuario_id = $1", [id]);
+      if (tec.rows.length > 0) {
+        const tecnico_id = tec.rows[0].id;
+        const mant = await pool.query(
+          "SELECT COUNT(*)::int AS total FROM mantenimientos WHERE tecnico_id = $1",
+          [tecnico_id]
+        );
+        if (mant.rows[0].total > 0) {
+          return res.status(400).json({
+            message: `No se puede eliminar a "${u.nombre}": tiene ${mant.rows[0].total} mantenimiento(s) en su historial como técnico. Usa "Desactivar" para conservar el historial.`,
+          });
+        }
+      }
+    }
+
+    // Regla 6: limpiar perfiles "vacíos" en cascada manual (porque las FKs son SET NULL).
+    //   Si dejamos los perfiles huérfanos sin usuario_id, quedan basura imposible de
+    //   reasociar. Por consistencia, los borramos junto con el usuario.
+    await pool.query("DELETE FROM duenos   WHERE usuario_id = $1", [id]);
+    await pool.query("DELETE FROM choferes WHERE usuario_id = $1", [id]);
+    await pool.query("DELETE FROM tecnicos WHERE usuario_id = $1", [id]);
+
+    await pool.query("DELETE FROM usuarios WHERE id = $1", [id]);
+    res.json({ message: `Usuario "${u.nombre}" eliminado correctamente.` });
+  } catch (error) {
+    console.error("Error en deleteUser:", error);
+    res.status(500).json({ error: "Error al eliminar usuario" });
+  }
+};
+
+module.exports = { getUsers, suggestUsername, createUser, updateUser, toggleUserStatus, deleteUser };

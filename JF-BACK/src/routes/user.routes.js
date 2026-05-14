@@ -10,5 +10,6 @@ router.get("/", authenticate, checkRole(["ADMIN"]), userController.getUsers);
 router.post("/", authenticate, checkRole(["ADMIN"]), userController.createUser);
 router.put("/:id", authenticate, checkRole(["ADMIN"]), userController.updateUser);
 router.put("/:id/status", authenticate, checkRole(["ADMIN"]), userController.toggleUserStatus);
+router.delete("/:id", authenticate, checkRole(["ADMIN"]), userController.deleteUser);
 
 module.exports = router;

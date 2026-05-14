@@ -1,40 +1,27 @@
-import { makeGetRequest, makePostRequest, makePutRequest } from '@/utils/api';
-import { toast } from 'sonner';
+import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
 
+// Nota: este service NO dispara toasts — los componentes deciden cómo
+// notificar (success/warning/error). Mantenemos los services como capa
+// pura de transporte para evitar duplicación de notificaciones.
 export const userService = {
   async getUsers() {
-    try {
-      return await makeGetRequest('/users');
-    } catch (error) {
-      throw new Error(error.message || 'Error al obtener usuarios');
-    }
+    return await makeGetRequest('/users');
   },
 
   async updateUser(id, userData) {
-    try {
-      return await makePutRequest(`/users/${id}`, userData);
-    } catch (error) {
-      toast.error(error.message || 'Error al actualizar usuario');
-      throw error;
-    }
+    return await makePutRequest(`/users/${id}`, userData);
   },
 
   async toggleUserStatus(id, activo) {
-    try {
-      return await makePutRequest(`/users/${id}/status`, { activo });
-    } catch (error) {
-      toast.error(error.message || 'Error al cambiar estado del usuario');
-      throw error;
-    }
+    return await makePutRequest(`/users/${id}/status`, { activo });
   },
 
   async createUser(userData) {
-    try {
-      return await makePostRequest('/users', userData);
-    } catch (error) {
-      toast.error(error.message || 'Error al crear usuario');
-      throw error;
-    }
+    return await makePostRequest('/users', userData);
+  },
+
+  async deleteUser(id) {
+    return await makeDeleteRequest(`/users/${id}`);
   },
 };
 
