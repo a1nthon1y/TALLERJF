@@ -17,7 +17,7 @@ const STATUS_LABEL = {
   EN_PROCESO:  { label: "En Proceso",  cls: "bg-blue-100 text-blue-800 border-blue-300" },
   COMPLETADO:  { label: "Completado",  cls: "bg-green-100 text-green-800 border-green-300" },
   CERRADO:     { label: "Cerrado",     cls: "bg-slate-100 text-slate-600 border-slate-300" },
-  REALIZADO:   { label: "Realizado",   cls: "bg-purple-100 text-purple-800 border-purple-300" },
+  REALIZADO:   { label: "Resuelto en ruta", cls: "bg-purple-100 text-purple-800 border-purple-300" },
 }
 
 function MaintRow({ m }) {

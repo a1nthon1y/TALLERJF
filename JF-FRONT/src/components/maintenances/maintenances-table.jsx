@@ -334,7 +334,7 @@ export function MaintenancesTable() {
   const getStatusBadge = (status) => {
     const s = status?.toUpperCase()
     if (s === "COMPLETADO") return <Badge className="bg-green-100 text-green-700 border border-green-300 text-xs font-semibold">Completado</Badge>
-    if (s === "REALIZADO")  return <Badge className="bg-purple-100 text-purple-700 border border-purple-300 text-xs font-semibold">En Campo</Badge>
+    if (s === "REALIZADO")  return <Badge className="bg-purple-100 text-purple-700 border border-purple-300 text-xs font-semibold" title="Trabajo correctivo resuelto por el chofer durante la ruta">Resuelto en ruta</Badge>
     if (s === "CERRADO")    return <Badge className="bg-slate-100 text-slate-600 border border-slate-300 text-xs font-semibold">Cerrado</Badge>
     if (s === "EN_PROCESO") return <Badge className="bg-blue-100 text-blue-700 border border-blue-300 text-xs font-semibold">En Proceso</Badge>
     return <Badge className="bg-yellow-100 text-yellow-700 border border-yellow-300 text-xs font-semibold">Pendiente</Badge>
@@ -585,7 +585,7 @@ export function MaintenancesTable() {
     { key: "PENDIENTE",  label: "Pendiente",  headerCls: "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/20",  dotCls: "bg-yellow-400", countCls: "bg-yellow-100 text-yellow-800" },
     { key: "EN_PROCESO", label: "En Proceso",  headerCls: "bg-blue-50 border-blue-300 dark:bg-blue-950/20",       dotCls: "bg-blue-500",   countCls: "bg-blue-100 text-blue-800" },
     { key: "COMPLETADO", label: "Completado",  headerCls: "bg-green-50 border-green-300 dark:bg-green-950/20",    dotCls: "bg-green-500",  countCls: "bg-green-100 text-green-800" },
-    { key: "REALIZADO",  label: "En Campo",    headerCls: "bg-purple-50 border-purple-300 dark:bg-purple-950/20", dotCls: "bg-purple-500", countCls: "bg-purple-100 text-purple-800" },
+    { key: "REALIZADO",  label: "Resuelto en ruta", headerCls: "bg-purple-50 border-purple-300 dark:bg-purple-950/20", dotCls: "bg-purple-500", countCls: "bg-purple-100 text-purple-800" },
   ]
   const cerradosCount = (maintenances ?? []).filter(m => m.estado?.toUpperCase() === "CERRADO").length
   const kanbanBase = (maintenances ?? []).filter((m) => {
@@ -694,7 +694,7 @@ export function MaintenancesTable() {
                 En Proceso {enProceso > 0 ? `(${enProceso})` : ""}
               </SelectItem>
               <SelectItem value="COMPLETADO">Completado</SelectItem>
-              <SelectItem value="REALIZADO">En Campo</SelectItem>
+              <SelectItem value="REALIZADO">Resuelto en ruta</SelectItem>
               <SelectItem value="CERRADO">Cerrado</SelectItem>
             </SelectContent>
           </Select>
@@ -751,11 +751,11 @@ export function MaintenancesTable() {
               return (
                 <div key={key} className="flex flex-col gap-2">
                   <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${headerCls}`}>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <span className={`h-2 w-2 rounded-full shrink-0 ${dotCls}`} />
-                      <span className="text-xs font-semibold">{label}</span>
+                      <span className="text-xs font-semibold truncate">{label}</span>
                     </div>
-                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${countCls}`}>
+                    <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full shrink-0 ${countCls}`}>
                       {colItems.length}
                     </span>
                   </div>

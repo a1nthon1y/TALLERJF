@@ -424,7 +424,7 @@ export default function ReportarLlegadaPage() {
                 })}
               </ul>
               {costoCampoTotal > 0 && (
-                <p className="mt-2 text-xs font-bold text-purple-700">Total en campo: S/. {costoCampoTotal.toFixed(2)}</p>
+                <p className="mt-2 text-xs font-bold text-purple-700">Total resuelto en ruta: S/. {costoCampoTotal.toFixed(2)}</p>
               )}
             </div>
           )}

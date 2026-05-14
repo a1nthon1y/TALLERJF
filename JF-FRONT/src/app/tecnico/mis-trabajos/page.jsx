@@ -77,7 +77,7 @@ const ESTADO_CONFIG = {
   EN_PROCESO: { label: "En Proceso",  color: "border-blue-300 bg-blue-50 text-blue-700" },
   COMPLETADO: { label: "Completado",  color: "border-green-300 bg-green-50 text-green-700" },
   CERRADO:    { label: "Cerrado",     color: "border-gray-300 bg-gray-100 text-gray-500" },
-  REALIZADO:  { label: "En Campo",    color: "border-purple-300 bg-purple-50 text-purple-700" },
+  REALIZADO:  { label: "Resuelto en ruta", color: "border-purple-300 bg-purple-50 text-purple-700" },
 };
 
 const estadoBadge = (estado) => {

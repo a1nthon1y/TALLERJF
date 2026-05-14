@@ -48,7 +48,7 @@ function estadoConfig(estado) {
     label: null, icon: null,
   };
   if (e === "REALIZADO") return {
-    badge: <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-xs">En Campo</Badge>,
+    badge: <Badge className="bg-purple-100 text-purple-700 border-purple-300 text-xs" title="Trabajo correctivo resuelto durante la ruta">Resuelto en ruta</Badge>,
     bar: "border-l-purple-400",
     label: null, icon: null,
   };
