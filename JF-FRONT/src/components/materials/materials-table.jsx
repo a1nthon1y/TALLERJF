@@ -72,7 +72,17 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
   const [isDeleting, setIsDeleting] = useState(false)
   const toggleMutation = useMutation({
     mutationFn: (id) => makePatchRequest(`/materials/${id}/status`, {}),
-    onSuccess: (res) => { toast.success(res.message || "Estado actualizado"); mutate() },
+    onSuccess: (res) => {
+      toast.success(res.message || "Estado actualizado")
+      // Advertencias informativas (mantenimientos activos que lo usan,
+      // stock que queda congelado). Backend nunca bloquea, solo informa.
+      if (Array.isArray(res?.advertencias)) {
+        res.advertencias.forEach((adv) =>
+          toast.warning(adv, { duration: 9000 })
+        )
+      }
+      mutate()
+    },
     onError: (err) => toast.error(err.message || "Error al cambiar estado del material", { duration: 6000 }),
   })
 

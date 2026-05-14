@@ -44,8 +44,16 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
   const { data: owners, isLoading: isLoadingOwners } = useOwners()
   const { data: choferes, isLoading: isLoadingChoferes } = useChoferes()
 
-  // Usar choferes directamente de la tabla choferes
-  const drivers = choferes || []
+  // Selector de "Chofer asignado": ocultar inactivos, salvo que la unidad
+  // ya tenga uno inactivo asignado (lo mantenemos visible y marcado para
+  // no romper la edición ni perder la asignación silenciosamente).
+  const drivers = (() => {
+    const all = Array.isArray(choferes) ? choferes : []
+    const currentId = unit?.chofer_id ? Number(unit.chofer_id) : null
+    return all.filter(
+      (c) => c.activo !== false || (currentId && Number(c.chofer_id) === currentId)
+    )
+  })()
 
   // Normalizar tipo a mayúsculas para que coincida con los SelectItems
   const TIPOS_VALIDOS = ["BUS", "VAN", "CAMION", "OTRO"]
@@ -262,11 +270,15 @@ export function UnitForm({ unit, onSubmit, onCancel, isLoading }) {
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="none">Sin asignar</SelectItem>
-                  {drivers.map((chofer) => (
-                    <SelectItem key={chofer.chofer_id} value={chofer.chofer_id.toString()}>
-                      {chofer.usuario_nombre || `Chofer ${chofer.chofer_id}`}
-                    </SelectItem>
-                  ))}
+                  {drivers.map((chofer) => {
+                    const inactivo = chofer.activo === false
+                    return (
+                      <SelectItem key={chofer.chofer_id} value={chofer.chofer_id.toString()}>
+                        {chofer.usuario_nombre || `Chofer ${chofer.chofer_id}`}
+                        {inactivo ? " (inactivo)" : ""}
+                      </SelectItem>
+                    )
+                  })}
                 </SelectContent>
               </Select>
               <FormDescription>Seleccione un chofer (opcional)</FormDescription>

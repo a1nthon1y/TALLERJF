@@ -149,16 +149,38 @@ const toggleTechnicianStatus = async (req, res) => {
     const { id } = req.params;
     const { activo } = req.body;
 
+    const tCheck = await pool.query("SELECT nombre, activo FROM tecnicos WHERE id = $1", [id]);
+    if (tCheck.rows.length === 0) {
+      return res.status(404).json({ message: "Técnico no encontrado." });
+    }
+
+    // Advertencias informativas al desactivar. No bloquean la acción —
+    // solo informan al admin del impacto. El técnico desactivado deja de
+    // aparecer en los selectores de "asignar técnico" para nuevos trabajos.
+    const advertencias = [];
+    if (activo === false && tCheck.rows[0].activo === true) {
+      const m = await pool.query(
+        `SELECT COUNT(*)::int AS total FROM mantenimientos
+          WHERE tecnico_id = $1 AND estado IN ('PENDIENTE','EN_PROCESO')`,
+        [id]
+      );
+      if (m.rows[0].total > 0) {
+        advertencias.push(
+          `Tiene ${m.rows[0].total} mantenimiento(s) activo(s) asignado(s). Considera reasignarlos a otro técnico antes de desactivarlo.`
+        );
+      }
+    }
+
     const result = await pool.query(
       "UPDATE tecnicos SET activo = $1 WHERE id = $2 RETURNING *",
       [activo, id]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Técnico no encontrado." });
-    }
-
-    res.json({ message: `Técnico ${activo ? "activado" : "desactivado"} correctamente`, tecnico: result.rows[0] });
+    res.json({
+      message: `Técnico ${activo ? "activado" : "desactivado"} correctamente`,
+      tecnico: result.rows[0],
+      advertencias,
+    });
   } catch (error) {
     res.status(500).json({ error: "Error al cambiar estado del técnico" });
   }

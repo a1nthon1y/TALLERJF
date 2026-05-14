@@ -374,7 +374,10 @@ export function MaintenancesTable() {
         materialService.getMaterials(),
       ])
       setMaterials(Array.isArray(mats) ? mats : [])
-      setCatalog(Array.isArray(cat) ? cat.filter(m => m.stock > 0) : [])
+      // Solo materiales activos y con stock disponible — desactivados quedan
+      // congelados aunque les quede stock (regla de negocio: si está inactivo
+      // no se puede agregar a más mantenimientos hasta reactivarlo).
+      setCatalog(Array.isArray(cat) ? cat.filter(m => m.activo !== false && m.stock > 0) : [])
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -1167,11 +1170,17 @@ export function MaintenancesTable() {
                       <SelectValue placeholder="Selecciona el técnico que realizó el trabajo..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {technicians?.map((t) => (
-                        <SelectItem key={t.id} value={String(t.id)}>
-                          {t.nombre} — {t.especialidad || t.rol || "Técnico"}
-                        </SelectItem>
-                      ))}
+                      {(technicians ?? [])
+                        .filter((t) => t.activo !== false || String(t.id) === String(compTecnicoId))
+                        .map((t) => {
+                          const inactivo = t.activo === false
+                          return (
+                            <SelectItem key={t.id} value={String(t.id)}>
+                              {t.nombre} — {t.especialidad || t.rol || "Técnico"}
+                              {inactivo ? " (inactivo)" : ""}
+                            </SelectItem>
+                          )
+                        })}
                     </SelectContent>
                   </Select>
                   {compErrors.tecnico_id && (

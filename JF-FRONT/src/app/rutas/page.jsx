@@ -94,8 +94,15 @@ export default function RutasPage() {
 
   const handleToggle = async (r) => {
     try {
-      await rutasService.update(r.id, { ...r, activa: !r.activa });
+      const updated = await rutasService.update(r.id, { ...r, activa: !r.activa });
       setRutas((prev) => prev.map((x) => x.id === r.id ? { ...x, activa: !x.activa } : x));
+      // Backend incluye advertencias cuando una ruta con histórico se
+      // desactiva (los choferes ya no podrán seleccionarla).
+      if (Array.isArray(updated?.advertencias)) {
+        updated.advertencias.forEach((adv) =>
+          toast.warning(adv, { duration: 9000 })
+        );
+      }
     } catch (err) {
       toast.error(err.message || "Error al actualizar");
     }

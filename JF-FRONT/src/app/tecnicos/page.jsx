@@ -95,8 +95,16 @@ export default function TecnicosPage() {
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, activo }) => makePutRequest(`/technicians/${id}/status`, { activo }),
-    onSuccess: () => {
-      toast.success("Estado actualizado")
+    onSuccess: (res) => {
+      toast.success(res?.message || "Estado actualizado")
+      // Backend devuelve advertencias informativas al desactivar
+      // (mantenimientos activos asignados). Mostrar sticky para que
+      // el admin pueda decidir si reasigna antes.
+      if (Array.isArray(res?.advertencias)) {
+        res.advertencias.forEach((adv) =>
+          toast.warning(adv, { duration: 9000 })
+        )
+      }
       queryClient.invalidateQueries({ queryKey: ["tecnicos"] })
     },
     onError: (e) => toast.error(e.message),
@@ -331,7 +339,21 @@ export default function TecnicosPage() {
                   <FormMessage />
                 </FormItem>
               )} />
-              <FormField control={form.control} name="especialidad" render={({ field }) => (
+              <FormField control={form.control} name="especialidad" render={({ field }) => {
+                // Si el técnico que se edita tiene una especialidad ahora
+                // inactiva, la incluimos para no romper la edición pero la
+                // marcamos como "(inactiva)". Al cambiarla, ya no estará
+                // disponible para volver a seleccionarla.
+                const opciones = (() => {
+                  const activas = especialidadesActivas
+                  const guardada = field.value
+                  if (!guardada) return activas
+                  if (activas.some((e) => e.nombre === guardada)) return activas
+                  const inactivaPersistida = especialidades.find((e) => e.nombre === guardada)
+                  if (inactivaPersistida) return [...activas, { ...inactivaPersistida, _inactiva: true }]
+                  return activas
+                })()
+                return (
                 <FormItem>
                   <FormLabel>Especialidad</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value || ""}>
@@ -341,17 +363,19 @@ export default function TecnicosPage() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {especialidadesActivas.length === 0 ? (
+                      {opciones.length === 0 ? (
                         <SelectItem value="__empty__" disabled>No hay especialidades disponibles</SelectItem>
-                      ) : especialidadesActivas.map((e) => (
-                        <SelectItem key={e.id} value={e.nombre}>{e.nombre}</SelectItem>
+                      ) : opciones.map((e) => (
+                        <SelectItem key={e.id} value={e.nombre}>
+                          {e.nombre}{e._inactiva ? " (inactiva)" : ""}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">Gestionadas en Configuraciones → Especialidades</p>
                   <FormMessage />
                 </FormItem>
-              )} />
+              )}} />
               <FormField control={form.control} name="usuario_id" render={({ field }) => (
                 <FormItem>
                   <FormLabel className="flex items-center gap-1.5">

@@ -79,17 +79,47 @@ const deleteMaterial = async (req, res) => {
 const toggleMaterialStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const check = await pool.query("SELECT nombre, activo FROM materiales WHERE id = $1", [id]);
+    const check = await pool.query("SELECT nombre, activo, stock FROM materiales WHERE id = $1", [id]);
     if (check.rows.length === 0)
       return res.status(404).json({ message: "Material no encontrado" });
 
-    const { nombre, activo } = check.rows[0];
+    const { nombre, activo, stock } = check.rows[0];
+
+    // Advertencias informativas al desactivar (no bloquean):
+    //  - mantenimientos PENDIENTE/EN_PROCESO que ya tienen este material
+    //    consumido (los técnicos pueden seguir trabajando con lo agregado,
+    //    pero NO podrán agregar más unidades hasta reactivarlo)
+    //  - stock remanente que queda "congelado"
+    const advertencias = [];
+    if (activo) {
+      const enUso = await pool.query(
+        `SELECT COUNT(DISTINCT m.id)::int AS total FROM detalles_mantenimiento dm
+         JOIN mantenimientos m ON dm.mantenimiento_id = m.id
+         WHERE dm.material_id = $1 AND m.estado IN ('PENDIENTE','EN_PROCESO')`,
+        [id]
+      );
+      if (enUso.rows[0].total > 0) {
+        advertencias.push(
+          `Está siendo usado en ${enUso.rows[0].total} mantenimiento(s) activo(s). Esos trabajos seguirán adelante, pero no se podrá agregar más unidades de "${nombre}" hasta reactivarlo.`
+        );
+      }
+      if (stock > 0) {
+        advertencias.push(
+          `Tiene ${stock} unidad(es) en stock que quedarán congeladas hasta reactivar el material.`
+        );
+      }
+    }
+
     const result = await pool.query(
       "UPDATE materiales SET activo = $1 WHERE id = $2 RETURNING activo",
       [!activo, id]
     );
     const estado = result.rows[0].activo ? "activado" : "desactivado";
-    res.json({ message: `Material "${nombre}" ${estado}`, activo: result.rows[0].activo });
+    res.json({
+      message: `Material "${nombre}" ${estado}`,
+      activo: result.rows[0].activo,
+      advertencias,
+    });
   } catch (error) {
     res.status(500).json({ error: "Error al cambiar estado del material" });
   }

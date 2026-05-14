@@ -44,12 +44,33 @@ const update = async (req, res) => {
     const { nombre, activa } = req.body;
     if (!nombre?.trim()) return res.status(400).json({ message: "El nombre de la ruta es requerido." });
 
+    const prev = await pool.query("SELECT nombre, activa FROM rutas WHERE id = $1", [id]);
+    if (prev.rows.length === 0) return res.status(404).json({ message: "Ruta no encontrada." });
+
     const result = await pool.query(
       "UPDATE rutas SET nombre=$1, activa=$2 WHERE id=$3 RETURNING id, nombre, activa",
       [nombre.trim(), activa ?? true, id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ message: "Ruta no encontrada." });
-    res.json(result.rows[0]);
+
+    // Advertencia informativa al desactivar (no bloquea):
+    //  - los reportes_llegada históricos guardan `origen` como texto y
+    //    no se ven afectados; pero el chofer dejará de ver esta ruta
+    //    en el dropdown (chofer.getRutas filtra por activa = TRUE).
+    const advertencias = [];
+    const seDesactiva = prev.rows[0].activa === true && (activa ?? true) === false;
+    if (seDesactiva) {
+      const usos = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM reportes_llegada WHERE origen = $1",
+        [prev.rows[0].nombre]
+      );
+      if (usos.rows[0].total > 0) {
+        advertencias.push(
+          `Esta ruta aparece en ${usos.rows[0].total} reporte(s) de llegada históricos. Los registros se mantienen, pero los choferes ya no podrán seleccionarla para nuevas llegadas.`
+        );
+      }
+    }
+
+    res.json({ ...result.rows[0], advertencias });
   } catch (err) {
     res.status(500).json({ error: "Error al actualizar ruta" });
   }

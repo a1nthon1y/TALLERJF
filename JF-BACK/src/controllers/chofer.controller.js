@@ -215,13 +215,34 @@ const toggleDriverStatus = async (req, res) => {
       return res.status(404).json({ message: "Chofer no encontrado" });
 
     const { activo, nombre } = check.rows[0];
+
+    // Advertencias informativas al desactivar (no bloquean): la asignación
+    // chofer↔unidad se conserva para no perder relaciones, pero el chofer
+    // dejará de poder operar (ver chofer.getMiUnidad y crearReporteLlegada).
+    const advertencias = [];
+    if (activo) {
+      const u = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM unidades WHERE chofer_id = $1 AND activo = TRUE",
+        [id]
+      );
+      if (u.rows[0].total > 0) {
+        advertencias.push(
+          `Tiene ${u.rows[0].total} unidad(es) activa(s) asignada(s). Mientras esté desactivado no podrá registrar llegadas ni reportar fallas. La asignación se mantiene.`
+        );
+      }
+    }
+
     const result = await pool.query(
       "UPDATE choferes SET activo = $1 WHERE id = $2 RETURNING activo",
       [!activo, id]
     );
 
     const nuevoEstado = result.rows[0].activo ? "activado" : "desactivado";
-    res.json({ message: `Chofer ${nombre} ${nuevoEstado} correctamente`, activo: result.rows[0].activo });
+    res.json({
+      message: `Chofer ${nombre} ${nuevoEstado} correctamente`,
+      activo: result.rows[0].activo,
+      advertencias,
+    });
   } catch (error) {
     console.error("Error al cambiar estado del chofer:", error);
     res.status(500).json({ error: "Error interno del servidor" });

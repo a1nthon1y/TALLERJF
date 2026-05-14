@@ -271,11 +271,13 @@ function MaintenancesContent() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {technicians?.map((tech) => (
-                            <SelectItem key={tech.id} value={String(tech.id)}>
-                              {tech.nombre}
-                            </SelectItem>
-                          ))}
+                          {(technicians ?? [])
+                            .filter((t) => t.activo !== false)
+                            .map((tech) => (
+                              <SelectItem key={tech.id} value={String(tech.id)}>
+                                {tech.nombre}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />

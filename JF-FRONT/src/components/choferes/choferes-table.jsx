@@ -46,6 +46,13 @@ export function ChoferesTable() {
     mutationFn: (chofer) => toggleChoferStatus(chofer.chofer_id),
     onSuccess: (res) => {
       toast.success(res.message || "Estado actualizado")
+      // Backend puede devolver advertencias informativas al desactivar
+      // (p.ej. unidades activas asignadas). Mostrar como warning sticky.
+      if (Array.isArray(res?.advertencias)) {
+        res.advertencias.forEach((adv) =>
+          toast.warning(adv, { duration: 9000 })
+        )
+      }
       mutate()
     },
     onError: (err) => {

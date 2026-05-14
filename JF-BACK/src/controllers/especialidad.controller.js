@@ -62,12 +62,34 @@ const toggleStatus = async (req, res) => {
       return res.status(404).json({ message: "Especialidad no encontrada" });
 
     const { nombre, activo } = check.rows[0];
+
+    // Advertencia informativa al desactivar (no bloquea):
+    //  - los técnicos cuya `especialidad` (texto) coincide con esta
+    //    no se eliminan, pero el catálogo deja de ofrecer esta opción
+    //    para nuevos técnicos / al editar.
+    const advertencias = [];
+    if (activo) {
+      const tecs = await pool.query(
+        "SELECT COUNT(*)::int AS total FROM tecnicos WHERE especialidad = $1 AND activo = TRUE",
+        [nombre]
+      );
+      if (tecs.rows[0].total > 0) {
+        advertencias.push(
+          `Hay ${tecs.rows[0].total} técnico(s) activo(s) con la especialidad "${nombre}". Conservarán su asignación, pero no podrás elegirla para nuevos técnicos hasta reactivarla.`
+        );
+      }
+    }
+
     const result = await pool.query(
       "UPDATE especialidades SET activo = $1 WHERE id = $2 RETURNING activo",
       [!activo, id]
     );
     const estado = result.rows[0].activo ? "activada" : "desactivada";
-    res.json({ message: `Especialidad "${nombre}" ${estado}`, activo: result.rows[0].activo });
+    res.json({
+      message: `Especialidad "${nombre}" ${estado}`,
+      activo: result.rows[0].activo,
+      advertencias,
+    });
   } catch (error) {
     console.error("Error al cambiar estado:", error);
     res.status(500).json({ error: "Error interno del servidor" });

@@ -64,7 +64,18 @@ export default function ConfiguracionesPage() {
 
   const espToggleMutation = useMutation({
     mutationFn: (id) => toggleEspecialidadStatus(id),
-    onSuccess: (res) => { toast.success(res.message); queryClient.invalidateQueries({ queryKey: ["especialidades"] }); },
+    onSuccess: (res) => {
+      toast.success(res.message);
+      // Backend devuelve advertencias informativas si la especialidad
+      // tiene técnicos activos asignados (la opción ya no se ofrecerá
+      // para nuevos técnicos hasta reactivarla).
+      if (Array.isArray(res?.advertencias)) {
+        res.advertencias.forEach((adv) =>
+          toast.warning(adv, { duration: 9000 })
+        );
+      }
+      queryClient.invalidateQueries({ queryKey: ["especialidades"] });
+    },
     onError: (e) => toast.error(e.message),
   });
 
