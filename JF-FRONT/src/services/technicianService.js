@@ -1,8 +1,4 @@
-import { makeGetRequest, makePostRequest, makePutRequest } from '@/utils/api';
-
-// Nota: NO existe `deleteTechnician`. La baja se hace vía soft-delete con
-// `PUT /technicians/:id/status` (ver `app/tecnicos/page.jsx`). El backend no
-// expone DELETE para técnicos para preservar el historial de mantenimientos.
+import { makeGetRequest, makePostRequest, makePutRequest, makeDeleteRequest } from '@/utils/api';
 export const technicianService = {
     async getTechnicians() {
         try {
@@ -28,6 +24,15 @@ export const technicianService = {
             return response;
         } catch (error) {
             throw new Error(error.message || "Error al actualizar el técnico");
+        }
+    },
+
+    async deleteTechnician(id) {
+        try {
+            const response = await makeDeleteRequest(`/technicians/${id}`);
+            return response;
+        } catch (error) {
+            throw new Error(error.message || "Error al eliminar el técnico");
         }
     },
 }

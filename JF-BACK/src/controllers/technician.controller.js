@@ -75,6 +75,47 @@ const updateTechnician = async (req, res) => {
   }
 };
 
+// Eliminar técnico
+const deleteTechnician = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const check = await pool.query("SELECT nombre FROM tecnicos WHERE id = $1", [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ message: "Técnico no encontrado." });
+    }
+    const nombre = check.rows[0].nombre;
+
+    // Bloquear si tiene mantenimientos activos asignados
+    const activos = await pool.query(
+      `SELECT COUNT(*) FROM mantenimientos
+       WHERE tecnico_id = $1 AND estado IN ('PENDIENTE','EN_PROCESO')`,
+      [id]
+    );
+    if (parseInt(activos.rows[0].count) > 0) {
+      return res.status(400).json({
+        message: `No se puede eliminar a "${nombre}": tiene ${activos.rows[0].count} mantenimiento(s) activo(s) asignado(s). Ciérralos o reasígnalos antes de eliminarlo.`,
+      });
+    }
+
+    // Bloquear si tiene historial de mantenimientos
+    const historial = await pool.query(
+      "SELECT COUNT(*) FROM mantenimientos WHERE tecnico_id = $1",
+      [id]
+    );
+    if (parseInt(historial.rows[0].count) > 0) {
+      return res.status(400).json({
+        message: `No se puede eliminar a "${nombre}": tiene ${historial.rows[0].count} mantenimiento(s) en su historial. Usa la opción "Desactivar" para darle de baja sin perder el historial.`,
+      });
+    }
+
+    await pool.query("DELETE FROM tecnicos WHERE id = $1", [id]);
+    res.json({ message: `Técnico "${nombre}" eliminado correctamente.` });
+  } catch (error) {
+    res.status(500).json({ error: "Error al eliminar técnico" });
+  }
+};
+
 // Activar o desactivar técnico
 const toggleTechnicianStatus = async (req, res) => {
   try {
@@ -100,5 +141,6 @@ module.exports = {
   getTechnicians,
   createTechnician,
   updateTechnician,
+  deleteTechnician,
   toggleTechnicianStatus,
 };

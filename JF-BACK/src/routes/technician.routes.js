@@ -11,5 +11,6 @@ router.get("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), technicianContr
 router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), technicianController.createTechnician);
 router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), technicianController.updateTechnician);
 router.put("/:id/status", authenticate, checkRole(["ADMIN", "ENCARGADO"]), technicianController.toggleTechnicianStatus);
+router.delete("/:id", authenticate, checkRole(["ADMIN"]), technicianController.deleteTechnician);
 
 module.exports = router;
