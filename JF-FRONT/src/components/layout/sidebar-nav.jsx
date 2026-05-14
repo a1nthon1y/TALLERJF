@@ -10,20 +10,38 @@ import { UserAvatar } from "@/components/ui/user-avatar"
 import { authService } from "@/services/authService"
 import { cn } from "@/lib/utils"
 
+// ADMIN: acceso total incluido gestión de cuentas de usuario
 const adminNavItems = [
-  { title: "Panel", href: "/", icon: BarChart3 },
-  { title: "Mantenimientos", href: "/mantenimientos", icon: Wrench },
-  { title: "Alertas", href: "/mantenimientos/alertas", icon: Bell },
-  { title: "Unidades", href: "/unidades", icon: Bus },
-  { title: "Dueños", href: "/duenos", icon: Building2 },
-  { title: "Choferes", href: "/choferes", icon: UserCircle },
-  { title: "Técnicos", href: "/tecnicos", icon: Hammer },
-  { title: "Estado de Flota", href: "/partes-unidades", icon: Settings },
-  { title: "Configuraciones", href: "/configuraciones", icon: SlidersHorizontal },
-  { title: "Materiales", href: "/materiales", icon: Package },
-  { title: "Rutas", href: "/rutas", icon: Route },
-  { title: "Reportes", href: "/reportes", icon: FileBarChart },
-  { title: "Usuarios", href: "/usuarios", icon: Users },
+  { title: "Panel",           href: "/",                      icon: BarChart3 },
+  { title: "Mantenimientos",  href: "/mantenimientos",        icon: Wrench },
+  { title: "Alertas",         href: "/mantenimientos/alertas",icon: Bell },
+  { title: "Unidades",        href: "/unidades",              icon: Bus },
+  { title: "Dueños",          href: "/duenos",                icon: Building2 },
+  { title: "Choferes",        href: "/choferes",              icon: UserCircle },
+  { title: "Técnicos",        href: "/tecnicos",              icon: Hammer },
+  { title: "Estado de Flota", href: "/partes-unidades",       icon: Settings },
+  { title: "Configuraciones", href: "/configuraciones",       icon: SlidersHorizontal },
+  { title: "Materiales",      href: "/materiales",            icon: Package },
+  { title: "Rutas",           href: "/rutas",                 icon: Route },
+  { title: "Reportes",        href: "/reportes",              icon: FileBarChart },
+  { title: "Usuarios",        href: "/usuarios",              icon: Users },
+]
+
+// ENCARGADO: gestión operativa del taller.
+// NO incluye Usuarios — el backend lo bloquea con 403 (solo ADMIN).
+const encargadoNavItems = [
+  { title: "Panel",           href: "/",                      icon: BarChart3 },
+  { title: "Mantenimientos",  href: "/mantenimientos",        icon: Wrench },
+  { title: "Alertas",         href: "/mantenimientos/alertas",icon: Bell },
+  { title: "Unidades",        href: "/unidades",              icon: Bus },
+  { title: "Dueños",          href: "/duenos",                icon: Building2 },
+  { title: "Choferes",        href: "/choferes",              icon: UserCircle },
+  { title: "Técnicos",        href: "/tecnicos",              icon: Hammer },
+  { title: "Estado de Flota", href: "/partes-unidades",       icon: Settings },
+  { title: "Configuraciones", href: "/configuraciones",       icon: SlidersHorizontal },
+  { title: "Materiales",      href: "/materiales",            icon: Package },
+  { title: "Rutas",           href: "/rutas",                 icon: Route },
+  { title: "Reportes",        href: "/reportes",              icon: FileBarChart },
 ]
 
 const choferNavItems = [
@@ -86,9 +104,10 @@ export function SidebarNav() {
 
   // Determinar qué items mostrar según el rol
   const navItems =
-    user.rol === 'CHOFER'  ? choferNavItems  :
-    user.rol === 'OWNER'   ? ownerNavItems   :
-    user.rol === 'TECNICO' ? tecnicoNavItems :
+    user.rol === 'CHOFER'    ? choferNavItems    :
+    user.rol === 'OWNER'     ? ownerNavItems     :
+    user.rol === 'TECNICO'   ? tecnicoNavItems   :
+    user.rol === 'ENCARGADO' ? encargadoNavItems :
     adminNavItems
 
   return (
