@@ -1,5 +1,6 @@
 const pool = require("../config/db");
 const { generarCodigo } = require("./maintenance.controller");
+const { evaluarMotorPredictivo } = require("../services/predictive-engine");
 
 // ===============================================================
 //  ✅ Crear chofer
@@ -248,7 +249,9 @@ const crearReporteLlegada = async (req, res) => {
     if (unidadQuery.rows.length === 0) return res.status(404).json({ message: "Unidad no encontrada" });
     const kilometrajeActual = unidadQuery.rows[0].kilometraje;
     if (kilometraje < kilometrajeActual) {
-      return res.status(400).json({ error: "El kilometraje ingresado no puede ser menor al actual registrado (" + kilometrajeActual + " km)." });
+      return res.status(400).json({
+        message: `El kilometraje ingresado (${Number(kilometraje).toLocaleString()} km) no puede ser menor al último registrado (${Number(kilometrajeActual).toLocaleString()} km). Verifica el tacómetro o, si fue un error humano, solicita a un administrador que lo corrija desde Unidades.`,
+      });
     }
 
     // 3. Registrar el reporte de llegada
@@ -335,48 +338,15 @@ const crearReporteLlegada = async (req, res) => {
       }
     }
 
-    // 6. MOTOR DE LÓGICA PREDICTIVA (corre con contadores ya actualizados)
-    const configs = await pool.query("SELECT * FROM configuracion_partes WHERE activo = TRUE");
-    let alertasGeneradas = 0;
-
-    for (let c of configs.rows) {
-      let estadoParte = await pool.query(
-        "SELECT * FROM estado_partes_unidad WHERE unidad_id = $1 AND configuracion_parte_id = $2",
-        [unidad_id, c.id]
-      );
-
-      let ultimoMantenimientoKm = 0;
-      if (estadoParte.rows.length > 0) {
-        ultimoMantenimientoKm = estadoParte.rows[0].ultimo_mantenimiento_km;
-      } else {
-        await pool.query(
-          "INSERT INTO estado_partes_unidad (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km) VALUES ($1, $2, $3)",
-          [unidad_id, c.id, kilometrajeActual]
-        );
-        continue;
-      }
-
-      const kmRecorridos = kilometraje - ultimoMantenimientoKm;
-
-      if (kmRecorridos >= c.umbral_km) {
-        const alertaExistente = await pool.query(
-          `SELECT 1 FROM alertas_mantenimiento WHERE unidad_id = $1 AND parte_id = $2 AND estado != 'RESUELTO' LIMIT 1`,
-          [unidad_id, c.id]
-        );
-        if (alertaExistente.rows.length === 0) {
-          await pool.query(
-            `INSERT INTO alertas_mantenimiento (unidad_id, parte_id, mensaje, estado) VALUES ($1, $2, $3, 'ACTIVO')`,
-            [unidad_id, c.id, `URGENTE Predictivo: [${c.nombre}] requiere mantenimiento inmediato. Límite superado.`]
-          );
-          alertasGeneradas++;
-        }
-      }
-    }
+    // 6. MOTOR DE LÓGICA PREDICTIVA (corre con contadores ya actualizados).
+    //    Lógica compartida con updateUnit (admin corrige km manual) — ver
+    //    src/services/predictive-engine.js
+    const motor = await evaluarMotorPredictivo(unidad_id, kilometraje);
 
     res.status(201).json({
       message: "Llegada registrada exitosamente",
       reporte: reporte.rows[0],
-      alertasNuevas: alertasGeneradas,
+      alertasNuevas: motor.alertasGeneradas,
       trabajosCampo,
     });
 
@@ -387,47 +357,11 @@ const crearReporteLlegada = async (req, res) => {
 };
 
 // ===============================================================
-//  ✅ Obtener rutas disponibles
+//  ✅ Obtener rutas activas (para el dropdown del chofer)
+//  La tabla `rutas` y su seed se crean en run-migrations.js.
 // ===============================================================
 const getRutas = async (req, res) => {
   try {
-    // Crear tabla si no existe y sembrar datos iniciales
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS rutas (
-        id SERIAL PRIMARY KEY,
-        nombre VARCHAR(120) NOT NULL,
-        activa BOOLEAN DEFAULT true,
-        orden INT DEFAULT 0
-      )
-    `);
-
-    const count = await pool.query("SELECT COUNT(*) FROM rutas");
-    if (parseInt(count.rows[0].count) === 0) {
-      await pool.query(`
-        INSERT INTO rutas (nombre, orden) VALUES
-          ('Lima - Arequipa', 1),
-          ('Lima - Cusco', 2),
-          ('Lima - Trujillo', 3),
-          ('Lima - Chiclayo', 4),
-          ('Lima - Piura', 5),
-          ('Lima - Puno', 6),
-          ('Lima - Tacna', 7),
-          ('Lima - Ica', 8),
-          ('Lima - Nazca', 9),
-          ('Lima - Huancayo', 10),
-          ('Lima - Huánuco', 11),
-          ('Lima - Pucallpa', 12),
-          ('Lima - Tarapoto', 13),
-          ('Lima - Chimbote', 14),
-          ('Lima - Cajamarca', 15),
-          ('Arequipa - Cusco', 16),
-          ('Arequipa - Puno', 17),
-          ('Arequipa - Tacna', 18),
-          ('Cusco - Puno', 19),
-          ('Trujillo - Chiclayo', 20)
-      `);
-    }
-
     const result = await pool.query(
       "SELECT id, nombre FROM rutas WHERE activa = true ORDER BY orden ASC, nombre ASC"
     );

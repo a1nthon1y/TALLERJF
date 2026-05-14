@@ -25,10 +25,23 @@ import {
 import { useUsers } from "@/hooks/useUsers"
 import { Loader2 } from "lucide-react"
 
+// Teléfono Perú: 9 dígitos exactos, comenzando en 9 (móvil) o 0 dígitos (vacío permitido)
+const TELEFONO_PE_REGEX = /^9\d{8}$/
 const formSchema = z.object({
   usuario_id: z.coerce.number().min(1, { message: "El usuario es requerido" }),
-  licencia: z.string().min(1, { message: "La licencia es requerida" }),
-  telefono: z.string().optional(),
+  licencia: z
+    .string()
+    .trim()
+    .min(3, { message: "La licencia debe tener al menos 3 caracteres." })
+    .max(20, { message: "Máximo 20 caracteres." }),
+  telefono: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (v) => !v || TELEFONO_PE_REGEX.test(v),
+      { message: "Teléfono inválido. Debe tener 9 dígitos comenzando con 9 (ej. 987654321)." }
+    ),
 })
 
 export function ChoferForm({ chofer, onSubmit, onCancel, isLoading }) {
@@ -128,9 +141,16 @@ export function ChoferForm({ chofer, onSubmit, onCancel, isLoading }) {
             <FormItem>
               <FormLabel>Teléfono</FormLabel>
               <FormControl>
-                <Input placeholder="999999999" {...field} />
+                <Input
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="987654321"
+                  maxLength={9}
+                  {...field}
+                  onChange={(e) => field.onChange(e.target.value.replace(/\D/g, ""))}
+                />
               </FormControl>
-              <FormDescription>Teléfono de contacto del chofer (opcional)</FormDescription>
+              <FormDescription>9 dígitos, formato Perú (opcional).</FormDescription>
               <FormMessage />
             </FormItem>
           )}

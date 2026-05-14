@@ -22,10 +22,25 @@ import { z } from "zod"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 
 const formSchema = z.object({
-  nombre: z.string().min(1, { message: "El nombre es requerido" }),
-  descripcion: z.string().min(1, { message: "La descripción es requerida" }),
-  stock: z.number().min(0, { message: "El stock no puede ser negativo" }),
-  precio: z.number().min(0, { message: "El precio no puede ser negativo" }),
+  nombre: z
+    .string()
+    .trim()
+    .min(2, { message: "El nombre debe tener al menos 2 caracteres" })
+    .max(120, { message: "Máximo 120 caracteres" }),
+  descripcion: z
+    .string()
+    .trim()
+    .min(1, { message: "La descripción es requerida" })
+    .max(500, { message: "Máximo 500 caracteres" }),
+  stock: z
+    .number({ invalid_type_error: "Stock inválido" })
+    .int({ message: "El stock debe ser entero" })
+    .min(0, { message: "El stock no puede ser negativo" })
+    .max(999999, { message: "Stock demasiado alto" }),
+  precio: z
+    .number({ invalid_type_error: "Precio inválido" })
+    .positive({ message: "El precio debe ser mayor a 0" })
+    .max(999999.99, { message: "Precio demasiado alto" }),
 })
 
 export default function MaterialsPage() {

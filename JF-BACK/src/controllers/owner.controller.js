@@ -8,7 +8,7 @@ const createOwner = async (req, res) => {
     // Verificar que el usuario exista
     const userCheck = await pool.query("SELECT id FROM usuarios WHERE id = $1", [usuario_id]);
     if (userCheck.rows.length === 0) {
-      return res.status(404).json({ error: "El usuario asociado no existe" });
+      return res.status(404).json({ message: `El usuario seleccionado (id ${usuario_id}) no existe.` });
     }
 
     // Insertar el nuevo dueño
@@ -73,7 +73,7 @@ const updateOwner = async (req, res) => {
     // Verificar que el usuario exista
     const userCheck = await pool.query("SELECT id FROM usuarios WHERE id = $1", [usuario_id]);
     if (userCheck.rows.length === 0) {
-      return res.status(404).json({ error: "El nuevo usuario asociado no existe" });
+      return res.status(404).json({ message: `El usuario seleccionado (id ${usuario_id}) no existe.` });
     }
 
     const result = await pool.query(

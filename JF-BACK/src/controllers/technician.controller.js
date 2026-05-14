@@ -19,9 +19,14 @@ const createTechnician = async (req, res) => {
 
     // Verificar que el usuario existe y tiene rol TECNICO si se provee
     if (usuario_id) {
-      const userCheck = await pool.query("SELECT rol FROM usuarios WHERE id = $1", [usuario_id]);
-      if (userCheck.rows.length === 0 || userCheck.rows[0].rol !== "TECNICO") {
-        return res.status(400).json({ error: "El usuario debe tener rol TECNICO" });
+      const userCheck = await pool.query("SELECT rol, nombre FROM usuarios WHERE id = $1", [usuario_id]);
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ message: `El usuario seleccionado (id ${usuario_id}) no existe.` });
+      }
+      if (userCheck.rows[0].rol !== "TECNICO") {
+        return res.status(400).json({
+          message: `El usuario "${userCheck.rows[0].nombre}" tiene rol ${userCheck.rows[0].rol}; debe tener rol TECNICO para vincularse a un técnico.`,
+        });
       }
     }
 
@@ -44,9 +49,14 @@ const updateTechnician = async (req, res) => {
 
     // Verificar que el usuario existe y tiene rol TECNICO si se provee
     if (usuario_id) {
-      const userCheck = await pool.query("SELECT rol FROM usuarios WHERE id = $1", [usuario_id]);
-      if (userCheck.rows.length === 0 || userCheck.rows[0].rol !== "TECNICO") {
-        return res.status(400).json({ error: "El usuario debe tener rol TECNICO" });
+      const userCheck = await pool.query("SELECT rol, nombre FROM usuarios WHERE id = $1", [usuario_id]);
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ message: `El usuario seleccionado (id ${usuario_id}) no existe.` });
+      }
+      if (userCheck.rows[0].rol !== "TECNICO") {
+        return res.status(400).json({
+          message: `El usuario "${userCheck.rows[0].nombre}" tiene rol ${userCheck.rows[0].rol}; debe tener rol TECNICO para vincularse a un técnico.`,
+        });
       }
     }
 
@@ -56,7 +66,7 @@ const updateTechnician = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Técnico no encontrado" });
+      return res.status(404).json({ message: "Técnico no encontrado." });
     }
 
     res.json({ message: "Técnico actualizado correctamente", tecnico: result.rows[0] });
@@ -77,7 +87,7 @@ const toggleTechnicianStatus = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Técnico no encontrado" });
+      return res.status(404).json({ message: "Técnico no encontrado." });
     }
 
     res.json({ message: `Técnico ${activo ? "activado" : "desactivado"} correctamente`, tecnico: result.rows[0] });

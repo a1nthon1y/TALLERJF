@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import { UnitPartsManager } from "@/components/units-parts/unit-parts-manager"
+import { PageSkeleton } from "@/components/ui/page-skeleton"
 
 export default function PartesUnidadesPage() {
   return (
@@ -8,7 +9,7 @@ export default function PartesUnidadesPage() {
         <h1 className="text-2xl font-bold tracking-tight">Estado de Flota</h1>
         <p className="text-muted-foreground">Estado predictivo de componentes por unidad — km recorridos vs. intervalos de mantenimiento</p>
       </div>
-      <Suspense fallback={null}>
+      <Suspense fallback={<PageSkeleton rowCount={5} columnCount={5} />}>
         <UnitPartsManager />
       </Suspense>
     </div>

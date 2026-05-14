@@ -36,10 +36,30 @@ import { authService } from "@/services/authService"
 import { useRouter } from "next/navigation"
 
 const formSchema = z.object({
-  nombre: z.string().min(1, { message: "El nombre es requerido" }),
-  descripcion: z.string().min(1, { message: "La descripción es requerida" }),
-  stock: z.number().min(0, { message: "El stock no puede ser negativo" }),
-  precio: z.string().min(1, { message: "El precio es requerido" }),
+  nombre: z
+    .string()
+    .trim()
+    .min(2, { message: "El nombre debe tener al menos 2 caracteres" })
+    .max(120, { message: "Máximo 120 caracteres" }),
+  descripcion: z
+    .string()
+    .trim()
+    .min(1, { message: "La descripción es requerida" })
+    .max(500, { message: "Máximo 500 caracteres" }),
+  stock: z
+    .number({ invalid_type_error: "Stock inválido" })
+    .int({ message: "El stock debe ser entero" })
+    .min(0, { message: "El stock no puede ser negativo" })
+    .max(999999, { message: "Stock demasiado alto" }),
+  precio: z
+    .string()
+    .trim()
+    .min(1, { message: "El precio es requerido" })
+    .refine((v) => /^\d+(\.\d{1,2})?$/.test(v), {
+      message: "Ingresa un precio válido (hasta 2 decimales).",
+    })
+    .refine((v) => Number(v) > 0, { message: "El precio debe ser mayor a 0." })
+    .refine((v) => Number(v) <= 999999.99, { message: "Precio demasiado alto." }),
 })
 
 export function MaterialsTable({ materials, isLoading, isError, mutate }) {
@@ -309,7 +329,10 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
                                 <td className="py-1 pr-4">
                                   <Badge variant="outline" className="text-xs">{uso.estado}</Badge>
                                 </td>
-                                <td className="py-1 pr-4 text-muted-foreground">{uso.fecha_programada ? new Date(uso.fecha_programada).toLocaleDateString("es-PE") : "—"}</td>
+                                <td className="py-1 pr-4 text-muted-foreground">{(() => {
+                                  const f = uso.fecha_realizacion || uso.fecha_solicitud
+                                  return f ? new Date(f).toLocaleDateString("es-PE") : "—"
+                                })()}</td>
                                 <td className="py-1 pr-4">{uso.cantidad}</td>
                                 <td className="py-1">S/. {parseFloat(uso.costo_total).toFixed(2)}</td>
                               </tr>
@@ -389,8 +412,9 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
                     <FormControl>
                       <Input
                         type="number"
-                        min="0"
+                        min="0.01"
                         step="0.01"
+                        inputMode="decimal"
                         placeholder="0.00"
                         {...field}
                         onChange={(e) => field.onChange(e.target.value)}

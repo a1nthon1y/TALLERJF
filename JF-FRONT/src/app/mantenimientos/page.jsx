@@ -73,24 +73,21 @@ function MaintenancesContent() {
     const crear = searchParams.get("crear")
     const unidadId = searchParams.get("unidad_id")
     if (crear === "true") {
-      const targetUnit = unidadId ? units.find((u) => String(u.id) === unidadId) : units[0]
+      // Solo pre-seleccionamos la unidad si vino explícitamente por query param
+      // (deep-link desde /partes-unidades, /unidades, alertas).
+      // Si no, el usuario debe elegirla explícitamente para evitar registrar
+      // un mantenimiento en la unidad equivocada por accidente.
+      const targetUnit = unidadId ? units.find((u) => String(u.id) === unidadId) : null
       if (targetUnit) form.setValue("unidad_id", String(targetUnit.id))
       setIsCreating(true)
       router.replace("/mantenimientos", { scroll: false })
     }
   }, [units, searchParams])
 
-  useEffect(() => {
-    if (technicians && technicians.length > 0) {
-      form.setValue("tecnico_id", String(technicians[0].id))
-    }
-  }, [technicians])
-
-  useEffect(() => {
-    if (units && units.length > 0 && !form.getValues("unidad_id")) {
-      form.setValue("unidad_id", String(units[0].id))
-    }
-  }, [units])
+  // NOTA: Eliminadas las pre-selecciones automáticas de "primer técnico" y
+  // "primera unidad" — el usuario DEBE elegir explícitamente. Caso contrario
+  // se registran mantenimientos en unidades/técnicos equivocados al hacer
+  // clic rápido en "Crear" sin revisar los selects.
 
   // Cargar partes predictivas cuando unidad o tipo cambian
   const watchedUnidad = form.watch("unidad_id")
@@ -171,7 +168,17 @@ function MaintenancesContent() {
               Ver alertas
             </Link>
           </Button>
-          <Dialog open={isCreating} onOpenChange={setIsCreating}>
+          <Dialog
+            open={isCreating}
+            onOpenChange={(open) => {
+              setIsCreating(open)
+              if (!open) {
+                form.reset({ unidad_id: "", tipo: "preventivo", observaciones: "", tecnico_id: "" })
+                setSelectedPartes([])
+                setUnitParts([])
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />

@@ -61,12 +61,37 @@ const TRANSICIONES_ADMIN = {
 const editSchema = z.object({
   estado: z.enum(["PENDIENTE", "EN_PROCESO", "COMPLETADO"]),
   tecnico_id: z.string().optional(),
-  nota_adicional: z.string().optional(),
+  nota_adicional: z.string().max(1000, { message: "Máximo 1000 caracteres." }).optional(),
   partes_reparadas: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
   if (data.estado === "COMPLETADO" && (!data.tecnico_id || data.tecnico_id === "NONE")) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El técnico es obligatorio al completar", path: ["tecnico_id"] })
   }
+})
+
+// Schemas para los sub-diálogos de la tabla (single source of truth de validación)
+const addMaterialSchema = z.object({
+  material_id: z.string().min(1, { message: "Selecciona un material." }),
+  cantidad: z.coerce
+    .number({ invalid_type_error: "La cantidad debe ser un número." })
+    .positive({ message: "La cantidad debe ser mayor a 0." })
+    .max(99999, { message: "Cantidad demasiado alta." }),
+})
+
+const completeSchema = z.object({
+  tecnico_id: z
+    .string()
+    .min(1, { message: "El técnico es obligatorio para marcar como completado." })
+    .refine((v) => v !== "NONE", { message: "Selecciona un técnico válido." }),
+  materiales_count: z
+    .number()
+    .int()
+    .min(1, { message: "Debes registrar al menos un material antes de completar." }),
+  nota_adicional: z.string().max(1000, { message: "Máximo 1000 caracteres." }).optional().or(z.literal("")),
+})
+
+const closeSchema = z.object({
+  observaciones: z.string().max(1000, { message: "Máximo 1000 caracteres." }).optional().or(z.literal("")),
 })
 
 export function MaintenancesTable() {
@@ -98,6 +123,13 @@ export function MaintenancesTable() {
   const [addMatId, setAddMatId] = useState("")
   const [addMatQty, setAddMatQty] = useState(1)
   const [addingMat, setAddingMat] = useState(false)
+  const [addMatErrors, setAddMatErrors] = useState({})
+
+  // Errores del cierre/aprobación
+  const [closeErrors, setCloseErrors] = useState({})
+
+  // Errores del completar
+  const [compErrors, setCompErrors] = useState({})
 
   // Partes en el dialog de Editar
   const [editPartes, setEditPartesState] = useState([])
@@ -264,6 +296,14 @@ export function MaintenancesTable() {
 
   const handleCloseMaintenance = async () => {
     if (!closingMaintenance) return
+    const parsed = closeSchema.safeParse({ observaciones: closeObs })
+    if (!parsed.success) {
+      const flat = parsed.error.flatten()
+      setCloseErrors({ observaciones: flat.fieldErrors.observaciones?.[0] })
+      toast.error(flat.fieldErrors.observaciones?.[0] || "Hay errores en el formulario.")
+      return
+    }
+    setCloseErrors({})
     setIsClosing(true)
     try {
       await maintenanceService.closeMaintenance(closingMaintenance.id, closeObs)
@@ -273,7 +313,7 @@ export function MaintenancesTable() {
       setCloseMaterials([])
       await mutate()
     } catch (error) {
-      toast.error(error.message)
+      toast.error(error.message || "Error al cerrar el mantenimiento.")
     } finally {
       setIsClosing(false)
     }
@@ -282,6 +322,7 @@ export function MaintenancesTable() {
   const openCloseDialog = (maintenance) => {
     setClosingMaintenance(maintenance)
     setCloseObs("")
+    setCloseErrors({})
     setCloseMaterials([])
     setCloseMatsLoading(true)
     maintenanceService.getMaintenanceMaterials(maintenance.id)
@@ -325,6 +366,7 @@ export function MaintenancesTable() {
     setMaterialsMaintenance(maintenance)
     setAddMatId("")
     setAddMatQty(1)
+    setAddMatErrors({})
     setMatLoading(true)
     try {
       const [mats, cat] = await Promise.all([
@@ -347,6 +389,7 @@ export function MaintenancesTable() {
     setCompNota("")
     setCompAddMatId("")
     setCompAddMatQty(1)
+    setCompErrors({})
     setCompTecnicoId(maintenance.tecnico_id?.toString() || "")
     setCompMatLoading(true)
     try {
@@ -417,15 +460,24 @@ export function MaintenancesTable() {
 
   const handleCompleteSubmit = async () => {
     if (!completingMaintenance) return
-    const tecId = compTecnicoId || completingMaintenance.tecnico_id?.toString()
-    if (!tecId || tecId === "NONE") {
-      toast.error("El técnico es obligatorio para marcar como completado")
+    const tecId = compTecnicoId || completingMaintenance.tecnico_id?.toString() || ""
+    const parsed = completeSchema.safeParse({
+      tecnico_id: tecId,
+      materiales_count: compMaterials.length,
+      nota_adicional: compNota,
+    })
+    if (!parsed.success) {
+      const flat = parsed.error.flatten()
+      const fieldErrors = {
+        tecnico_id: flat.fieldErrors.tecnico_id?.[0],
+        materiales_count: flat.fieldErrors.materiales_count?.[0],
+        nota_adicional: flat.fieldErrors.nota_adicional?.[0],
+      }
+      setCompErrors(fieldErrors)
+      toast.error(Object.values(fieldErrors).find(Boolean) || "Hay errores en el formulario.")
       return
     }
-    if (compMaterials.length === 0) {
-      toast.error("Debes registrar al menos un material antes de completar el mantenimiento")
-      return
-    }
+    setCompErrors({})
     const esPreventivo = completingMaintenance.tipo?.toUpperCase() === "PREVENTIVO"
     setIsCompleting(true)
     try {
@@ -451,7 +503,26 @@ export function MaintenancesTable() {
   }
 
   const handleAddMaterial = async () => {
-    if (!addMatId || addMatQty < 1) return
+    const parsed = addMaterialSchema.safeParse({ material_id: addMatId, cantidad: addMatQty })
+    if (!parsed.success) {
+      const flat = parsed.error.flatten()
+      const fieldErrors = {
+        material_id: flat.fieldErrors.material_id?.[0],
+        cantidad: flat.fieldErrors.cantidad?.[0],
+      }
+      setAddMatErrors(fieldErrors)
+      toast.error(Object.values(fieldErrors).find(Boolean) || "Hay errores en el formulario.")
+      return
+    }
+    // Validación adicional contra el stock disponible (regla de negocio dinámica)
+    const stockDisponible = catalog.find(c => c.id === parseInt(addMatId))?.stock ?? 0
+    if (addMatQty > stockDisponible) {
+      const msg = `Solo hay ${stockDisponible} unidades disponibles en stock.`
+      setAddMatErrors({ cantidad: msg })
+      toast.error(msg)
+      return
+    }
+    setAddMatErrors({})
     setAddingMat(true)
     try {
       const added = await maintenanceService.addMaintenanceMaterial(materialsMaintenance.id, parseInt(addMatId), addMatQty)
@@ -461,7 +532,7 @@ export function MaintenancesTable() {
       setAddMatQty(1)
       toast.success("Material agregado")
     } catch (err) {
-      toast.error(err.message)
+      toast.error(err.message || "Error al agregar el material.")
     } finally {
       setAddingMat(false)
     }
@@ -1004,31 +1075,47 @@ export function MaintenancesTable() {
                 {!matReadonly && (
                   <div className="border rounded-md p-3 space-y-2 bg-muted/20">
                     <p className="text-sm font-medium">Agregar material del catálogo</p>
-                    <div className="flex gap-2 flex-wrap">
-                      <Select value={addMatId} onValueChange={setAddMatId}>
-                        <SelectTrigger className="flex-1 min-w-[180px]">
-                          <SelectValue placeholder="Seleccionar material..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {catalog.length === 0 ? (
-                            <SelectItem value="_none" disabled>Sin stock disponible</SelectItem>
-                          ) : catalog.map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>
-                              {c.nombre} — S/. {Number(c.precio).toFixed(2)} (stock: {c.stock})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={catalog.find(c => c.id === parseInt(addMatId))?.stock ?? 999}
-                        value={addMatQty}
-                        onChange={(e) => setAddMatQty(Number(e.target.value))}
-                        className="w-24"
-                        placeholder="Cant."
-                      />
-                      <Button onClick={handleAddMaterial} disabled={!addMatId || addMatQty < 1 || addingMat}>
+                    <div className="flex gap-2 flex-wrap items-start">
+                      <div className="flex-1 min-w-[180px] space-y-1">
+                        <Select
+                          value={addMatId}
+                          onValueChange={(v) => { setAddMatId(v); setAddMatErrors((e) => ({ ...e, material_id: undefined })) }}
+                        >
+                          <SelectTrigger className="w-full" aria-invalid={!!addMatErrors.material_id}>
+                            <SelectValue placeholder="Seleccionar material..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {catalog.length === 0 ? (
+                              <SelectItem value="_none" disabled>Sin stock disponible</SelectItem>
+                            ) : catalog.map((c) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {c.nombre} — S/. {Number(c.precio).toFixed(2)} (stock: {c.stock})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {addMatErrors.material_id && (
+                          <p className="text-xs text-destructive">{addMatErrors.material_id}</p>
+                        )}
+                      </div>
+                      <div className="w-24 space-y-1">
+                        <Input
+                          type="number"
+                          min={1}
+                          max={catalog.find(c => c.id === parseInt(addMatId))?.stock ?? 999}
+                          value={addMatQty}
+                          onChange={(e) => {
+                            setAddMatQty(e.target.value === "" ? "" : Number(e.target.value))
+                            setAddMatErrors((er) => ({ ...er, cantidad: undefined }))
+                          }}
+                          placeholder="Cant."
+                          aria-invalid={!!addMatErrors.cantidad}
+                        />
+                        {addMatErrors.cantidad && (
+                          <p className="text-xs text-destructive">{addMatErrors.cantidad}</p>
+                        )}
+                      </div>
+                      <Button onClick={handleAddMaterial} disabled={addingMat}>
                         {addingMat ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
                         Agregar
                       </Button>
@@ -1072,8 +1159,11 @@ export function MaintenancesTable() {
               {(!completingMaintenance?.tecnico_id && !completingMaintenance?.tecnico_nombre) && (
                 <div className="space-y-1.5">
                   <p className="text-sm font-medium text-destructive">Técnico responsable <span className="text-destructive">*</span></p>
-                  <Select value={compTecnicoId} onValueChange={setCompTecnicoId}>
-                    <SelectTrigger>
+                  <Select
+                    value={compTecnicoId}
+                    onValueChange={(v) => { setCompTecnicoId(v); setCompErrors((e) => ({ ...e, tecnico_id: undefined })) }}
+                  >
+                    <SelectTrigger aria-invalid={!!compErrors.tecnico_id}>
                       <SelectValue placeholder="Selecciona el técnico que realizó el trabajo..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -1084,6 +1174,9 @@ export function MaintenancesTable() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {compErrors.tecnico_id && (
+                    <p className="text-xs text-destructive">{compErrors.tecnico_id}</p>
+                  )}
                 </div>
               )}
 
@@ -1263,16 +1356,26 @@ export function MaintenancesTable() {
               {/* Nota del encargado */}
               <div className="space-y-1.5">
                 <p className="text-sm font-medium">Nota de cierre del trabajo <span className="text-muted-foreground font-normal">(opcional)</span></p>
-                <Textarea value={compNota} onChange={(e) => setCompNota(e.target.value)}
-                  rows={2} placeholder="Ej: Trabajo realizado correctamente. Se reemplazaron filtros..." />
+                <Textarea
+                  value={compNota}
+                  onChange={(e) => { setCompNota(e.target.value); setCompErrors((er) => ({ ...er, nota_adicional: undefined })) }}
+                  rows={2}
+                  maxLength={1000}
+                  placeholder="Ej: Trabajo realizado correctamente. Se reemplazaron filtros..."
+                  aria-invalid={!!compErrors.nota_adicional}
+                />
+                {compErrors.nota_adicional && (
+                  <p className="text-xs text-destructive">{compErrors.nota_adicional}</p>
+                )}
               </div>
             </div>
           )}
 
           <DialogFooter className="flex-col gap-2 sm:flex-row">
-            {compMaterials.length === 0 && !compMatLoading && (
+            {(compErrors.materiales_count || (compMaterials.length === 0 && !compMatLoading)) && (
               <p className="text-xs text-destructive flex items-center gap-1 mr-auto">
-                <AlertCircle className="h-3.5 w-3.5" /> Registra al menos un material para continuar
+                <AlertCircle className="h-3.5 w-3.5" />
+                {compErrors.materiales_count || "Registra al menos un material para continuar"}
               </p>
             )}
             <Button variant="outline" onClick={() => setCompletingMaintenance(null)}>Cancelar</Button>
@@ -1590,9 +1693,14 @@ export function MaintenancesTable() {
               <Textarea
                 placeholder="Ej: Trabajo revisado y conforme. Se verificaron frenos y aceite."
                 value={closeObs}
-                onChange={(e) => setCloseObs(e.target.value)}
+                onChange={(e) => { setCloseObs(e.target.value); setCloseErrors((er) => ({ ...er, observaciones: undefined })) }}
                 rows={3}
+                maxLength={1000}
+                aria-invalid={!!closeErrors.observaciones}
               />
+              {closeErrors.observaciones && (
+                <p className="text-xs text-destructive">{closeErrors.observaciones}</p>
+              )}
             </div>
           </div>
 

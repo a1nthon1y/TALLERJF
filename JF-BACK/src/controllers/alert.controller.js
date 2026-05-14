@@ -25,7 +25,7 @@ const resolveAlert = async (req, res) => {
             "UPDATE alertas_mantenimiento SET estado = 'RESUELTO' WHERE id = $1 RETURNING id",
             [id]
         );
-        if (result.rows.length === 0) return res.status(404).json({ error: "Alerta no encontrada" });
+        if (result.rows.length === 0) return res.status(404).json({ message: "Alerta no encontrada." });
         res.status(200).json({ message: "Alerta resuelta" });
     } catch (error) {
         res.status(500).json({ error: error.message });

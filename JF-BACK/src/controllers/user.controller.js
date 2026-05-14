@@ -18,7 +18,7 @@ const getUsers = async (req, res) => {
 const suggestUsername = async (req, res) => {
   try {
     const { nombre } = req.query;
-    if (!nombre) return res.status(400).json({ error: "nombre es requerido" });
+    if (!nombre) return res.status(400).json({ message: "El nombre es requerido para sugerir un username." });
     const username = await generateUsername(nombre);
     res.json({ username });
   } catch (error) {
@@ -32,27 +32,24 @@ const createUser = async (req, res) => {
     const { nombre, correo, username: usernameInput, password, rol, activo } = req.body;
 
     if (!nombre || !password || !rol) {
-      return res.status(400).json({ error: "nombre, password y rol son obligatorios" });
+      return res.status(400).json({ message: "Nombre, contraseña y rol son obligatorios para crear un usuario." });
     }
 
-    // Si el admin envió un username manual, verificar que no exista
-    // Si no envió uno, generarlo automáticamente
     let username;
     if (usernameInput && usernameInput.trim()) {
       const existing = await pool.query("SELECT id FROM usuarios WHERE username = $1", [usernameInput.trim()]);
       if (existing.rows.length > 0) {
-        return res.status(409).json({ error: `El usuario '${usernameInput.trim()}' ya existe` });
+        return res.status(409).json({ message: `Ya existe un usuario con el username '${usernameInput.trim()}'. Elige otro.` });
       }
       username = usernameInput.trim().toLowerCase();
     } else {
       username = await generateUsername(nombre);
     }
 
-    // Verificar unicidad de correo si se proporcionó
     if (correo) {
       const correoExists = await pool.query("SELECT id FROM usuarios WHERE correo = $1", [correo]);
       if (correoExists.rows.length > 0) {
-        return res.status(409).json({ error: "Ya existe un usuario con ese correo" });
+        return res.status(409).json({ message: `Ya existe un usuario registrado con el correo ${correo}.` });
       }
     }
 
@@ -84,7 +81,7 @@ const updateUser = async (req, res) => {
         [usernameInput.trim(), id]
       );
       if (existing.rows.length > 0) {
-        return res.status(409).json({ error: `El usuario '${usernameInput.trim()}' ya existe` });
+        return res.status(409).json({ message: `Ya existe otro usuario con el username '${usernameInput.trim()}'.` });
       }
     }
 
@@ -102,7 +99,7 @@ const updateUser = async (req, res) => {
 
     const result = await pool.query(query, params);
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
+      return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
     res.json({ message: "Usuario actualizado correctamente", user: result.rows[0] });
@@ -111,7 +108,6 @@ const updateUser = async (req, res) => {
   }
 };
 
-// Activar o desactivar usuario
 const toggleUserStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -122,7 +118,7 @@ const toggleUserStatus = async (req, res) => {
       [activo, id]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Usuario no encontrado" });
+      return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
     res.json({ message: `Usuario ${activo ? "activado" : "desactivado"} correctamente`, user: result.rows[0] });

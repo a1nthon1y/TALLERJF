@@ -8,6 +8,10 @@ const OwnerReportsSummary = dynamic(
   () => import("@/components/reports/owner-reports-summary").then(m => ({ default: m.OwnerReportsSummary })),
   { loading: () => <Skeleton className="h-40 w-full mt-4" /> }
 )
+const OwnerReportsTable = dynamic(
+  () => import("@/components/reports/owner-reports-table").then(m => ({ default: m.OwnerReportsTable })),
+  { loading: () => <Skeleton className="h-60 w-full mt-4" /> }
+)
 
 export default function ReportsPage() {
   return (
@@ -23,12 +27,13 @@ export default function ReportsPage() {
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="por-dueno">Por Dueño</TabsTrigger>
         </TabsList>
-        <TabsContent value="general">
+        <TabsContent value="general" className="space-y-4">
           <ReportsSummary />
           <ReportsTable />
         </TabsContent>
-        <TabsContent value="por-dueno">
+        <TabsContent value="por-dueno" className="space-y-4">
           <OwnerReportsSummary />
+          <OwnerReportsTable />
         </TabsContent>
       </Tabs>
     </div>

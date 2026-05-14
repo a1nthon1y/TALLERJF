@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { rutasService } from "@/services/rutasService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +12,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -19,7 +25,21 @@ import { DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 
-const EMPTY = { nombre: "", orden: 0, activa: true };
+const rutaSchema = z.object({
+  nombre: z
+    .string()
+    .trim()
+    .min(2, { message: "El nombre debe tener al menos 2 caracteres." })
+    .max(120, { message: "Máximo 120 caracteres." }),
+  orden: z.coerce
+    .number({ invalid_type_error: "El orden debe ser un número." })
+    .int({ message: "El orden debe ser entero." })
+    .min(0, { message: "El orden no puede ser negativo." })
+    .default(0),
+  activa: z.boolean().default(true),
+});
+
+const EMPTY_VALUES = { nombre: "", orden: 0, activa: true };
 
 export default function RutasPage() {
   const [rutas, setRutas] = useState([]);
@@ -28,9 +48,13 @@ export default function RutasPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState(null); // null = crear, obj = editar
-  const [form, setForm] = useState(EMPTY);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const form = useForm({
+    resolver: zodResolver(rutaSchema),
+    defaultValues: EMPTY_VALUES,
+  });
 
   const load = () => {
     setLoading(true);
@@ -44,25 +68,24 @@ export default function RutasPage() {
 
   const openCreate = () => {
     setEditTarget(null);
-    setForm(EMPTY);
+    form.reset(EMPTY_VALUES);
     setDialogOpen(true);
   };
 
   const openEdit = (r) => {
     setEditTarget(r);
-    setForm({ nombre: r.nombre, orden: r.orden ?? 0, activa: r.activa });
+    form.reset({ nombre: r.nombre, orden: r.orden ?? 0, activa: r.activa });
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.nombre.trim()) { toast.error("El nombre es requerido"); return; }
+  const handleSave = async (values) => {
     setSaving(true);
     try {
       if (editTarget) {
-        await rutasService.update(editTarget.id, form);
+        await rutasService.update(editTarget.id, values);
         toast.success("Ruta actualizada");
       } else {
-        await rutasService.create(form);
+        await rutasService.create(values);
         toast.success("Ruta creada");
       }
       setDialogOpen(false);
@@ -160,45 +183,66 @@ export default function RutasPage() {
           <DialogHeader>
             <DialogTitle>{editTarget ? "Editar ruta" : "Nueva ruta"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Nombre *</label>
-              <Input
-                placeholder="Ej. Lima - Arequipa"
-                value={form.nombre}
-                onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-                autoFocus
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSave)} className="space-y-3 py-2">
+              <FormField
+                control={form.control}
+                name="nombre"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej. Lima - Arequipa" autoFocus {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Orden (opcional)</label>
-              <Input
-                type="number" min={0}
-                placeholder="0"
-                value={form.orden}
-                onChange={(e) => setForm((f) => ({ ...f, orden: Number(e.target.value) }))}
+              <FormField
+                control={form.control}
+                name="orden"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-muted-foreground">Orden (opcional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="0"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value === "" ? 0 : Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormDescription>Número menor aparece primero en el select del chofer.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              <p className="text-xs text-muted-foreground">Número menor aparece primero en el select del chofer.</p>
-            </div>
-            {editTarget && (
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={form.activa}
-                  onCheckedChange={(v) => setForm((f) => ({ ...f, activa: v }))}
+              {editTarget && (
+                <FormField
+                  control={form.control}
+                  name="activa"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-3 space-y-0">
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <Badge variant={field.value ? "outline" : "secondary"} className={field.value ? "border-green-500 text-green-600" : ""}>
+                        {field.value ? "Activa" : "Inactiva"}
+                      </Badge>
+                    </FormItem>
+                  )}
                 />
-                <Badge variant={form.activa ? "outline" : "secondary"} className={form.activa ? "border-green-500 text-green-600" : ""}>
-                  {form.activa ? "Activa" : "Inactiva"}
-                </Badge>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {editTarget ? "Guardar cambios" : "Crear ruta"}
-            </Button>
-          </DialogFooter>
+              )}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+                <Button type="submit" disabled={saving}>
+                  {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                  {editTarget ? "Guardar cambios" : "Crear ruta"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 

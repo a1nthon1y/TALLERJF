@@ -10,7 +10,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
 } from "@/components/ui/command"
 import { useRouter } from "next/navigation"
 import { authService } from "@/services/authService"
@@ -45,20 +44,20 @@ const encargadoLinks = [
 ]
 
 const choferLinks = [
-  { name: "Mi Dashboard", description: "Resumen de tu unidad", url: "/chofer/dashboard", icon: BarChart3 },
+  { name: "Mi Panel", description: "Resumen de tu unidad", url: "/chofer/dashboard", icon: BarChart3 },
   { name: "Mis Mantenimientos", description: "Historial de mantenimientos", url: "/chofer/mis-mantenimientos", icon: Wrench },
   { name: "Solicitar Mantenimiento", description: "Enviar solicitud de mantenimiento", url: "/chofer/solicitar-mantenimiento", icon: ClipboardList },
   { name: "Llegada al Taller", description: "Registrar llegada y kilometraje", url: "/chofer/reportar-llegada", icon: Bus },
 ]
 
 const ownerLinks = [
-  { name: "Mi Dashboard", description: "Resumen de mis unidades", url: "/dueno/dashboard", icon: BarChart3 },
+  { name: "Mi Panel", description: "Resumen de mis unidades", url: "/dueno/dashboard", icon: BarChart3 },
   { name: "Mis Unidades", description: "Ver mis unidades asignadas", url: "/dueno/mis-unidades", icon: Bus },
   { name: "Historial de Mantenimientos", description: "Ver mantenimientos de mis unidades", url: "/dueno/mantenimientos", icon: Wrench },
 ]
 
 const tecnicoLinks = [
-  { name: "Mi Dashboard", description: "Resumen de trabajos asignados", url: "/tecnico/dashboard", icon: BarChart3 },
+  { name: "Mi Panel", description: "Resumen de trabajos asignados", url: "/tecnico/dashboard", icon: BarChart3 },
   { name: "Mis Trabajos", description: "Ver y actualizar trabajos asignados", url: "/tecnico/mis-trabajos", icon: Wrench },
 ]
 

@@ -1,4 +1,5 @@
 const pool = require("../config/db");
+const { evaluarMotorPredictivo } = require("../services/predictive-engine");
 
 // ===================================================================
 //  ✅ Crear una unidad
@@ -19,9 +20,25 @@ const createUnit = async (req, res) => {
       [placa, modelo, año, tipoNorm, chofer_id || null, kilometraje || 0, dueno_id || null]
     );
 
+    const nuevaUnidad = result.rows[0];
+
+    // Inicializar baseline predictivo: una fila en estado_partes_unidad por
+    // cada regla activa, con ultimo_mantenimiento_km = km actual de la unidad.
+    // Esto evita el bug donde COALESCE(NULL, 0) producía "Vencido +X km" falso
+    // en /partes-unidades para reglas que nunca habían sido reparadas en esta unidad.
+    await pool.query(
+      `INSERT INTO estado_partes_unidad
+         (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)
+       SELECT $1, cp.id, $2, NOW()
+       FROM configuracion_partes cp
+       WHERE cp.activo = TRUE
+       ON CONFLICT (unidad_id, configuracion_parte_id) DO NOTHING`,
+      [nuevaUnidad.id, nuevaUnidad.kilometraje || 0]
+    );
+
     res.status(201).json({
       message: "Unidad creada correctamente",
-      unidad: result.rows[0],
+      unidad: nuevaUnidad,
     });
   } catch (error) {
     console.error("Error al crear unidad:", error);
@@ -149,30 +166,75 @@ const getUnitById = async (req, res) => {
 
 // ===================================================================
 //  🔧 Actualizar una unidad
+//
+//  Reglas para el campo `kilometraje`:
+//    - ENCARGADO: solo puede AVANZARLO (nuevo ≥ actual). Cualquier intento de
+//      reducirlo se rechaza con 400 y mensaje guiando a contactar al admin.
+//    - ADMIN: puede establecer cualquier valor (corrige errores humanos del
+//      chofer en ambos sentidos).
+//
+//  Si el km cambia (sin importar el rol), se dispara el motor predictivo
+//  compartido (mismo helper que `crearReporteLlegada`):
+//    - km sube → puede emitir nuevas alertas ACTIVO.
+//    - km baja → resuelve alertas ACTIVO huérfanas (que existían por una
+//      lectura inflada anterior).
+//
+//  No se inserta en `reportes_llegada`: la edición admin es una corrección,
+//  no una bitácora del chofer. La trazabilidad queda en el `unidades.kilometraje`.
 // ===================================================================
 const updateUnit = async (req, res) => {
   try {
     const { id } = req.params;
     const { placa, modelo, año, tipo, chofer_id, kilometraje, dueno_id } = req.body;
+    const isAdmin = req.user?.rol === "ADMIN";
 
-    const result = await pool.query(
-      `
-      UPDATE unidades 
-      SET placa = $1, modelo = $2, año = $3, tipo = $4, chofer_id = $5,
-          kilometraje = $6, dueno_id = $7
-      WHERE id = $8
-      RETURNING *
-      `,
-      [placa, modelo, año, tipo?.toUpperCase(), chofer_id || null, kilometraje || 0, dueno_id, id]
+    const current = await pool.query(
+      "SELECT placa, kilometraje FROM unidades WHERE id = $1",
+      [id]
     );
-
-    if (result.rows.length === 0) {
+    if (current.rows.length === 0) {
       return res.status(404).json({ message: "Unidad no encontrada" });
     }
 
+    const placaActual = current.rows[0].placa;
+    const kmActual = Number(current.rows[0].kilometraje) || 0;
+    const kmNuevo = Number(kilometraje) || 0;
+    const kmCambio = kmNuevo !== kmActual;
+
+    if (kmCambio && !isAdmin && kmNuevo < kmActual) {
+      return res.status(400).json({
+        message: `No puedes reducir el kilometraje de la unidad ${placaActual}. Actual: ${kmActual.toLocaleString()} km, ingresaste ${kmNuevo.toLocaleString()} km. Solo un administrador puede corregir errores hacia atrás.`,
+      });
+    }
+
+    const result = await pool.query(
+      `UPDATE unidades
+         SET placa = $1, modelo = $2, año = $3, tipo = $4, chofer_id = $5,
+             kilometraje = $6, dueno_id = $7
+       WHERE id = $8
+       RETURNING *`,
+      [placa, modelo, año, tipo?.toUpperCase(), chofer_id || null, kmNuevo, dueno_id, id]
+    );
+
+    let motor = null;
+    if (kmCambio) {
+      motor = await evaluarMotorPredictivo(id, kmNuevo);
+    }
+
+    let mensaje = "Unidad actualizada correctamente";
+    if (motor) {
+      const partes = [];
+      if (motor.alertasGeneradas > 0) partes.push(`${motor.alertasGeneradas} alerta(s) nueva(s)`);
+      if (motor.alertasResueltas > 0) partes.push(`${motor.alertasResueltas} alerta(s) resuelta(s)`);
+      if (partes.length > 0) {
+        mensaje = `Unidad actualizada — Motor predictivo: ${partes.join(", ")}.`;
+      }
+    }
+
     res.json({
-      message: "Unidad actualizada correctamente",
+      message: mensaje,
       unidad: result.rows[0],
+      motor: motor || undefined,
     });
   } catch (error) {
     console.error("Error al actualizar unidad:", error);
@@ -297,7 +359,7 @@ const getMyUnits = async (req, res) => {
       [usuario_id]
     );
     if (duenoPQuery.rows.length === 0) {
-      return res.status(404).json({ error: "No se encontró perfil de dueño para este usuario" });
+      return res.status(404).json({ message: "No se encontró perfil de dueño para este usuario" });
     }
     const dueno_id = duenoPQuery.rows[0].id;
 

@@ -23,7 +23,22 @@ const createPartConfig = async (req, res) => {
       "INSERT INTO configuracion_partes (nombre, umbral_km) VALUES ($1, $2) RETURNING *",
       [nombre, umbral_km]
     );
-    res.status(201).json(result.rows[0]);
+    const nuevaConfig = result.rows[0];
+
+    // Backfill: inicializar baseline predictivo para TODAS las unidades existentes,
+    // tomando como ultimo_mantenimiento_km el km actual de cada unidad. Sin esto,
+    // /partes-unidades mostraría "Vencido +X km" inmediato en cada unidad para una
+    // regla recién agregada (porque COALESCE(epu.ultimo_mantenimiento_km, 0) = 0).
+    await pool.query(
+      `INSERT INTO estado_partes_unidad
+         (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)
+       SELECT u.id, $1, COALESCE(u.kilometraje, 0), NOW()
+       FROM unidades u
+       ON CONFLICT (unidad_id, configuracion_parte_id) DO NOTHING`,
+      [nuevaConfig.id]
+    );
+
+    res.status(201).json(nuevaConfig);
   } catch (error) {
     console.error("Error creando config:", error);
     res.status(500).json({ error: "Error interno del servidor" });
@@ -45,7 +60,7 @@ const updatePartConfig = async (req, res) => {
       "UPDATE configuracion_partes SET umbral_km = $1, activo = $2 WHERE id = $3 RETURNING *",
       [umbral_km, activo, id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ error: "Config no encontrado " });
+    if (result.rows.length === 0) return res.status(404).json({ message: "Regla predictiva no encontrada." });
 
     let alertasResueltas = 0;
     if (activo === false && resolveAlerts) {
@@ -105,11 +120,10 @@ const deletePartConfig = async (req, res) => {
     );
     if (alertas.rows.length > 0) {
       return res.status(409).json({
-        error: "No se puede eliminar: hay alertas activas para esta parte. Resuélvelas primero.",
+        message: "No se puede eliminar la regla: hay alertas activas asociadas. Resuélvelas primero o desactívala con la opción 'Resolver alertas'.",
       });
     }
 
-    // Eliminar estado_partes_unidad relacionado
     await pool.query("DELETE FROM estado_partes_unidad WHERE configuracion_parte_id = $1", [id]);
 
     const result = await pool.query(
@@ -117,7 +131,7 @@ const deletePartConfig = async (req, res) => {
       [id]
     );
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Configuración no encontrada" });
+      return res.status(404).json({ message: "Regla predictiva no encontrada." });
     }
     res.json({ message: "Regla eliminada correctamente" });
   } catch (error) {

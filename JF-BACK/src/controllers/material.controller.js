@@ -39,7 +39,7 @@ const updateMaterial = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Material no encontrado" });
+      return res.status(404).json({ message: "Material no encontrado." });
     }
 
     res.json({ message: "Material actualizado correctamente", material: result.rows[0] });
@@ -55,7 +55,7 @@ const deleteMaterial = async (req, res) => {
 
     const matCheck = await pool.query("SELECT nombre FROM materiales WHERE id = $1", [id]);
     if (matCheck.rows.length === 0)
-      return res.status(404).json({ error: "Material no encontrado" });
+      return res.status(404).json({ message: "Material no encontrado." });
 
     // Bloquear si ha sido usado en algún mantenimiento (historial intacto)
     const usadoCheck = await pool.query(
@@ -95,7 +95,9 @@ const toggleMaterialStatus = async (req, res) => {
   }
 };
 
-// Historial de usos de un material en mantenimientos
+// Historial de usos de un material en mantenimientos.
+// `mantenimientos` no tiene `fecha_programada`; solo `fecha_solicitud` (creación)
+// y `fecha_realizacion` (cuando se completó el trabajo).
 const getMaterialUsage = async (req, res) => {
   try {
     const { id } = req.params;
@@ -105,20 +107,23 @@ const getMaterialUsage = async (req, res) => {
          dm.cantidad,
          dm.costo_total,
          m.id AS mantenimiento_id,
+         m.codigo,
          m.tipo,
          m.estado,
-         m.fecha_programada,
+         m.fecha_solicitud,
+         m.fecha_realizacion,
          u.placa,
          u.modelo
        FROM detalles_mantenimiento dm
        JOIN mantenimientos m ON dm.mantenimiento_id = m.id
        JOIN unidades u ON m.unidad_id = u.id
        WHERE dm.material_id = $1
-       ORDER BY m.fecha_programada DESC`,
+       ORDER BY COALESCE(m.fecha_realizacion, m.fecha_solicitud) DESC`,
       [id]
     );
     res.json(result.rows);
   } catch (error) {
+    console.error("Error al obtener usos del material:", error);
     res.status(500).json({ error: "Error al obtener usos del material" });
   }
 };

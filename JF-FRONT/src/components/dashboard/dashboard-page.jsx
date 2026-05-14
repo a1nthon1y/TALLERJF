@@ -29,7 +29,7 @@ export function DashboardPage() {
     <div className="flex flex-col gap-6">
       {/* Encabezado */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Panel</h1>
         <p className="text-muted-foreground flex items-center mt-1">
           <CalendarDays className="mr-1 h-4 w-4" />
           {formattedDate}

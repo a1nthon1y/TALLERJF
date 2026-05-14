@@ -38,7 +38,7 @@ function unitHealthBadge(parts) {
     );
   return (
     <Badge className="bg-green-100 text-green-700 border-green-300 text-xs flex items-center gap-1">
-      <CheckCircle2 className="h-3 w-3" /> OK
+      <CheckCircle2 className="h-3 w-3" /> En orden
     </Badge>
   );
 }

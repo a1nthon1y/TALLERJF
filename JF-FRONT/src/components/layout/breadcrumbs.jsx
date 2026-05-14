@@ -23,13 +23,13 @@ export function Breadcrumbs() {
     duenos: "Dueños",
     choferes: "Choferes",
     configuraciones: "Configuraciones",
-    "partes-unidades": "Partes de Unidades",
+    "partes-unidades": "Estado de Flota",
     // Role-based roots
     dueno: "Mi Panel",
     chofer: "Mi Panel",
     tecnico: "Mi Panel",
     // Chofer sub-pages
-    dashboard: "Dashboard",
+    dashboard: "Panel",
     "mis-mantenimientos": "Mis Mantenimientos",
     "solicitar-mantenimiento": "Solicitar Mantenimiento",
     "reportar-llegada": "Llegada al Taller",
@@ -37,11 +37,8 @@ export function Breadcrumbs() {
     "mis-unidades": "Mis Unidades",
     // Técnico sub-pages
     "mis-trabajos": "Mis Trabajos",
-    // Reports
-    "por-dueno": "Por Dueño",
     // Others
     login: "Iniciar Sesión",
-    "partes-unidades": "Partes de Unidades",
   }
 
   return (

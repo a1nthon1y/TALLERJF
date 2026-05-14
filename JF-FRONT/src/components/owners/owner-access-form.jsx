@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -33,24 +33,31 @@ const accessFormSchema = z
     path: ["confirmPassword"],
   })
 
+const buildAccessDefaults = (owner) => ({
+  email: owner?.email || "",
+  password: "",
+  confirmPassword: "",
+  viewUnits: true,
+  manageUnits: false,
+  viewMaintenance: true,
+  scheduleMaintenance: false,
+  viewReports: true,
+  viewCosts: false,
+})
+
 export function OwnerAccessForm({ owner, onSubmit, isLoading }) {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const form = useForm({
     resolver: zodResolver(accessFormSchema),
-    defaultValues: {
-      email: owner?.email || "",
-      password: "",
-      confirmPassword: "",
-      viewUnits: true,
-      manageUnits: false,
-      viewMaintenance: true,
-      scheduleMaintenance: false,
-      viewReports: true,
-      viewCosts: false,
-    },
+    defaultValues: buildAccessDefaults(owner),
   })
+
+  // Sincroniza el formulario cuando cambia el dueño asociado.
+  useEffect(() => {
+    form.reset(buildAccessDefaults(owner))
+  }, [owner])
 
   const handleSubmit = (values) => {
     onSubmit(values)

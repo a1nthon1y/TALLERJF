@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { useMiUnidad } from "@/hooks/useMiUnidad";
 import { maintenanceService } from "@/services/maintenanceService";
 import { Button } from "@/components/ui/button";
@@ -9,23 +12,33 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
 import { AlertCircle, Bus, CheckCircle2, Loader2, Wrench } from "lucide-react";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { toast } from "sonner";
 
+const solicitarSchema = z.object({
+  descripcion: z
+    .string()
+    .trim()
+    .min(10, { message: "Describe la falla con al menos 10 caracteres para que el encargado entienda." })
+    .max(1000, { message: "Máximo 1000 caracteres." }),
+});
+
 export default function SolicitarMantenimientoPage() {
   const router = useRouter();
   const { unidades, unidad: unit, setUnidad, loading, error } = useMiUnidad();
-  const [descripcion, setDescripcion] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!descripcion.trim()) {
-      toast.error("Describe qué necesita atención");
-      return;
-    }
+  const form = useForm({
+    resolver: zodResolver(solicitarSchema),
+    defaultValues: { descripcion: "" },
+  });
+
+  const handleSubmit = async ({ descripcion }) => {
     setSubmitting(true);
     try {
       await maintenanceService.createMaintenance({
@@ -36,7 +49,7 @@ export default function SolicitarMantenimientoPage() {
       });
       setSubmitted(true);
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || "Error al enviar la solicitud.");
     } finally {
       setSubmitting(false);
     }
@@ -67,7 +80,7 @@ export default function SolicitarMantenimientoPage() {
           <Button variant="outline" onClick={() => router.push("/chofer/mis-mantenimientos")}>
             Ver mis solicitudes
           </Button>
-          <Button onClick={() => { setSubmitted(false); setDescripcion(""); }}>
+          <Button onClick={() => { setSubmitted(false); form.reset({ descripcion: "" }); }}>
             Nueva solicitud
           </Button>
         </div>
@@ -117,32 +130,43 @@ export default function SolicitarMantenimientoPage() {
       </div>
 
       {/* Formulario mínimo */}
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-1.5">
-          <label className="text-sm font-medium">
-            ¿Qué necesita atención? <span className="text-destructive">*</span>
-          </label>
-          <Textarea
-            placeholder="Ej: Ruido en el motor al acelerar, fuga de aceite, frenos duros..."
-            value={descripcion}
-            onChange={(e) => setDescripcion(e.target.value)}
-            rows={4}
-            className="resize-none"
-            autoFocus
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="descripcion"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  ¿Qué necesita atención? <span className="text-destructive">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="Ej: Ruido en el motor al acelerar, fuga de aceite, frenos duros..."
+                    rows={4}
+                    className="resize-none"
+                    autoFocus
+                    maxLength={1000}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
 
-        <div className="flex gap-3">
-          <Button type="button" variant="outline" onClick={() => router.back()}>
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={submitting} className="flex-1">
-            {submitting
-              ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Enviando...</>
-              : "Enviar al encargado"}
-          </Button>
-        </div>
-      </form>
+          <div className="flex gap-3">
+            <Button type="button" variant="outline" onClick={() => router.back()}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={submitting} className="flex-1">
+              {submitting
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Enviando...</>
+                : "Enviar al encargado"}
+            </Button>
+          </div>
+        </form>
+      </Form>
     </div>
   );
 }

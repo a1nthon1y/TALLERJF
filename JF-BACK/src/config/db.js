@@ -22,49 +22,20 @@ if (process.env.DATABASE_URL) {
 
 const pool = new Pool(poolConfig);
 
-pool.on('error', (err, client) => {
-  console.error('🔴 Error inesperado en el pool de PostgreSQL:', err.message);
+pool.on("error", (err) => {
+  console.error("🔴 Error inesperado en el pool de PostgreSQL:", err.message);
 });
 
+// IMPORTANTE: este módulo solo expone el pool de conexión.
+// Toda evolución de schema (ALTER, UPDATE, INSERT seed) vive en
+// `run-migrations.js`. NO ejecutar DDL aquí — esa duplicación causa que el
+// estado del schema dependa de "si reiniciaste el server", no de "si corriste
+// las migraciones". Ejecuta `npm run migrate` en cada despliegue.
 pool.connect()
-  .then(async client => {
+  .then((client) => {
     console.log("🟢 Conectado a PostgreSQL");
-    try {
-      // Agregar columna codigo si no existe
-      await client.query(`
-        ALTER TABLE mantenimientos
-        ADD COLUMN IF NOT EXISTS codigo VARCHAR(20) UNIQUE;
-      `);
-
-      // Backfill: generar código para registros que no lo tengan
-      await client.query(`
-        UPDATE mantenimientos
-        SET codigo = CONCAT(
-          CASE tipo
-            WHEN 'PREVENTIVO' THEN 'PRV'
-            WHEN 'CORRECTIVO' THEN
-              CASE WHEN estado = 'REALIZADO' THEN 'CAM' ELSE 'CRR' END
-            ELSE 'MNT'
-          END,
-          '-',
-          TO_CHAR(COALESCE(fecha_solicitud, NOW()), 'YYMM'),
-          '-',
-          LPAD(id::text, 4, '0')
-        )
-        WHERE codigo IS NULL;
-      `);
-
-      console.log("🟢 Migración codigo completada");
-
-      // Normalizar tipo de unidades: solo mayúsculas (sin pisar valores legacy
-      // como 'CARGA' o 'MINIVAN', que el CHECK migrado ya admite).
-      await client.query(`UPDATE unidades SET tipo = UPPER(tipo) WHERE tipo != UPPER(tipo);`);
-      console.log("🟢 Normalización tipo unidades completada");
-    } catch (e) {
-      console.error("🟡 Migración codigo:", e.message);
-    }
     client.release();
   })
-  .catch(err => console.error("🔴 Error de conexión:", err.message));
+  .catch((err) => console.error("🔴 Error de conexión:", err.message));
 
 module.exports = pool;

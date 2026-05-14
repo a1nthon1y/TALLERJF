@@ -4,14 +4,14 @@ import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import { BarChart3, Bus, Wrench, Package, FileBarChart, Users, LogOut, Settings, Building2, ChevronLeft, UserCircle, MapPin, Hammer, ClipboardList, Route, SlidersHorizontal, Bell } from "lucide-react"
 import { useState, useEffect } from "react"
-import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarRail } from "@/components/ui/sidebar"
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarHeader, SidebarMenu, SidebarMenuItem } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { authService } from "@/services/authService"
 import { cn } from "@/lib/utils"
 
 const adminNavItems = [
-  { title: "Dashboard", href: "/", icon: BarChart3 },
+  { title: "Panel", href: "/", icon: BarChart3 },
   { title: "Mantenimientos", href: "/mantenimientos", icon: Wrench },
   { title: "Alertas", href: "/mantenimientos/alertas", icon: Bell },
   { title: "Unidades", href: "/unidades", icon: Bus },
@@ -34,12 +34,12 @@ const choferNavItems = [
 ]
 
 const tecnicoNavItems = [
-  { title: "Dashboard", href: "/tecnico/dashboard", icon: BarChart3 },
+  { title: "Panel", href: "/tecnico/dashboard", icon: BarChart3 },
   { title: "Mis Trabajos", href: "/tecnico/mis-trabajos", icon: Wrench },
 ]
 
 const ownerNavItems = [
-  { title: "Dashboard", href: "/dueno/dashboard", icon: BarChart3 },
+  { title: "Panel", href: "/dueno/dashboard", icon: BarChart3 },
   { title: "Mis Unidades", href: "/dueno/mis-unidades", icon: Bus },
   { title: "Mantenimientos", href: "/dueno/mantenimientos", icon: ClipboardList },
 ]
@@ -111,7 +111,7 @@ export function SidebarNav() {
             )} />
             {!isCollapsed && (
               <div className="ml-3">
-                <div className="font-semibold text-lg text-sidebar-foreground">ExpresoJFTaller</div>
+                <div className="font-semibold text-lg text-sidebar-foreground">ExpresoJF</div>
                 <div className="text-xs text-sidebar-foreground/70">
                   {user.rol === 'ADMIN' ? 'Administrador' : user.rol === 'ENCARGADO' ? 'Encargado' : user.rol === 'OWNER' ? 'Dueño' : user.rol === 'TECNICO' ? 'Técnico' : 'Chofer'}
                 </div>

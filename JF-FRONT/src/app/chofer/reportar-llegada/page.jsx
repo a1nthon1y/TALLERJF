@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import * as z from "zod";
 import { toast } from "sonner";
 import {
   Bus, AlertTriangle, Plus, Trash2,
@@ -21,6 +22,50 @@ import { getPartsStatus } from "@/services/unitsService";
 const STEP_FORM = "form";
 const STEP_CONFIRM = "confirm";
 const STEP_DONE = "done";
+
+// Schema único — fuente de verdad de la validación.
+// `kmActual` se inyecta para validar km nuevo ≥ km actual de la unidad.
+const parteCampoSchema = z.object({
+  configuracion_parte_id: z
+    .number({ invalid_type_error: "Selecciona la parte atendida." })
+    .int()
+    .positive({ message: "Selecciona la parte atendida." }),
+  km_realizado: z.coerce.number().int().min(0),
+  costo_estimado: z.coerce
+    .number({ invalid_type_error: "Costo inválido." })
+    .min(0, { message: "El costo no puede ser negativo." })
+    .max(99999, { message: "Costo demasiado alto." }),
+  descripcion: z
+    .string()
+    .trim()
+    .max(255, { message: "Máximo 255 caracteres." })
+    .optional()
+    .or(z.literal("")),
+});
+
+const makeLlegadaSchema = (kmActual) =>
+  z.object({
+    kilometraje: z.coerce
+      .number({ invalid_type_error: "Ingresa un kilometraje válido." })
+      .int({ message: "El kilometraje debe ser un número entero." })
+      .min(kmActual, {
+        message: `El kilometraje no puede ser menor al actual registrado (${(kmActual || 0).toLocaleString()} km).`,
+      })
+      .max((kmActual || 0) + 100000, {
+        message: "Diferencia mayor a 100,000 km — verifica el tacómetro.",
+      }),
+    origen: z
+      .string()
+      .trim()
+      .min(2, { message: "Selecciona o escribe la ruta de este viaje." })
+      .max(120, { message: "Máximo 120 caracteres." }),
+    comentarios: z
+      .string()
+      .max(1000, { message: "Máximo 1000 caracteres." })
+      .optional()
+      .or(z.literal("")),
+    partes_campo: z.array(parteCampoSchema).optional(),
+  });
 
 // Parte crítica — fila compacta con checkbox
 function FilaCritica({ parte, partStatus, onChange }) {
@@ -118,7 +163,9 @@ export default function ReportarLlegadaPage() {
   const [origenCustom, setOrigenCustom] = useState("");
   const [comentarios, setComentarios] = useState("");
   const [rutas, setRutas] = useState([]);
-  const [kmError, setKmError] = useState("");
+
+  // Errores por campo (poblados por el schema Zod). Keys: kilometraje, origen, comentarios, partes_campo
+  const [errors, setErrors] = useState({});
 
   // Campo: partes críticas (≥60%) como checkboxes + filas custom
   const [mostrarCampo, setMostrarCampo] = useState(false);
@@ -132,7 +179,6 @@ export default function ReportarLlegadaPage() {
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState(null);
 
-  // Cargar rutas disponibles una sola vez
   useEffect(() => {
     getRutas().then(setRutas);
   }, []);
@@ -140,7 +186,7 @@ export default function ReportarLlegadaPage() {
   useEffect(() => {
     if (!unidad) return;
     setKilometraje(String(unidad.kilometraje || 0));
-    setKmError("");
+    setErrors({});
     setStep(STEP_FORM);
     setResultado(null);
     setPartesCriticas([]);
@@ -150,7 +196,6 @@ export default function ReportarLlegadaPage() {
       .then((parts) => {
         const lista = Array.isArray(parts) ? parts : [];
         setPartsStatus(lista);
-        // Solo partes en estado crítico/atención (≥60%) se muestran como checkboxes rápidos
         setPartesCriticas(
           lista
             .filter((p) => Number(p.porcentaje) >= 60)
@@ -193,72 +238,86 @@ export default function ReportarLlegadaPage() {
 
   const origenFinal = origen === "__custom__" ? origenCustom.trim() : origen;
 
+  // Construye el payload normalizado para validar/enviar
+  const buildPayload = () => {
+    const km = Number(kilometraje);
+    const partes = [
+      ...partesCriticas.filter((p) => p.checked).map((p) => ({
+        configuracion_parte_id: p.id,
+        km_realizado: km,
+        costo_estimado: Number(p.costo_estimado) || 0,
+        descripcion: p.descripcion || p.nombre,
+      })),
+      ...partesCustom.filter((p) => p.configuracion_parte_id).map((p) => ({
+        configuracion_parte_id: p.configuracion_parte_id,
+        km_realizado: km,
+        costo_estimado: Number(p.costo_estimado) || 0,
+        descripcion: p.descripcion || "",
+      })),
+    ];
+    return {
+      kilometraje: km,
+      origen: origenFinal,
+      comentarios: comentarios.trim() || undefined,
+      partes_campo: partes.length > 0 ? partes : undefined,
+    };
+  };
+
+  // Devuelve true si OK; pobla `errors` y muestra toast si falla.
+  const validateForm = () => {
+    const payload = buildPayload();
+    const result = makeLlegadaSchema(unidad?.kilometraje || 0).safeParse(payload);
+    if (!result.success) {
+      const flat = result.error.flatten();
+      const fieldErrors = {
+        kilometraje: flat.fieldErrors.kilometraje?.[0],
+        origen: flat.fieldErrors.origen?.[0],
+        comentarios: flat.fieldErrors.comentarios?.[0],
+        partes_campo: flat.fieldErrors.partes_campo?.[0],
+      };
+      setErrors(fieldErrors);
+      const firstMsg = Object.values(fieldErrors).find(Boolean) || "Hay errores en el formulario.";
+      toast.error(firstMsg);
+      return null;
+    }
+    setErrors({});
+    return result.data;
+  };
+
+  // Validación liviana del km en cada teclazo (solo para feedback visual).
+  // La validación canónica corre en handleContinue/handleSubmit con el schema.
   const handleKmChange = (val) => {
     setKilometraje(val);
     const km = Number(val);
     const actual = unidad?.kilometraje || 0;
-    if (!val || isNaN(km) || km < 0) {
-      setKmError("Ingresa un número válido.");
-    } else if (km < actual) {
-      setKmError(`No puede ser menor al actual (${actual.toLocaleString()} km).`);
-    } else if (km === actual) {
-      setKmError("El km es igual al registrado. ¿El bus no salió?");
-    } else if (km > actual + 10000) {
-      setKmError(`Diferencia de ${(km - actual).toLocaleString()} km — verifica el tacómetro.`);
-    } else {
-      setKmError("");
-    }
+    let msg = "";
+    if (val !== "" && (isNaN(km) || km < 0)) msg = "Ingresa un número válido.";
+    else if (val !== "" && km < actual) msg = `No puede ser menor al actual (${actual.toLocaleString()} km).`;
+    else if (val !== "" && km === actual) msg = "El km es igual al registrado. ¿El bus no salió?";
+    else if (val !== "" && km > actual + 10000) msg = `Diferencia de ${(km - actual).toLocaleString()} km — verifica el tacómetro.`;
+    setErrors((e) => ({ ...e, kilometraje: msg || undefined }));
   };
 
   const handleContinue = () => {
-    const km = Number(kilometraje);
-    const actual = unidad?.kilometraje || 0;
-
-    if (!kilometraje || isNaN(km) || km < 0) {
-      toast.error("Ingresa un kilometraje válido");
-      return;
-    }
-    if (km < actual) {
-      toast.error(`El km no puede ser menor al registrado (${actual.toLocaleString()} km)`);
-      return;
-    }
-    if (!origenFinal) {
-      toast.error("Selecciona la ruta de este viaje");
-      return;
-    }
-    if (origen === "__custom__" && !origenCustom.trim()) {
-      toast.error("Escribe el nombre de la ruta personalizada");
-      return;
-    }
-    setAlertasPreview(calcAlertasPreview(kilometraje));
+    const data = validateForm();
+    if (!data) return;
+    setAlertasPreview(calcAlertasPreview(data.kilometraje));
     setStep(STEP_CONFIRM);
   };
 
   const handleSubmit = async () => {
+    const data = validateForm();
+    if (!data) {
+      setStep(STEP_FORM);
+      return;
+    }
     setLoading(true);
     try {
-      const partesCampoPayload = [
-        ...partesCriticas.filter((p) => p.checked).map((p) => ({
-          configuracion_parte_id: p.id,
-          km_realizado: Number(kilometraje),
-          costo_estimado: Number(p.costo_estimado) || 0,
-          descripcion: p.descripcion || p.nombre,
-        })),
-        ...partesCustom.filter((p) => p.configuracion_parte_id).map((p) => ({
-          configuracion_parte_id: p.configuracion_parte_id,
-          km_realizado: Number(kilometraje),
-          costo_estimado: Number(p.costo_estimado) || 0,
-          descripcion: p.descripcion || "",
-        })),
-      ];
-
       const res = await registrarLlegada({
-        kilometraje: Number(kilometraje),
-        origen: origenFinal,
-        comentarios: comentarios.trim() || undefined,
+        ...data,
         unidad_id: unidad.id,
-        partes_campo: partesCampoPayload.length > 0 ? partesCampoPayload : undefined,
       });
+      const partesCampoPayload = data.partes_campo || [];
 
       const nombresResultado = partesCampoPayload.map((p) => {
         const found = partsStatus.find((ps) => ps.id === p.configuracion_parte_id);
@@ -280,7 +339,7 @@ export default function ReportarLlegadaPage() {
 
   const handleReset = () => {
     setKilometraje(String(unidad?.kilometraje || 0));
-    setOrigen(""); setOrigenCustom(""); setComentarios(""); setKmError("");
+    setOrigen(""); setOrigenCustom(""); setComentarios(""); setErrors({});
     setMostrarCampo(false);
     setStep(STEP_FORM); setResultado(null); setAlertasPreview([]);
     setPartesCustom([]);
@@ -438,18 +497,19 @@ export default function ReportarLlegadaPage() {
             placeholder={String((unidad?.kilometraje || 0) + 50)}
             value={kilometraje}
             onChange={(e) => handleKmChange(e.target.value)}
-            className={kmError && Number(kilometraje) < (unidad?.kilometraje || 0) ? "border-destructive" : ""}
+            className={errors.kilometraje && Number(kilometraje) < (unidad?.kilometraje || 0) ? "border-destructive" : ""}
+            aria-invalid={!!errors.kilometraje}
           />
-          {kmError && (
+          {errors.kilometraje && (
             <p className={`text-xs flex items-center gap-1 ${
               Number(kilometraje) < (unidad?.kilometraje || 0)
                 ? "text-destructive"
                 : "text-orange-500"
             }`}>
-              <AlertTriangle className="h-3 w-3 shrink-0" />{kmError}
+              <AlertTriangle className="h-3 w-3 shrink-0" />{errors.kilometraje}
             </p>
           )}
-          {!kmError && kilometraje && Number(kilometraje) > (unidad?.kilometraje || 0) && (
+          {!errors.kilometraje && kilometraje && Number(kilometraje) > (unidad?.kilometraje || 0) && (
             <p className="text-xs text-muted-foreground">
               +{(Number(kilometraje) - (unidad?.kilometraje || 0)).toLocaleString()} km en este viaje
             </p>
@@ -459,8 +519,8 @@ export default function ReportarLlegadaPage() {
         {/* Ruta (select desde backend) */}
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Ruta *</label>
-          <Select value={origen} onValueChange={setOrigen}>
-            <SelectTrigger>
+          <Select value={origen} onValueChange={(v) => { setOrigen(v); setErrors((e) => ({ ...e, origen: undefined })); }}>
+            <SelectTrigger aria-invalid={!!errors.origen}>
               <SelectValue placeholder="Selecciona la ruta de este viaje..." />
             </SelectTrigger>
             <SelectContent>
@@ -474,10 +534,17 @@ export default function ReportarLlegadaPage() {
             <Input
               placeholder="Ej. Lima - Huaraz, Arequipa - Moquegua..."
               value={origenCustom}
-              onChange={(e) => setOrigenCustom(e.target.value)}
+              onChange={(e) => { setOrigenCustom(e.target.value); setErrors((er) => ({ ...er, origen: undefined })); }}
               className="mt-2"
               autoFocus
+              maxLength={120}
+              aria-invalid={!!errors.origen}
             />
+          )}
+          {errors.origen && (
+            <p className="text-xs text-destructive flex items-center gap-1">
+              <AlertTriangle className="h-3 w-3 shrink-0" />{errors.origen}
+            </p>
           )}
         </div>
 
@@ -486,8 +553,15 @@ export default function ReportarLlegadaPage() {
           <label className="text-sm font-medium text-muted-foreground">Comentarios / Incidencias (opcional)</label>
           <Textarea
             placeholder="Ruidos, fallas u otras novedades del viaje."
-            value={comentarios} onChange={(e) => setComentarios(e.target.value)} rows={2}
+            value={comentarios}
+            onChange={(e) => setComentarios(e.target.value)}
+            rows={2}
+            maxLength={1000}
+            aria-invalid={!!errors.comentarios}
           />
+          {errors.comentarios && (
+            <p className="text-xs text-destructive">{errors.comentarios}</p>
+          )}
         </div>
       </div>
 
@@ -552,6 +626,11 @@ export default function ReportarLlegadaPage() {
                 <span className="text-xs font-medium text-purple-700 flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Total gasto en ruta</span>
                 <span className="text-sm font-bold text-purple-700">S/. {costoCampoTotal.toFixed(2)}</span>
               </div>
+            )}
+            {errors.partes_campo && (
+              <p className="text-xs text-destructive flex items-center gap-1 mt-2">
+                <AlertTriangle className="h-3 w-3 shrink-0" />{errors.partes_campo}
+              </p>
             )}
           </div>
         )}

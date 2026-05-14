@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import { maintenanceService } from "@/services/maintenanceService";
 import { makeGetRequest } from "@/utils/api";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +16,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from "@/components/ui/form";
 import { PageSkeleton } from "@/components/ui/page-skeleton";
 import {
   Wrench, AlertCircle, Loader2, Play, CheckCircle2, Zap,
@@ -20,6 +26,23 @@ import {
   Plus, Trash2, ClipboardCheck,
 } from "lucide-react";
 import { toast } from "sonner";
+
+// Schemas Zod (fuente única de validación)
+const addMaterialSchema = z.object({
+  material_id: z
+    .string()
+    .min(1, { message: "Selecciona un material." })
+    .refine((v) => Number(v) > 0, { message: "Selecciona un material válido." }),
+  cantidad: z.coerce
+    .number({ invalid_type_error: "Cantidad inválida." })
+    .positive({ message: "La cantidad debe ser mayor a 0." })
+    .max(99999, { message: "Cantidad demasiado alta." }),
+});
+
+const completeJobSchema = z.object({
+  partes_reparadas: z.array(z.number().int().positive()),
+  notas: z.string().max(1000, { message: "Máximo 1000 caracteres." }).optional().or(z.literal("")),
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -91,9 +114,12 @@ function MaterialManager({ jobId, readonly = false }) {
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  const [selectedMat, setSelectedMat] = useState("");
-  const [cantidad, setCantidad] = useState("1");
   const [saving, setSaving] = useState(false);
+
+  const form = useForm({
+    resolver: zodResolver(addMaterialSchema),
+    defaultValues: { material_id: "", cantidad: 1 },
+  });
 
   const fetchMaterials = useCallback(() => {
     maintenanceService.getMaintenanceMaterials(jobId)
@@ -111,18 +137,16 @@ function MaterialManager({ jobId, readonly = false }) {
     }
   }, [jobId, readonly, fetchMaterials]);
 
-  const handleAdd = async () => {
-    if (!selectedMat || !cantidad || Number(cantidad) <= 0) return;
+  const handleAdd = async ({ material_id, cantidad }) => {
     setSaving(true);
     try {
-      await maintenanceService.addMaintenanceMaterial(jobId, Number(selectedMat), Number(cantidad));
+      await maintenanceService.addMaintenanceMaterial(jobId, Number(material_id), Number(cantidad));
       toast.success("Material registrado");
-      setSelectedMat("");
-      setCantidad("1");
+      form.reset({ material_id: "", cantidad: 1 });
       setAdding(false);
       fetchMaterials();
     } catch (e) {
-      toast.error(e.message);
+      toast.error(e.message || "Error al registrar el material.");
     } finally {
       setSaving(false);
     }
@@ -134,7 +158,7 @@ function MaterialManager({ jobId, readonly = false }) {
       toast.success("Material eliminado");
       fetchMaterials();
     } catch (e) {
-      toast.error(e.message);
+      toast.error(e.message || "Error al eliminar el material.");
     }
   };
 
@@ -147,7 +171,15 @@ function MaterialManager({ jobId, readonly = false }) {
           <Package className="h-3.5 w-3.5" /> Materiales utilizados
         </p>
         {!readonly && (
-          <Button variant="ghost" size="sm" className="h-6 text-xs gap-1" onClick={() => setAdding((v) => !v)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 text-xs gap-1"
+            onClick={() => {
+              setAdding((v) => !v);
+              form.reset({ material_id: "", cantidad: 1 });
+            }}
+          >
             <Plus className="h-3 w-3" /> Agregar
           </Button>
         )}
@@ -180,36 +212,61 @@ function MaterialManager({ jobId, readonly = false }) {
       )}
 
       {adding && !readonly && (
-        <div className="flex gap-2 items-end pt-1">
-          <div className="flex-1">
-            <Select value={selectedMat} onValueChange={setSelectedMat}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder="Seleccionar material..." />
-              </SelectTrigger>
-              <SelectContent>
-                {catalog.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>
-                    {c.nombre} (stock: {c.stock})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Input
-            type="number"
-            min="1"
-            value={cantidad}
-            onChange={(e) => setCantidad(e.target.value)}
-            className="w-16 h-8 text-xs"
-            placeholder="Cant."
-          />
-          <Button size="sm" className="h-8 text-xs" onClick={handleAdd} disabled={saving || !selectedMat}>
-            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Agregar"}
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setAdding(false)}>
-            Cancelar
-          </Button>
-        </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleAdd)} className="pt-1 space-y-1">
+            <div className="flex gap-2 items-start">
+              <FormField
+                control={form.control}
+                name="material_id"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormControl>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className="h-8 text-xs" aria-invalid={!!form.formState.errors.material_id}>
+                          <SelectValue placeholder="Seleccionar material..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {catalog.map((c) => (
+                            <SelectItem key={c.id} value={String(c.id)}>
+                              {c.nombre} (stock: {c.stock})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage className="text-[11px]" />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="cantidad"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        className="w-16 h-8 text-xs"
+                        placeholder="Cant."
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.value === "" ? "" : Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-[11px]" />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" size="sm" className="h-8 text-xs" disabled={saving}>
+                {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Agregar"}
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setAdding(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </Form>
       )}
     </div>
   );
@@ -219,39 +276,46 @@ function MaterialManager({ jobId, readonly = false }) {
 
 function CompleteJobDialog({ job, open, onClose, onDone }) {
   const [parts, setParts] = useState([]);
-  const [selectedParts, setSelectedParts] = useState([]);
-  const [notas, setNotas] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const form = useForm({
+    resolver: zodResolver(completeJobSchema),
+    defaultValues: { partes_reparadas: [], notas: "" },
+  });
+  const selectedParts = form.watch("partes_reparadas");
+
   useEffect(() => {
     if (!open) return;
-    setSelectedParts([]);
-    setNotas("");
+    form.reset({ partes_reparadas: [], notas: "" });
+    setLoading(true);
     makeGetRequest("/configs")
       .then((data) => setParts(Array.isArray(data) ? data.filter((p) => p.activo) : []))
       .catch(() => setParts([]))
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, form]);
 
   const togglePart = (id) => {
-    setSelectedParts((prev) =>
-      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    const current = form.getValues("partes_reparadas");
+    form.setValue(
+      "partes_reparadas",
+      current.includes(id) ? current.filter((p) => p !== id) : [...current, id],
+      { shouldValidate: true, shouldDirty: true }
     );
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = async ({ partes_reparadas, notas }) => {
     setSaving(true);
     try {
       await maintenanceService.updateMyJobStatus(job.id, "COMPLETADO", {
-        partes_reparadas: selectedParts,
-        notas_tecnico: notas,
+        partes_reparadas,
+        notas_tecnico: notas?.trim() || "",
       });
       toast.success("Trabajo marcado como completado — esperando revisión del encargado");
       onDone();
       onClose();
     } catch (e) {
-      toast.error(e.message);
+      toast.error(e.message || "Error al completar el trabajo.");
     } finally {
       setSaving(false);
     }
@@ -270,66 +334,84 @@ function CompleteJobDialog({ job, open, onClose, onDone }) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Partes reparadas */}
-          <div>
-            <p className="text-sm font-semibold mb-2">Componentes trabajados</p>
-            {loading ? (
-              <p className="text-xs text-muted-foreground">Cargando componentes...</p>
-            ) : parts.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No hay componentes configurados</p>
-            ) : (
-              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                {parts.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`part-${p.id}`}
-                      checked={selectedParts.includes(p.id)}
-                      onCheckedChange={() => togglePart(p.id)}
-                    />
-                    <label htmlFor={`part-${p.id}`} className="text-sm cursor-pointer flex-1">
-                      {p.nombre}
-                      <span className="text-xs text-muted-foreground ml-2">
-                        (intervalo: {Number(p.umbral_km).toLocaleString()} km)
-                      </span>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            )}
-            {selectedParts.length > 0 && (
-              <p className="text-xs text-green-600 mt-1">
-                ✓ {selectedParts.length} componente{selectedParts.length > 1 ? "s" : ""} — se resetearán sus contadores predictivos
-              </p>
-            )}
-          </div>
-
-          {/* Materiales — solo lectura, ya se gestionaron inline */}
-          <div>
-            <MaterialManager jobId={job?.id} readonly />
-          </div>
-
-          {/* Notas */}
-          <div>
-            <p className="text-sm font-semibold mb-1">Notas para el encargado (opcional)</p>
-            <Textarea
-              value={notas}
-              onChange={(e) => setNotas(e.target.value)}
-              placeholder="Ej: Se cambió el aceite y filtros, se detectó desgaste en freno trasero derecho..."
-              className="resize-none text-sm"
-              rows={3}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleConfirm)} className="space-y-4">
+            {/* Partes reparadas */}
+            <FormField
+              control={form.control}
+              name="partes_reparadas"
+              render={() => (
+                <FormItem>
+                  <FormLabel>Componentes trabajados</FormLabel>
+                  {loading ? (
+                    <p className="text-xs text-muted-foreground">Cargando componentes...</p>
+                  ) : parts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">No hay componentes configurados</p>
+                  ) : (
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                      {parts.map((p) => (
+                        <div key={p.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`part-${p.id}`}
+                            checked={selectedParts.includes(p.id)}
+                            onCheckedChange={() => togglePart(p.id)}
+                          />
+                          <label htmlFor={`part-${p.id}`} className="text-sm cursor-pointer flex-1">
+                            {p.nombre}
+                            <span className="text-xs text-muted-foreground ml-2">
+                              (intervalo: {Number(p.umbral_km).toLocaleString()} km)
+                            </span>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {selectedParts.length > 0 && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ {selectedParts.length} componente{selectedParts.length > 1 ? "s" : ""} — se resetearán sus contadores predictivos
+                    </p>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleConfirm} disabled={saving} className="bg-green-600 hover:bg-green-700">
-            {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            <CheckCircle2 className="h-4 w-4 mr-2" />
-            Marcar como completado
-          </Button>
-        </DialogFooter>
+            {/* Materiales — solo lectura, ya se gestionaron inline */}
+            <div>
+              <MaterialManager jobId={job?.id} readonly />
+            </div>
+
+            {/* Notas */}
+            <FormField
+              control={form.control}
+              name="notas"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="font-semibold">Notas para el encargado (opcional)</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Ej: Se cambió el aceite y filtros, se detectó desgaste en freno trasero derecho..."
+                      className="resize-none text-sm"
+                      rows={3}
+                      maxLength={1000}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button type="submit" disabled={saving} className="bg-green-600 hover:bg-green-700">
+                {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Marcar como completado
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );
@@ -527,10 +609,9 @@ export default function MisTrabajosPage() {
     try {
       await maintenanceService.updateMyJobStatus(job.id, "EN_PROCESO");
       toast.success("Trabajo iniciado");
-      setStartingJob(null);
       fetchJobs();
     } catch (e) {
-      toast.error(e.message);
+      toast.error(e.message || "Error al iniciar el trabajo.");
     } finally {
       setUpdating(false);
     }

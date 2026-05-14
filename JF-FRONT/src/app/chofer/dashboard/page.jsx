@@ -240,7 +240,7 @@ export default function DriverDashboard() {
     <div className="space-y-6">
       {/* Encabezado */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Mi Dashboard</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Mi Panel</h1>
         <p className="text-muted-foreground text-sm">Estado de tus unidades asignadas</p>
       </div>
 

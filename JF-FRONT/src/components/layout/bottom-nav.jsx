@@ -8,7 +8,7 @@ import {
   Wrench, ClipboardList, MapPin,
   Bus, LayoutDashboard, Hammer, Package,
   FileBarChart, Users, Settings, Building2, UserCircle,
-  MoreHorizontal, X, Route, BarChart3, SlidersHorizontal,
+  MoreHorizontal, X, Route, Bell, SlidersHorizontal,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -54,7 +54,7 @@ const moreByRole = {
     { title: "Materiales",       href: "/materiales",              icon: Package },
     { title: "Rutas",            href: "/rutas",                   icon: Route },
     { title: "Usuarios",         href: "/usuarios",                icon: Users },
-    { title: "Alertas",          href: "/mantenimientos/alertas",  icon: BarChart3 },
+    { title: "Alertas",          href: "/mantenimientos/alertas",  icon: Bell },
   ],
   ENCARGADO: [
     { title: "Dueños",           href: "/duenos",         icon: Building2 },
@@ -63,7 +63,7 @@ const moreByRole = {
     { title: "Estado de Flota",  href: "/partes-unidades", icon: Settings },
     { title: "Materiales",       href: "/materiales",     icon: Package },
     { title: "Rutas",            href: "/rutas",          icon: Route },
-    { title: "Alertas",          href: "/mantenimientos/alertas", icon: BarChart3 },
+    { title: "Alertas",          href: "/mantenimientos/alertas", icon: Bell },
   ],
 }
 

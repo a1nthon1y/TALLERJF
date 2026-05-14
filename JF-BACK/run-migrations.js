@@ -4,7 +4,7 @@ const path = require("path");
 
 async function run() {
   try {
-    // 1. Verify if base tables exist
+    // 1. Verificar si las tablas base existen
     let needsBaseImport = false;
     try {
       await pool.query("SELECT 1 FROM unidades LIMIT 1");
@@ -17,12 +17,19 @@ async function run() {
     }
 
     if (needsBaseImport) {
-      console.log("Base tables not found. Importing gestion-flota.sql...");
-      const sqlDump = fs.readFileSync(path.join(__dirname, "gestion-flota.sql"), "utf8");
+      const dumpPath = path.join(__dirname, "gestion-flota.sql");
+      if (!fs.existsSync(dumpPath)) {
+        console.error("🔴 Las tablas base no existen y `gestion-flota.sql` no está en el repo.");
+        console.error("   Ubica el dump inicial en:", dumpPath);
+        console.error("   o crea las tablas base manualmente en tu base de datos antes de migrar.");
+        process.exit(1);
+      }
+      console.log("Tablas base no encontradas. Importando gestion-flota.sql...");
+      const sqlDump = fs.readFileSync(dumpPath, "utf8");
       await pool.query(sqlDump);
-      console.log("Base tables imported successfully!");
+      console.log("Tablas base importadas correctamente.");
     } else {
-      console.log("Base tables already exist.");
+      console.log("Tablas base ya existen.");
     }
 
     // 2. Run new schema migrations
@@ -129,11 +136,80 @@ async function run() {
         ('Motor y Transmisión'),
         ('Diagnóstico Electrónico')
       ON CONFLICT (nombre) DO NOTHING;
+
+      -- ── mantenimientos: columna codigo (anteriormente en db.js) ──────────
+      ALTER TABLE mantenimientos
+        ADD COLUMN IF NOT EXISTS codigo VARCHAR(20) UNIQUE;
+
+      -- ── rutas: catálogo de rutas para reportes de llegada del chofer ────
+      --   Anteriormente esta tabla se creaba "lazy" en chofer.controller y
+      --   rutas.controller, lo que producía DDL duplicado en cada request.
+      CREATE TABLE IF NOT EXISTS rutas (
+        id SERIAL PRIMARY KEY,
+        nombre VARCHAR(120) NOT NULL,
+        activa BOOLEAN DEFAULT true,
+        orden INT DEFAULT 0
+      );
+      INSERT INTO rutas (nombre, orden)
+      SELECT v.nombre, v.orden FROM (VALUES
+        ('Lima - Arequipa', 1),
+        ('Lima - Cusco', 2),
+        ('Lima - Trujillo', 3),
+        ('Lima - Chiclayo', 4),
+        ('Lima - Piura', 5),
+        ('Lima - Puno', 6),
+        ('Lima - Tacna', 7),
+        ('Lima - Ica', 8),
+        ('Lima - Nazca', 9),
+        ('Lima - Huancayo', 10),
+        ('Lima - Huánuco', 11),
+        ('Lima - Pucallpa', 12),
+        ('Lima - Tarapoto', 13),
+        ('Lima - Chimbote', 14),
+        ('Lima - Cajamarca', 15),
+        ('Arequipa - Cusco', 16),
+        ('Arequipa - Puno', 17),
+        ('Arequipa - Tacna', 18),
+        ('Cusco - Puno', 19),
+        ('Trujillo - Chiclayo', 20)
+      ) AS v(nombre, orden)
+      WHERE NOT EXISTS (SELECT 1 FROM rutas WHERE LOWER(rutas.nombre) = LOWER(v.nombre));
     `;
     
     console.log("Applying custom migrations...");
     await pool.query(customMigration);
     console.log("Migrations applied successfully!");
+
+    // 2.b. Backfill: generar `codigo` para mantenimientos antiguos sin código
+    //      (anteriormente vivía en db.js como side-effect del primer connect).
+    const codigoBackfill = await pool.query(`
+      UPDATE mantenimientos
+      SET codigo = CONCAT(
+        CASE tipo
+          WHEN 'PREVENTIVO' THEN 'PRV'
+          WHEN 'CORRECTIVO' THEN
+            CASE WHEN estado = 'REALIZADO' THEN 'CAM' ELSE 'CRR' END
+          ELSE 'MNT'
+        END,
+        '-',
+        TO_CHAR(COALESCE(fecha_solicitud, NOW()), 'YYMM'),
+        '-',
+        LPAD(id::text, 4, '0')
+      )
+      WHERE codigo IS NULL
+      RETURNING id
+    `);
+    if (codigoBackfill.rowCount > 0) {
+      console.log(`🟢 Backfill codigo: ${codigoBackfill.rowCount} mantenimiento(s) actualizado(s)`);
+    }
+
+    // 2.c. Normalizar tipo de unidades a mayúsculas (anteriormente en db.js)
+    const tipoNorm = await pool.query(
+      `UPDATE unidades SET tipo = UPPER(tipo) WHERE tipo != UPPER(tipo) RETURNING id`
+    );
+    if (tipoNorm.rowCount > 0) {
+      console.log(`🟢 Normalización tipo unidades: ${tipoNorm.rowCount} fila(s)`);
+    }
 
     // 3. Sembrar el material especial "Servicio en Ruta" (idempotente).
     //    Este material lo usa `crearReporteLlegada` para registrar costos
@@ -160,10 +236,33 @@ async function run() {
        `);
        console.log("Inserted default configuration parts!");
     }
+
+    // 4. Backfill one-time de estado_partes_unidad: para cada (unidad, regla activa)
+    //    sin fila previa, crear baseline con ultimo_mantenimiento_km = km actual de la unidad.
+    //    Esto corrige el bug donde COALESCE(epu.ultimo_mantenimiento_km, 0) producía
+    //    "Vencido +X km" falso en /partes-unidades para unidades sin historial registrado.
+    //    A partir de ahora createUnit y createPartConfig hacen el INSERT al momento,
+    //    pero esta migración cubre la base instalada.
+    const baseline = await pool.query(`
+      INSERT INTO estado_partes_unidad
+        (unidad_id, configuracion_parte_id, ultimo_mantenimiento_km, ultimo_mantenimiento_fecha)
+      SELECT u.id, cp.id, COALESCE(u.kilometraje, 0), NOW()
+      FROM unidades u
+      CROSS JOIN configuracion_partes cp
+      WHERE cp.activo = TRUE
+      ON CONFLICT (unidad_id, configuracion_parte_id) DO NOTHING
+      RETURNING id
+    `);
+    if (baseline.rowCount > 0) {
+      console.log(`🟢 Backfill estado_partes_unidad: ${baseline.rowCount} fila(s) inicializadas con km actual de cada unidad`);
+    }
   } catch (err) {
-    console.error("Migration failed:", err);
+    console.error("🔴 Migration failed:", err.message);
+    if (err.stack) console.error(err.stack);
+    await pool.end().catch(() => {});
+    process.exit(1);
   } finally {
-    pool.end();
+    await pool.end().catch(() => {});
   }
 }
 

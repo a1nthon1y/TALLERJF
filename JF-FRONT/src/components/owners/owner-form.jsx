@@ -1,4 +1,5 @@
 "use client"
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -10,37 +11,57 @@ import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Building2, User, Mail, Phone, MapPin } from "lucide-react"
 
+// Teléfono Perú: 9 dígitos comenzando en 9
+const TELEFONO_PE_REGEX = /^9\d{8}$/
 const formSchema = z.object({
-  name: z.string().min(3, {
-    message: "El nombre debe tener al menos 3 caracteres",
-  }),
-  contactPerson: z.string().min(3, {
-    message: "El nombre del contacto debe tener al menos 3 caracteres",
-  }),
-  email: z.string().email({
-    message: "Debe ingresar un email válido",
-  }),
-  phone: z.string().min(8, {
-    message: "El teléfono debe tener al menos 8 caracteres",
-  }),
-  address: z.string().min(5, {
-    message: "La dirección debe tener al menos 5 caracteres",
-  }),
+  name: z
+    .string()
+    .trim()
+    .min(3, { message: "El nombre debe tener al menos 3 caracteres" })
+    .max(120, { message: "Máximo 120 caracteres" }),
+  contactPerson: z
+    .string()
+    .trim()
+    .min(3, { message: "El nombre del contacto debe tener al menos 3 caracteres" })
+    .max(120, { message: "Máximo 120 caracteres" }),
+  email: z
+    .string()
+    .trim()
+    .email({ message: "Debe ingresar un email válido" })
+    .max(160, { message: "Máximo 160 caracteres" }),
+  phone: z
+    .string()
+    .trim()
+    .regex(TELEFONO_PE_REGEX, {
+      message: "Teléfono inválido. Debe tener 9 dígitos comenzando con 9 (ej. 987654321).",
+    }),
+  address: z
+    .string()
+    .trim()
+    .min(5, { message: "La dirección debe tener al menos 5 caracteres" })
+    .max(255, { message: "Máximo 255 caracteres" }),
   isActive: z.boolean().default(true),
+})
+
+const buildDefaults = (owner) => ({
+  name: owner?.name || "",
+  contactPerson: owner?.contactPerson || "",
+  email: owner?.email || "",
+  phone: owner?.phone || "",
+  address: owner?.address || "",
+  isActive: owner ? owner.status === "Activo" : true,
 })
 
 export function OwnerForm({ owner, onSubmit, isLoading }) {
   const form = useForm({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: owner?.name || "",
-      contactPerson: owner?.contactPerson || "",
-      email: owner?.email || "",
-      phone: owner?.phone || "",
-      address: owner?.address || "",
-      isActive: owner?.status === "Activo",
-    },
+    defaultValues: buildDefaults(owner),
   })
+
+  // Sincroniza el formulario cuando cambia el dueño (crear ↔ editar).
+  useEffect(() => {
+    form.reset(buildDefaults(owner))
+  }, [owner])
 
   const handleSubmit = (values) => {
     onSubmit({
@@ -126,9 +147,17 @@ export function OwnerForm({ owner, onSubmit, isLoading }) {
                       <FormControl>
                         <div className="flex items-center">
                           <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
-                          <Input placeholder="+52 555 123 4567" {...field} />
+                          <Input
+                            type="tel"
+                            inputMode="numeric"
+                            placeholder="987654321"
+                            maxLength={9}
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.value.replace(/\D/g, ""))}
+                          />
                         </div>
                       </FormControl>
+                      <FormDescription>9 dígitos, formato Perú.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
