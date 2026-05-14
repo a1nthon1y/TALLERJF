@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { MaterialsTable } from "@/components/materials/materials-table"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { Plus, ShoppingCart, Package } from "lucide-react"
 import { materialService } from "@/services/materialService"
 import { toast } from "sonner"
 import {
@@ -20,6 +20,8 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 
 const formSchema = z.object({
   nombre: z
@@ -46,6 +48,15 @@ const formSchema = z.object({
 export default function MaterialsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const { data: materials, isLoading, isError, mutate } = useMaterials()
+
+  const internalMaterials = useMemo(
+    () => (materials || []).filter((m) => !m.es_externo),
+    [materials]
+  )
+  const externalMaterials = useMemo(
+    () => (materials || []).filter((m) => m.es_externo),
+    [materials]
+  )
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -164,7 +175,51 @@ export default function MaterialsPage() {
           </DialogContent>
         </Dialog>
       </div>
-      <MaterialsTable materials={materials} isLoading={isLoading} isError={isError} mutate={mutate} />
+
+      <Tabs defaultValue="internal">
+        <TabsList>
+          <TabsTrigger value="internal" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            Stock interno
+            {!isLoading && (
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {internalMaterials.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="external" className="flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4" />
+            Compras externas
+            {!isLoading && externalMaterials.length > 0 && (
+              <Badge variant="outline" className="ml-1 text-xs border-orange-300 text-orange-600">
+                {externalMaterials.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="internal" className="mt-4">
+          <MaterialsTable
+            materials={internalMaterials}
+            isLoading={isLoading}
+            isError={isError}
+            mutate={mutate}
+          />
+        </TabsContent>
+
+        <TabsContent value="external" className="mt-4">
+          <div className="rounded-md border border-orange-200 bg-orange-50/40 dark:bg-orange-950/10 dark:border-orange-900/40 p-3 mb-3 text-sm text-orange-700 dark:text-orange-300">
+            Estos materiales fueron registrados desde un mantenimiento como compras externas (no pertenecen al stock habitual).
+            Si quedó sobrante y se agregó al stock, aparecerán con cantidad disponible y podrán usarse como stock interno en futuros mantenimientos.
+          </div>
+          <MaterialsTable
+            materials={externalMaterials}
+            isLoading={isLoading}
+            isError={isError}
+            mutate={mutate}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

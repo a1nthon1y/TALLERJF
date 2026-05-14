@@ -396,7 +396,7 @@ export function MaintenancesTable() {
       // Solo materiales activos y con stock disponible — desactivados quedan
       // congelados aunque les quede stock (regla de negocio: si está inactivo
       // no se puede agregar a más mantenimientos hasta reactivarlo).
-      setCatalog(Array.isArray(cat) ? cat.filter(m => m.activo !== false && m.stock > 0) : [])
+      setCatalog(Array.isArray(cat) ? cat.filter(m => m.activo !== false && m.stock > 0 && !m.es_externo) : [])
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -427,7 +427,7 @@ export function MaintenancesTable() {
       }
       const [mats, cat, freshMaint, partsStatus] = await Promise.all(fetches)
       setCompMaterials(Array.isArray(mats) ? mats : [])
-      setCompCatalog(Array.isArray(cat) ? cat.filter(m => m.stock > 0) : [])
+      setCompCatalog(Array.isArray(cat) ? cat.filter(m => m.activo !== false && m.stock > 0 && !m.es_externo) : [])
 
       if (partsStatus) {
         const partes = Array.isArray(partsStatus) ? partsStatus : (partsStatus?.partes || [])
@@ -507,7 +507,7 @@ export function MaintenancesTable() {
       // ahora aparece con stock disponible para futuros usos.
       try {
         const cat = await materialService.getMaterials()
-        setCompCatalog((cat || []).filter((m) => m.activo !== false && Number(m.stock) > 0))
+        setCompCatalog((cat || []).filter((m) => m.activo !== false && Number(m.stock) > 0 && !m.es_externo))
       } catch { /* no bloqueante */ }
       closeExternalDialog()
     } catch (err) {
