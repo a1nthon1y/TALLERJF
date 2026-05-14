@@ -29,13 +29,15 @@ Tu objetivo principal al interactuar con el usuario es mantener la rigidez de es
 
 | Rol | Rutas frontend | Descripción |
 |---|---|---|
-| `CHOFER` | `/chofer/*` | Ve y opera **sus** unidades asignadas. |
+| `CHOFER` | `/chofer/*` | Ve y opera **sus** unidades asignadas (solo activas). |
 | `OWNER` (Dueño) | `/dueno/*` | Visibilidad de flota: unidades, mantenimientos y costos. Sin edición directa. |
 | `TECNICO` | `/tecnico/*` | Ve sus trabajos asignados, marca avances y registra materiales. |
-| `ENCARGADO` | `/` y rutas de gestión | Operación diaria del taller: gestión de mantenimientos con flujo **forward-only**. |
-| `ADMIN` | `/` y rutas de gestión | Control total + capacidades adicionales de corrección (puede retroceder estados, eliminar). |
+| `ENCARGADO` | `/` y rutas de gestión | Operación diaria del taller: gestión de mantenimientos con flujo **forward-only**. **Puede desactivar pero NO eliminar.** |
+| `ADMIN` | `/` y rutas de gestión | Control total: corrección de estados hacia atrás, edición de kilometraje a cualquier valor, **única autorización para `DELETE` real en cualquier entidad**. |
 
-> **Nota CHOFER**: Un chofer **puede tener múltiples unidades asignadas** (`unidades.chofer_id`). El endpoint `GET /api/choferes/mi-unidad` devuelve `{ unidades: [...] }` (array). El hook `useMiUnidad` (`/src/hooks/useMiUnidad.js`) gestiona la lista y la unidad activa seleccionada.
+> **Regla universal de DELETE**: cualquier endpoint `DELETE` (usuarios, choferes, técnicos, dueños, unidades, materiales, mantenimientos, especialidades, rutas, configuraciones) está protegido con `restrictTo("ADMIN")`. Encargado solo puede **desactivar** (`PATCH /:id/status`). Si una entidad necesita borrarse permanentemente, debe escalarse a un admin.
+
+> **Nota CHOFER**: Un chofer **puede tener múltiples unidades asignadas** (`unidades.chofer_id`). El endpoint `GET /api/choferes/mi-unidad` devuelve `{ unidades: [...] }` (array, **solo unidades con `activo = TRUE`**). Si todas las unidades del chofer están desactivadas, devuelve `409 { code: "UNIDADES_DESACTIVADAS", unidades_desactivadas: [...] }` para que el dashboard muestre un banner explicativo (ver §15.3). El hook `useMiUnidad` (`/src/hooks/useMiUnidad.js`) gestiona la lista, la unidad activa y la rama "solo desactivadas".
 
 > **Nota "Jefe de máquina"**: Solo el chofer principal interactúa con el sistema; el "segundo chofer" es informativo (no tiene acceso ni reporta).
 
@@ -124,13 +126,15 @@ La respuesta incluye el resultado del motor:
 
 ### 4. Estado de Mantenimiento
 
-| `estado` | Significado | Quién lo provoca |
-|---|---|---|
-| `PENDIENTE` | Creado, esperando técnico o inicio | Admin/Encargado/Chofer (solicitud) |
-| `EN_PROCESO` | Técnico trabajando | Admin/Encargado/Técnico |
-| `COMPLETADO` | Trabajo realizado, contadores reseteados, esperando aprobación del jefe mecánico | Admin/Encargado/Técnico |
-| `CERRADO` | Aprobado y archivado, **INMUTABLE** | Admin/Encargado (vía "Cerrar / Aprobar") |
-| `REALIZADO` | Trabajo en campo (ruta) — contadores reseteados al instante | Backend (al recibir `partes_campo` en llegada) |
+| `estado` | UI label | Significado | Quién lo provoca |
+|---|---|---|---|
+| `PENDIENTE` | Pendiente | Creado, esperando técnico o inicio | Admin/Encargado/Chofer (solicitud) |
+| `EN_PROCESO` | En proceso | Técnico trabajando | Admin/Encargado/Técnico |
+| `COMPLETADO` | Completado | Trabajo realizado, contadores reseteados, esperando aprobación del jefe mecánico | Admin/Encargado/Técnico |
+| `CERRADO` | Cerrado | Aprobado y archivado, **INMUTABLE** | Admin/Encargado (vía "Cerrar / Aprobar") |
+| `REALIZADO` | **Resuelto en ruta** | Trabajo correctivo resuelto por el chofer en campo — contadores reseteados al instante. **INMUTABLE** desde su creación. | Backend (al recibir `partes_campo` en `crearReporteLlegada`) |
+
+> **Terminología canónica `REALIZADO` → "Resuelto en ruta"**: en TODA la UI (badges, columnas Kanban, filtros, dashboards, KPIs) el estado `REALIZADO` se renderiza como **"Resuelto en ruta"**. Las cadenas legacy "En Campo" / "Realizado" están deprecadas — si las encuentras en código nuevo, son un bug. El motivo: "Resuelto en ruta" comunica al instante que es un trabajo cerrado por el chofer en campo (vs. uno en taller).
 
 #### Transiciones permitidas
 
@@ -208,10 +212,12 @@ Acción "Marcar completado" del dropdown abre este dialog (NO el de Editar):
 - El campo editable es `nota_adicional`: el backend lo **anexa** al final de `observaciones` con un separador `\n\n--- NOTA DEL ENCARGADO ---\n`.
 - Garantiza trazabilidad para los dueños (no se pierde contexto histórico).
 
-### 11. Configuración Predictiva — Desactivación con impacto
+### 11. Configuración Predictiva — Desactivación con impacto (caso especial)
 
-Al desactivar una regla en `/configuraciones`:
-- Se abre un **dialog explicativo** mostrando el impacto:
+`configuracion_partes` es el **único toggle con dialog explicativo previo** (no toast post-hoc) porque el costo de equivocarse es alto: deja alertas huérfanas en producción. Para todas las demás entidades, ver §15 (patrón canónico de advertencias).
+
+Flujo en `/configuraciones`:
+- Se abre un **dialog explicativo** mostrando el impacto antes de confirmar:
   - Cuántas **alertas activas** referencian esa parte (`GET /config/:id/impact`).
   - Cuántos **mantenimientos PENDIENTE/EN_PROCESO** la incluyen en `partes_programadas`.
 - Checkbox opcional "Resolver también las N alertas activas" (default ON) → marca esas alertas como `RESUELTO` para evitar inconsistencias visuales.
@@ -253,6 +259,141 @@ Componente `Notifications.jsx`:
 - **Llegada al Taller** (`/chofer/reportar-llegada`): Kilometraje del tacómetro (validado ≥ actual), Ruta/Origen (dropdown desde tabla `rutas` administrable por admin), comentarios. Sección opcional "Trabajos en ruta" — partes atendidas en campo con costo estimado → backend crea mantenimientos `REALIZADO` y resetea contadores ANTES de correr el motor predictivo (evita alertas falsas). **Este es el único lugar donde se actualiza el odómetro.**
 - **Solicitar Mantenimiento** (`/chofer/solicitar-mantenimiento`): Formulario minimal — solo la unidad y un textarea libre. El encargado decide los detalles.
 - **Mis Mantenimientos** (`/chofer/mis-mantenimientos`): Historial expandible con técnico, materiales (sin costos) y observaciones parseadas (función `parseObservaciones`). El material especial **"Servicio en Ruta"** se filtra y nunca se muestra al chofer.
+
+### 15. Desactivación con Advertencias — patrón unificado
+
+Toda entidad con `activo` (unidades, choferes, técnicos, materiales, especialidades, rutas, usuarios) sigue el **mismo contrato** al desactivar. La acción **NUNCA bloquea**: solo informa al admin del impacto colateral. Si quiere borrar de verdad, usa Eliminar (admin-only).
+
+#### 15.1 Contrato Backend
+
+Cada `toggleXStatus` retorna:
+```json
+{
+  "message": "Chofer Juan desactivado correctamente",
+  "activo": false,
+  "advertencias": [
+    "Tiene 2 unidad(es) activa(s) asignada(s). ...",
+    "..."
+  ]
+}
+```
+
+`advertencias` se construye **solo cuando `activo` pasa de `true → false`**. Si está vacío, el front lo ignora.
+
+| Entidad | Qué advertir al desactivar |
+|---|---|
+| `unidades` | chofer asignado (sigue ligado pero no opera); mantenimientos `PENDIENTE`/`EN_PROCESO` |
+| `usuarios` | impacto en perfil vinculado (CHOFER → unidades activas, TECNICO → mantenimientos activos, OWNER → unidades en propiedad) |
+| `choferes` | unidades activas asignadas (no podrá registrar llegadas / reportar fallas) |
+| `tecnicos` | mantenimientos `PENDIENTE`/`EN_PROCESO` asignados (sugerir reasignación) |
+| `materiales` | mantenimientos en curso que ya lo consumieron + stock que queda congelado |
+| `especialidades` | técnicos activos con esa especialidad (mantienen asignación, pero deja de ofrecerse para nuevos) |
+| `rutas` | reportes de llegada históricos que la usan (los choferes ya no podrán seleccionarla) |
+
+#### 15.2 Contrato Frontend
+
+```jsx
+const toggleMutation = useMutation({
+  mutationFn: (entity) => toggleEntityStatus(entity.id),
+  onSuccess: (res) => {
+    toast.success(res.message)
+    if (Array.isArray(res?.advertencias)) {
+      res.advertencias.forEach((adv) => toast.warning(adv, { duration: 9000 }))
+    }
+    mutate()
+  },
+  onError: (err) => toast.error(err.message, { duration: 6000 }),
+})
+```
+
+Reglas:
+- `toast.warning` con duración **9000ms** (sticky suficiente para leerlo).
+- Una advertencia = un toast (no concatenar).
+- El `toast.success` siempre va primero, las advertencias después.
+
+#### 15.3 Filtrado en selectores (regla del "actualmente asignado")
+
+Los `<Select>` que ofrecen elegir una entidad con `activo` (chofer en `unit-form`, técnico al crear/editar mantenimiento, material al agregar al detalle, especialidad al crear técnico, etc.) **filtran inactivos**, pero con una excepción inviolable:
+
+> **Si la entidad que se está editando ya tiene asignado un valor que ahora está inactivo, ese valor se mantiene visible en el dropdown con el sufijo `(inactivo)` / `(inactiva)`.** Nunca lo quitamos silenciosamente — eso rompe la edición y deja al usuario sin entender qué pasó.
+
+```jsx
+const opciones = (() => {
+  const all = Array.isArray(items) ? items : []
+  const currentId = entity?.x_id ? Number(entity.x_id) : null
+  return all.filter(
+    (i) => i.activo !== false || (currentId && Number(i.id) === currentId)
+  )
+})()
+
+// JSX
+{opciones.map((i) => {
+  const inactivo = i.activo === false
+  return <SelectItem key={i.id} value={String(i.id)}>{i.nombre}{inactivo ? " (inactivo)" : ""}</SelectItem>
+})}
+```
+
+Casos especiales ya implementados:
+- **Materiales** en `maintenances-table`: se filtra por `activo !== false && stock > 0` (regla compuesta).
+- **Especialidades** (texto, no FK): si la guardada no aparece en activas pero existe en el catálogo inactiva, se inyecta con `_inactiva: true` para mostrarla.
+
+#### 15.4 Validación de unidad inactiva al crear mantenimiento
+
+`createMaintenance` rechaza con `409 { code: "UNIDAD_DESACTIVADA", message: "La unidad ${placa} está desactivada — reactívala antes de registrar un mantenimiento." }`. El frontend lee `err.code === "UNIDAD_DESACTIVADA"` y muestra el mensaje específico.
+
+#### 15.5 Chofer con todas sus unidades desactivadas
+
+`getMiUnidad` distingue entre "no tiene unidades" y "todas sus unidades están desactivadas". En el segundo caso devuelve `409 { code: "UNIDADES_DESACTIVADAS", unidades_desactivadas: [{placa, modelo, ...}] }`. `useMiUnidad` expone la flag `soloDesactivadas` y el dashboard del chofer (`/chofer/dashboard`) renderiza un banner ámbar con las placas y un CTA para contactar al admin — **nunca** un error genérico.
+
+### 16. Vinculación Usuario ↔ Perfil (chofer / técnico / dueño)
+
+Crear o editar un `chofer`, `tecnico` o `dueno` que se enlaza a un `usuario` pasa por el helper común `validarUsuarioVinculable` en cada controlador:
+
+```js
+async function validarUsuarioVinculable({ usuario_id, rolEsperado, tabla, excludeId = null }) {
+  // Verifica: existe + activo + rol correcto + no vinculado a otro perfil del mismo tipo
+}
+```
+
+Códigos de error que devuelve (todos `409`):
+- `USUARIO_NO_ENCONTRADO`
+- `USUARIO_DESACTIVADO`
+- `USUARIO_ROL_INCORRECTO` (p.ej. intentar vincular un OWNER como chofer)
+- `USUARIO_YA_VINCULADO` (otro perfil del mismo tipo ya lo usa)
+
+Frontend (`chofer-form`, `tecnicos/page`, `owners-table`):
+- El `<Select>` de "Cuenta de usuario" filtra a usuarios `activo && rol correcto && no vinculado a otro perfil`.
+- Si se está editando un perfil cuya cuenta vinculada quedó **inactiva**, el dropdown la mantiene visible con sufijo `(inactivo)` y un banner ámbar arriba ("Esta cuenta está desactivada — el perfil seguirá vinculado pero el usuario no podrá iniciar sesión").
+- Al desactivar un usuario, el backend devuelve `advertencias` describiendo el impacto en el perfil vinculado (ver §15.1).
+
+### 17. Reportes (PDF / Excel) — arquitectura "Report Library"
+
+Generación de reportes vive en una **librería de componentes reutilizables** — no se reinventa por cada nuevo reporte.
+
+#### 17.1 Backend
+
+- Utilidad común `src/utils/report-export.js` con `toExcel(rows, cols, meta)` y `toPdf(rows, cols, meta)` usando `exceljs` y `pdfkit`.
+- Cada reporte vive como un endpoint en `report.controller.js` y devuelve **un sobre uniforme**:
+  ```json
+  {
+    "title": "Estado de Cuenta del Dueño",
+    "generated_at": "2026-05-13T...",
+    "filters": { "from": "...", "to": "..." },
+    "columns": [{ "key": "placa", "label": "Placa" }, ...],
+    "rows": [{...}, ...],
+    "summary": { "total": 12345.67, ... }
+  }
+  ```
+- El query string `?format=xlsx|pdf` activa la descarga (vía `report-export`); sin él, devuelve JSON para renderizar en pantalla.
+- Endpoint legacy `getMyUnitsReport` se mantiene aparte para alimentar la página funcional `/dueno/mantenimientos` (datos crudos con materiales anidados) — **no tocarlo**, no es un reporte sino una vista operativa.
+
+#### 17.2 Frontend
+
+Componentes reutilizables en `@/components/reports/`:
+- `<ReportFiltersBar />` — barra estándar de filtros con presets de fecha (Hoy, Esta semana, Este mes, Personalizado).
+- `<ReportViewer report={...} onExport={(fmt) => ...} />` — renderiza columnas + filas + summary + botones "Descargar PDF / Excel".
+
+Páginas `/reportes` (admin), `/dueno/reportes`, `/tecnico/reportes`, `/chofer/reportes` siguen el mismo layout: tabs por tipo de reporte → filtros → viewer. Para agregar un reporte nuevo: define endpoint en backend (con el sobre uniforme), declara el descriptor `{ key, label, endpoint, filters }` en la página y el viewer hace el resto.
 
 ---
 
@@ -304,17 +445,20 @@ No se elimina lo que tiene historial o relaciones — se desactiva.
 |---|---|
 | **Base de datos** | `ALTER TABLE x ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE` en `run-migrations.js` |
 | **Backend SELECT** | Incluir `x.activo` en la consulta. Ordenar por `nombre ASC` (NO por `activo DESC` — desactivar no mueve la fila) |
-| **Backend endpoint toggle** | `PATCH /:id/status` → flip `activo`, responde `{ message, activo }` |
+| **Backend endpoint toggle** | `PATCH /:id/status` → flip `activo`, responde `{ message, activo, advertencias: string[] }` (ver §15.1 para qué advertir por entidad) |
+| **Backend endpoint DELETE** | `DELETE /:id` con `restrictTo("ADMIN")` + validación de dependencias (mensaje específico si no procede) |
 | **Frontend servicio** | `toggleXStatus(id)` usando `makePatchRequest(`/x/${id}/status`, {})` |
 | **Frontend tabla/fila** | Columna **"Estado"** con `<Switch checked={x.activo !== false} onCheckedChange={() => toggleMutation.mutate(x)} />` + `<Badge>` |
+| **Frontend toast** | `onSuccess` muestra `res.message` Y recorre `res.advertencias` con `toast.warning(adv, { duration: 9000 })` (ver §15.2) |
+| **Frontend selectores** | Filtran inactivos PERO mantienen el actualmente asignado con sufijo `(inactivo)` (ver §15.3) |
 | **Badge activo** | `variant="outline" className="border-green-500 text-green-600"` → texto "Activo/Activa" |
 | **Badge inactivo** | `variant="secondary"` → texto "Inactivo/Inactiva" |
 | **Fila inactiva** | `className={x.activo === false ? "opacity-60 bg-muted/30" : ""}` en `<TableRow>` / `<Card>` |
 | **Mutation** | `useMutation` de `@tanstack/react-query` — NO función async manual sin mutation |
 
-Entidades que ya siguen este patrón: `unidades`, `choferes`, `tecnicos`, `materiales`, `configuracion_partes`, `especialidades`, `rutas`.
+Entidades que ya siguen este patrón: `usuarios`, `unidades`, `choferes`, `tecnicos`, `materiales`, `configuracion_partes`, `especialidades`, `rutas`.
 
-**Regla de desactivación libre**: la desactivación NO debe bloquearse por mantenimientos activos (eso corresponde a Eliminar). El toggle es reversible.
+**Regla de desactivación libre**: la desactivación NO bloquea, solo advierte (ver §15). Eliminar es la operación que valida dependencias y rechaza con mensaje accionable. El toggle es reversible siempre.
 
 ---
 
@@ -353,11 +497,42 @@ Entidades que ya siguen este patrón: `unidades`, `choferes`, `tecnicos`, `mater
 
 ### 3. Errores Backend — Mensajes específicos
 
-El interceptor de `api.js` prioriza `error.response?.data?.message` antes que `error.response?.data?.error`.
+El interceptor de `api.js` prioriza `error.response?.data?.message` antes que `error.response?.data?.error`, y **enriquece el `Error` rechazado con `code`, `status` y `data`** del payload del backend, para que el frontend pueda reaccionar a casos específicos sin parsear strings:
+
+```js
+// utils/api.js — interceptor
+const enriched = new Error(errorMessage);
+enriched.code   = error.response?.data?.code;
+enriched.status = error.response?.status;
+enriched.data   = error.response?.data;
+return Promise.reject(enriched);
+```
+
+Los helpers (`makeGetRequest`, etc.) hacen **rethrow** del `Error` enriquecido:
+```js
+const rethrow = (error, fallback) => {
+  if (error instanceof Error) throw error;
+  throw new Error(error?.message || fallback);
+};
+```
+
+> **Regla**: cuando crees un servicio nuevo, **NO envuelvas el error** en `new Error(err.message)` — perdería `code` y `data`. Reenvía el `Error` original con `throw err`.
 
 **Regla de claves** (auditada y aplicada en todo el backend):
 - `message` → errores de negocio legibles por el usuario (`400 / 401 / 403 / 404 / 409`).
+- `code` → identificador estable de la regla violada, en `SCREAMING_SNAKE_CASE`. **Obligatorio en respuestas de las que el frontend deba reaccionar de forma diferenciada** (UI especial, redirect, banner explicativo).
 - `error` → errores técnicos de servidor (`500`); el front muestra un mensaje genérico.
+
+**Códigos canónicos en uso** (no inventar variantes nuevas si ya existe uno equivalente):
+
+| `code` | Cuándo se emite | Quién lo consume |
+|---|---|---|
+| `UNIDAD_DESACTIVADA` | `createMaintenance` con `unidad.activo = false` | dialog de creación → toast con el message |
+| `UNIDADES_DESACTIVADAS` | `getMiUnidad` cuando todas las unidades del chofer están inactivas | `useMiUnidad` → banner ámbar en `/chofer/dashboard` |
+| `USUARIO_NO_ENCONTRADO` | `validarUsuarioVinculable` | forms de chofer/tecnico/dueno |
+| `USUARIO_DESACTIVADO` | `validarUsuarioVinculable` | forms de chofer/tecnico/dueno |
+| `USUARIO_ROL_INCORRECTO` | `validarUsuarioVinculable` | forms de chofer/tecnico/dueno |
+| `USUARIO_YA_VINCULADO` | `validarUsuarioVinculable` | forms de chofer/tecnico/dueno |
 
 ```js
 // ✅ correcto — el usuario verá el detalle
@@ -552,19 +727,20 @@ Ventajas: `isPending` para deshabilitar Switch durante operación, manejo de err
 
 ### 9. Modelo de Datos — Entidades con `activo`
 
-Las siguientes tablas tienen columna `activo BOOLEAN DEFAULT TRUE`:
+Las siguientes tablas tienen columna `activo BOOLEAN DEFAULT TRUE` (`rutas` usa `activa`):
 
-| Tabla | Propósito |
-|---|---|
-| `tecnicos` | Técnico dado de baja o sin actividad |
-| `configuracion_partes` | Regla predictiva suspendida |
-| `unidades` | Bus vendido / fuera de flota |
-| `choferes` | Chofer que ya no trabaja |
-| `materiales` | Material discontinuado |
-| `especialidades` | Especialidad que ya no se ofrece |
-| `rutas` | Ruta suspendida (campo `activa`, no `activo`) |
+| Tabla | Propósito | Quién filtra inactivos en sus selectores |
+|---|---|---|
+| `usuarios` | Cuenta deshabilitada (no puede iniciar sesión) | forms de chofer/tecnico/dueno (vinculación) |
+| `tecnicos` | Técnico dado de baja o sin actividad | `mantenimientos/page` (crear), `maintenances-table` (editar/completar) |
+| `configuracion_partes` | Regla predictiva suspendida | motor predictivo, `parts-status`, form preventivo |
+| `unidades` | Bus vendido / fuera de flota | `getMiUnidad` (chofer), `createMaintenance` (rechazo) |
+| `choferes` | Chofer que ya no trabaja | `unit-form` (asignación) |
+| `materiales` | Material discontinuado | `maintenances-table` "agregar material" (combinado con `stock > 0`) |
+| `especialidades` | Especialidad que ya no se ofrece | `tecnicos/page` (form crear/editar técnico) |
+| `rutas` (`activa`) | Ruta suspendida | `chofer.getRutas` (dropdown de llegada) |
 
-**`materiales` activo**: los materiales inactivos pueden aparecer en historial pero NO deben ofrecerse para agregar a futuros mantenimientos (filtrar en el selector).
+> **Histórico vs. selector**: los inactivos siguen apareciendo en LECTURA de datos históricos (un mantenimiento viejo con material inactivo, un reporte de llegada con ruta inactiva, etc.). El filtro `activo` aplica únicamente a SELECTORES de creación/edición — nunca rompe la trazabilidad del historial.
 
 ---
 
@@ -618,9 +794,15 @@ Datos que parecen "listas fijas" pero son administrables desde el panel:
     - Para loading de página usa `PageSkeleton`, **no** spinners aislados
 17. **Confirmación de impacto antes de operaciones destructivas/silenciosas**: cuando una acción "apaga" algo (desactivar regla, eliminar dueño, quitar técnico), muestra al usuario qué entidades quedan colgando y ofrece la limpieza (como el dialog de desactivar configuración).
 
-18. **Patrón `activo` completo**: cuando añadas `activo` a una entidad, el patrón es SIEMPRE los 7 pasos: migración SQL → backend SELECT + PATCH status → servicio frontend → columna Estado con Switch+Badge → fila muted si inactiva → `useMutation` para el toggle. Implementar a medias rompe la experiencia.
+18. **Patrón `activo` completo**: cuando añadas `activo` a una entidad, el patrón es SIEMPRE los 8 pasos: migración SQL → backend SELECT + PATCH status (con `advertencias[]`) → backend DELETE admin-only → servicio frontend → columna Estado con Switch+Badge → fila muted si inactiva → `useMutation` para el toggle (que muestra `advertencias` como `toast.warning`) → filtrar inactivos en TODOS los selectores que la usen (manteniendo el actualmente asignado). Implementar a medias rompe la experiencia.
 19. **`ORDER BY` en listas con `activo`**: ordenar por `nombre ASC` (o `creado_en DESC`), NUNCA por `activo DESC` en listas donde el usuario puede hacer toggle — causa salto visual de filas.
 20. **Acciones de fila**: siempre `DropdownMenu` tres puntos. El Switch de estado va en su propia columna "Estado", no en el menú. Nunca botones de icono sueltos.
 21. **Catálogos en BD**: listas como `especialidades`, `rutas`, `configuracion_partes` deben venir de la BD. Nunca hardcodearlos como arrays en el frontend.
+22. **DELETE solo ADMIN, universal**: TODA ruta `DELETE` (sin excepciones) lleva `restrictTo("ADMIN")` y oculta el `DropdownMenuItem` "Eliminar" para roles no admin (`{isAdmin && <DropdownMenuItem .../>}`). Encargado solo desactiva. Si añades una entidad nueva con borrado, sigue esta regla — no inventes excepciones.
+23. **Códigos de error en backend**: cuando el frontend deba reaccionar de forma diferenciada (UI especial, banner, redirect), añade `code` SCREAMING_SNAKE_CASE en la respuesta. **Nunca** parsees mensajes en el frontend para detectar reglas — usa `err.code`. Mantén la tabla canónica de códigos en §3 actualizada al añadir nuevos.
+24. **Vinculación usuario↔perfil**: usa el helper `validarUsuarioVinculable` en cualquier controlador que enlace un `usuario` a un perfil (chofer/tecnico/dueno o futuros). Verifica existencia + activo + rol esperado + no duplicación. Devuelve códigos `USUARIO_*` (ver §16). El frontend filtra los inactivos pero mantiene visible el actualmente vinculado con sufijo `(inactivo)`.
+25. **Terminología `REALIZADO` = "Resuelto en ruta"**: nunca escribas "En Campo" o "Realizado" en UI nueva. Es estado de mantenimiento correctivo cerrado por el chofer en ruta. Inmutable desde su creación. Resetea contadores predictivos al instante.
+26. **Reportes**: para añadir un reporte nuevo NO crees página desde cero — declara endpoint en `report.controller.js` con el sobre uniforme `{ title, columns, rows, summary, generated_at, filters }`, añade el descriptor a la página `/reportes` (o la del rol correspondiente) y deja que `<ReportFiltersBar />` + `<ReportViewer />` hagan el resto. PDF/Excel via `report-export.js` con `?format=pdf|xlsx`. **No** mezcles datos crudos operativos con reportes (el endpoint legacy `getMyUnitsReport` alimenta `/dueno/mantenimientos`, separado de los reportes descargables).
+27. **Advertencias al desactivar**: TODA `toggleXStatus` en backend devuelve `advertencias: string[]` describiendo el impacto colateral (relaciones activas, datos congelados). Nunca bloquea — solo informa. El frontend las muestra con `toast.warning(adv, { duration: 9000 })`. Una advertencia = un toast.
 
 ¡Usa esta fundación para expandir Taller JF a la mejor plataforma de gestión del país!
