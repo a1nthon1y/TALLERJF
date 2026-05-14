@@ -215,14 +215,36 @@ const getMiUnidad = async (req, res) => {
       return res.status(404).json({ message: "No se encontró registro de chofer para este usuario" });
     }
     const chofer_id = choferQuery.rows[0].id;
+    // Solo entregamos al chofer las unidades activas (operativas). Las
+    // desactivadas se reportan por separado para que el frontend pueda
+    // mostrar un mensaje claro ("tu bus está fuera de servicio") en vez
+    // de un 404 genérico o, peor, datos como si nada hubiera cambiado.
     const unidadQuery = await pool.query(
-      "SELECT id, placa, modelo, año, tipo, kilometraje FROM unidades WHERE chofer_id = $1 ORDER BY id ASC",
+      `SELECT id, placa, modelo, año, tipo, kilometraje, activo
+         FROM unidades
+        WHERE chofer_id = $1
+        ORDER BY activo DESC, id ASC`,
       [chofer_id]
     );
-    if (unidadQuery.rows.length === 0) {
+
+    const activas = unidadQuery.rows.filter((u) => u.activo);
+    const desactivadas = unidadQuery.rows.filter((u) => !u.activo);
+
+    if (activas.length === 0) {
+      if (desactivadas.length > 0) {
+        return res.status(409).json({
+          code: "UNIDADES_DESACTIVADAS",
+          message:
+            desactivadas.length === 1
+              ? `La unidad ${desactivadas[0].placa} a la que estás asignado está desactivada. Contacta al administrador para reactivarla.`
+              : `Tus ${desactivadas.length} unidades asignadas (${desactivadas.map((u) => u.placa).join(", ")}) están desactivadas. Contacta al administrador.`,
+          unidades_desactivadas: desactivadas,
+        });
+      }
       return res.status(404).json({ message: "No tienes una unidad asignada actualmente" });
     }
-    res.json({ unidades: unidadQuery.rows });
+
+    res.json({ unidades: activas, unidades_desactivadas: desactivadas });
   } catch (error) {
     console.error("Error al obtener unidades del chofer:", error);
     res.status(500).json({ error: "Error interno del servidor" });
@@ -245,8 +267,17 @@ const crearReporteLlegada = async (req, res) => {
     const chofer_id = choferQuery.rows[0].id;
 
     // 2. Verificar unidad y validar kilometraje
-    const unidadQuery = await pool.query("SELECT kilometraje FROM unidades WHERE id = $1", [unidad_id]);
+    const unidadQuery = await pool.query(
+      "SELECT placa, kilometraje, activo FROM unidades WHERE id = $1",
+      [unidad_id]
+    );
     if (unidadQuery.rows.length === 0) return res.status(404).json({ message: "Unidad no encontrada" });
+    if (!unidadQuery.rows[0].activo) {
+      return res.status(409).json({
+        code: "UNIDAD_DESACTIVADA",
+        message: `La unidad ${unidadQuery.rows[0].placa} está desactivada — no se puede registrar movimiento. Contacta al administrador para reactivarla.`,
+      });
+    }
     const kilometrajeActual = unidadQuery.rows[0].kilometraje;
     if (kilometraje < kilometrajeActual) {
       return res.status(400).json({

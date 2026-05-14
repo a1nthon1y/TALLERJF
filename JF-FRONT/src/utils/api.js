@@ -43,16 +43,31 @@ api.interceptors.response.use(
       error.response?.data?.error ||
       error.message ||
       'Error en la petición';
-    return Promise.reject(new Error(errorMessage));
+    // Preservamos el body del backend (code, data adicional) en propiedades del Error
+    // para que casos como UNIDADES_DESACTIVADAS o UNIDAD_DESACTIVADA puedan ser detectados
+    // por la UI sin parsear strings.
+    const enriched = new Error(errorMessage);
+    enriched.code   = error.response?.data?.code;
+    enriched.status = error.response?.status;
+    enriched.data   = error.response?.data;
+    return Promise.reject(enriched);
   }
 );
+
+// Re-lanzamos el Error original (que ya viene enriquecido por el interceptor con
+// code/status/data del backend). Antes envolvíamos en `new Error(...)`, lo cual
+// borraba esos campos y obligaba a parsear strings en la UI.
+const rethrow = (error, fallback) => {
+  if (error instanceof Error) throw error;
+  throw new Error(error?.message || fallback);
+};
 
 export const makeGetRequest = async (url, params = {}) => {
   try {
     const response = await api.get(url, { params });
     return response.data;
   } catch (error) {
-    throw new Error(error.message || 'Error al obtener los datos');
+    rethrow(error, 'Error al obtener los datos');
   }
 };
 
@@ -61,7 +76,7 @@ export const makePostRequest = async (url, data = {}) => {
     const response = await api.post(url, data);
     return response.data;
   } catch (error) {
-    throw new Error(error.message || 'Error al enviar los datos');
+    rethrow(error, 'Error al enviar los datos');
   }
 };
 
@@ -70,7 +85,7 @@ export const makePutRequest = async (url, data = {}) => {
     const response = await api.put(url, data);
     return response.data;
   } catch (error) {
-    throw new Error(error.message || 'Error al actualizar los datos');
+    rethrow(error, 'Error al actualizar los datos');
   }
 };
 
@@ -79,7 +94,7 @@ export const makePatchRequest = async (url, data = {}) => {
     const response = await api.patch(url, data);
     return response.data;
   } catch (error) {
-    throw new Error(error.message || 'Error al actualizar los datos');
+    rethrow(error, 'Error al actualizar los datos');
   }
 };
 
@@ -88,7 +103,7 @@ export const makeDeleteRequest = async (url) => {
     const response = await api.delete(url);
     return response.data;
   } catch (error) {
-    throw new Error(error.message || 'Error al eliminar los datos');
+    rethrow(error, 'Error al eliminar los datos');
   }
 };
 

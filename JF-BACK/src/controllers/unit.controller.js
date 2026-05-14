@@ -327,12 +327,42 @@ const toggleUnitStatus = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const unitCheck = await pool.query("SELECT placa, activo FROM unidades WHERE id = $1", [id]);
+    const unitCheck = await pool.query(
+      `SELECT u.placa, u.activo, u.chofer_id, c_user.nombre AS chofer_nombre
+         FROM unidades u
+         LEFT JOIN choferes c     ON u.chofer_id = c.id
+         LEFT JOIN usuarios c_user ON c.usuario_id = c_user.id
+        WHERE u.id = $1`,
+      [id]
+    );
     if (unitCheck.rows.length === 0) {
       return res.status(404).json({ message: "Unidad no encontrada" });
     }
 
-    const { placa, activo } = unitCheck.rows[0];
+    const { placa, activo, chofer_nombre } = unitCheck.rows[0];
+
+    // Recolectamos advertencias informativas (no bloqueantes) sobre el
+    // impacto de desactivar. La asignación al chofer se mantiene a propósito
+    // (al reactivar, vuelve a operar tal cual). Sí bloqueamos endpoints de
+    // escritura (llegada, mantenimientos) en otros controllers.
+    const advertencias = [];
+    if (activo) {
+      if (chofer_nombre) {
+        advertencias.push(
+          `Tiene asignado al chofer ${chofer_nombre}. Mientras esté desactivada, no podrá registrar llegadas ni reportar fallas. La asignación se mantiene para cuando reactives la unidad.`
+        );
+      }
+      const mantsActivos = await pool.query(
+        `SELECT COUNT(*)::int AS total FROM mantenimientos
+          WHERE unidad_id = $1 AND estado IN ('PENDIENTE','EN_PROCESO')`,
+        [id]
+      );
+      if (mantsActivos.rows[0].total > 0) {
+        advertencias.push(
+          `Tiene ${mantsActivos.rows[0].total} mantenimiento(s) activo(s) (PENDIENTE / EN_PROCESO). Esos trabajos seguirán visibles, pero no se podrán crear nuevos hasta reactivarla.`
+        );
+      }
+    }
 
     const result = await pool.query(
       "UPDATE unidades SET activo = $1 WHERE id = $2 RETURNING activo",
@@ -340,7 +370,11 @@ const toggleUnitStatus = async (req, res) => {
     );
 
     const nuevoEstado = result.rows[0].activo ? "activada" : "desactivada";
-    res.json({ message: `Unidad ${placa} ${nuevoEstado} correctamente`, activo: result.rows[0].activo });
+    res.json({
+      message: `Unidad ${placa} ${nuevoEstado} correctamente`,
+      activo: result.rows[0].activo,
+      advertencias,
+    });
   } catch (error) {
     console.error("Error al cambiar estado de unidad:", error);
     res.status(500).json({ error: "Error interno del servidor" });

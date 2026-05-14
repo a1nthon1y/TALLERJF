@@ -168,7 +168,15 @@ function UnitChip({ unidad, isActive, health, onClick }) {
 }
 
 export default function DriverDashboard() {
-  const { unidades, unidad: selectedUnidad, setUnidad, loading, error } = useMiUnidad();
+  const {
+    unidades,
+    unidadesDesactivadas,
+    soloDesactivadas,
+    unidad: selectedUnidad,
+    setUnidad,
+    loading,
+    error,
+  } = useMiUnidad();
   const [parts, setParts] = useState([]);
   const [partialErrors, setPartialErrors] = useState([]);
   const [dataLoading, setDataLoading] = useState(false);
@@ -214,6 +222,64 @@ export default function DriverDashboard() {
 
   if (loading) {
     return <PageSkeleton variant="grid" rowCount={3} action={false} />;
+  }
+
+  // Caso especial: todas las unidades del chofer están desactivadas.
+  // Mostramos una pantalla informativa (no error) que explica qué pasó y qué hacer.
+  if (soloDesactivadas) {
+    const lista = unidadesDesactivadas;
+    const unaSola = lista.length === 1;
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Mi Panel</h1>
+          <p className="text-muted-foreground text-sm">Estado de tus unidades asignadas</p>
+        </div>
+
+        <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-5 flex items-start gap-4">
+          <div className="rounded-full p-3 shrink-0 bg-amber-100 dark:bg-amber-900/60">
+            <AlertTriangle className="h-7 w-7 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-2">
+            <p className="font-bold text-base text-amber-800 dark:text-amber-300">
+              {unaSola
+                ? `Tu unidad ${lista[0].placa} está fuera de servicio`
+                : `Tus ${lista.length} unidades están fuera de servicio`}
+            </p>
+            <p className="text-sm text-amber-900/80 dark:text-amber-200/80">
+              {unaSola
+                ? "El administrador desactivó esta unidad. Mientras esté así no podrás registrar llegadas ni reportar fallas. Cuando se reactive, todo volverá a estar disponible automáticamente."
+                : "El administrador desactivó las unidades a las que estás asignado. Mientras estén así no podrás registrar llegadas ni reportar fallas."}
+            </p>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {lista.map((u) => (
+                <Badge
+                  key={u.id}
+                  variant="outline"
+                  className="bg-white dark:bg-amber-950/40 border-amber-300 text-amber-800 dark:text-amber-200"
+                >
+                  <Bus className="h-3 w-3 mr-1" />
+                  {u.placa}
+                  {u.modelo ? ` · ${u.modelo}` : ""}
+                </Badge>
+              ))}
+            </div>
+
+            <p className="text-xs text-amber-800/80 dark:text-amber-300/80 pt-2">
+              ¿Necesitas operar hoy? Contacta al administrador para reactivar la unidad o reasignarte a otra.
+            </p>
+          </div>
+        </div>
+
+        <Button asChild variant="outline">
+          <Link href="/chofer/mis-mantenimientos">
+            <History className="h-4 w-4 mr-2" />
+            Ver historial de mantenimientos
+          </Link>
+        </Button>
+      </div>
+    );
   }
 
   if (error || !selectedUnidad) {

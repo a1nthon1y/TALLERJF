@@ -116,6 +116,14 @@ export function UnitsTable() {
     mutationFn: (unit) => toggleUnitStatus(unit.id),
     onSuccess: (res) => {
       toast.success(res.message || "Estado actualizado")
+      // El backend devuelve advertencias informativas al desactivar
+      // (chofer asignado, mantenimientos activos). Las mostramos como
+      // toasts warning con duración larga para que el admin las lea.
+      if (Array.isArray(res?.advertencias)) {
+        res.advertencias.forEach((adv) =>
+          toast.warning(adv, { duration: 9000 })
+        )
+      }
       mutate()
     },
     onError: (err) => {

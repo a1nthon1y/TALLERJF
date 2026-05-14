@@ -60,14 +60,13 @@ export async function deleteChofer(id) {
   }
 }
 
-// Obtener la unidad asignada al chofer autenticado
+// Obtener la unidad asignada al chofer autenticado.
+// El backend puede devolver un 409 con code='UNIDADES_DESACTIVADAS' cuando todas
+// las unidades del chofer están apagadas — ese caso lo manejamos en el dashboard
+// para mostrar una pantalla amigable. Re-lanzamos el Error tal cual para preservar
+// `code` y `data.unidades_desactivadas`.
 export async function getMiUnidad() {
-  try {
-    const data = await makeGetRequest("/choferes/mi-unidad");
-    return data;
-  } catch (error) {
-    throw new Error(error.message || 'No tienes una unidad asignada');
-  }
+  return await makeGetRequest("/choferes/mi-unidad");
 }
 
 // Registrar Llegada Predictiva

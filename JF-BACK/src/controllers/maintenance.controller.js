@@ -35,6 +35,14 @@ const createMaintenance = async (req, res) => {
     if (unidad.rows.length === 0) {
       return res.status(404).json({ message: "Unidad no encontrada" });
     }
+    // Bloqueamos crear mantenimientos sobre unidades desactivadas para no
+    // ensuciar contadores ni costos de una unidad que está fuera de servicio.
+    if (!unidad.rows[0].activo) {
+      return res.status(409).json({
+        code: "UNIDAD_DESACTIVADA",
+        message: `La unidad ${unidad.rows[0].placa} está desactivada — reactívala antes de registrar un mantenimiento.`,
+      });
+    }
 
     // Snapshot del odómetro al momento de crear el mantenimiento
     const kilometrajeSnapshot = unidad.rows[0].kilometraje ?? 0;
