@@ -28,6 +28,7 @@ import { useMutation } from "@tanstack/react-query"
 import { deleteChofer, createChofer, updateChofer, getChoferById, toggleChoferStatus } from "@/services/choferesService"
 import { toast } from "sonner"
 import { ChoferForm } from "./chofer-form"
+import { authService } from "@/services/authService"
 
 export function ChoferesTable() {
   const { data: choferes, isLoading, isError, mutate } = useChoferes()
@@ -38,6 +39,8 @@ export function ChoferesTable() {
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [choferToEdit, setChoferToEdit] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => { setIsAdmin(authService.getUser()?.rol === "ADMIN") }, [])
 
   const toggleMutation = useMutation({
     mutationFn: (chofer) => toggleChoferStatus(chofer.chofer_id),
@@ -254,13 +257,15 @@ export function ChoferesTable() {
                           <Edit className="mr-2 h-4 w-4" />
                           <span>Editar</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => handleDeleteClick(chofer)}
-                        >
-                          <Trash className="mr-2 h-4 w-4" />
-                          <span>Eliminar</span>
-                        </DropdownMenuItem>
+                        {isAdmin && (
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDeleteClick(chofer)}
+                          >
+                            <Trash className="mr-2 h-4 w-4" />
+                            <span>Eliminar</span>
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

@@ -12,6 +12,6 @@ router.patch("/:id/status", authenticate, checkRole(["ADMIN", "ENCARGADO"]), mat
 // Escritura solo ADMIN y ENCARGADO
 router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), materialController.createMaterial);
 router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), materialController.updateMaterial);
-router.delete("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), materialController.deleteMaterial);
+router.delete("/:id", authenticate, checkRole(["ADMIN"]), materialController.deleteMaterial);
 
 module.exports = router;

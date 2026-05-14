@@ -31,6 +31,7 @@ import { useMutation } from "@tanstack/react-query"
 import { deleteUnit, createUnit, updateUnit, getUnitById, toggleUnitStatus } from "@/services/unitsService"
 import { toast } from "sonner"
 import { UnitForm } from "./unit-form"
+import { authService } from "@/services/authService"
 
 export function UnitsTable() {
   const { data: units, isLoading, isError, mutate } = useUnits()
@@ -42,6 +43,8 @@ export function UnitsTable() {
   const [isEditing, setIsEditing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [unitToEdit, setUnitToEdit] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => { setIsAdmin(authService.getUser()?.rol === "ADMIN") }, [])
 
   // Obtener dueños únicos de los datos
   const owners = useMemo(() => {
@@ -299,14 +302,18 @@ export function UnitsTable() {
                             <span>Ver Estado Predictivo</span>
                           </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => handleDeleteClick(unit)}
-                        >
-                          <Trash className="mr-2 h-4 w-4" />
-                          <span>Eliminar</span>
-                        </DropdownMenuItem>
+                        {isAdmin && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onClick={() => handleDeleteClick(unit)}
+                            >
+                              <Trash className="mr-2 h-4 w-4" />
+                              <span>Eliminar</span>
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

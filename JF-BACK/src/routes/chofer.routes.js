@@ -15,6 +15,6 @@ router.get("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.getA
 router.get("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.getDriverById);
 router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.updateDriver);
 router.patch("/:id/status", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.toggleDriverStatus);
-router.delete("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.deleteDriver);
+router.delete("/:id", authenticate, checkRole(["ADMIN"]), controller.deleteDriver);
 
 module.exports = router;

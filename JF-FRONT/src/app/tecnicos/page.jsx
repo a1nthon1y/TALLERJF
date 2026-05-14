@@ -8,6 +8,7 @@ import { z } from "zod"
 import { technicianService } from "@/services/technicianService"
 import { makePutRequest, makeGetRequest } from "@/utils/api"
 import { getAllEspecialidades } from "@/services/especialidadesService"
+import { authService } from "@/services/authService"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -46,6 +47,8 @@ export default function TecnicosPage() {
   const [editing, setEditing] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [tecnicoUsers, setTecnicoUsers] = useState([])
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => { setIsAdmin(authService.getUser()?.rol === "ADMIN") }, [])
 
   const { data: tecnicos = [], isLoading } = useQuery({
     queryKey: ["tecnicos"],
@@ -242,12 +245,14 @@ export default function TecnicosPage() {
                         <DropdownMenuItem onClick={() => openEdit(t)}>
                           <Edit className="mr-2 h-4 w-4" /> Editar
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setDeleteTarget(t)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" /> Eliminar
-                        </DropdownMenuItem>
+                        {isAdmin && (
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setDeleteTarget(t)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

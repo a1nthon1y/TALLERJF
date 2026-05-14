@@ -9,6 +9,6 @@ router.get("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.getP
 router.get("/:id/impact", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.getPartConfigImpact);
 router.post("/", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.createPartConfig);
 router.put("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.updatePartConfig);
-router.delete("/:id", authenticate, checkRole(["ADMIN", "ENCARGADO"]), controller.deletePartConfig);
+router.delete("/:id", authenticate, checkRole(["ADMIN"]), controller.deletePartConfig);
 
 module.exports = router;
