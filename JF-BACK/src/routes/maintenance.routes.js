@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const maintenanceController = require("../controllers/maintenance.controller");
-const { getMaterials, addMaterial, removeMaterial } = require("../controllers/maintenance-materials.controller");
+const { getMaterials, addMaterial, removeMaterial, addExternalMaterial } = require("../controllers/maintenance-materials.controller");
 const authenticate = require("../middlewares/auth.middleware");
 const checkRole = require("../middlewares/role.middleware");
 
@@ -44,6 +44,9 @@ router.delete("/:id", authenticate, checkRole(["ADMIN"]), maintenanceController.
 // Materiales usados en un mantenimiento (TECNICO puede agregar/quitar en sus propios trabajos)
 router.get("/:id/materials", authenticate, getMaterials);
 router.post("/:id/materials", authenticate, checkRole(["ADMIN", "ENCARGADO", "TECNICO"]), addMaterial);
+// Compra externa: pieza adquirida fuera del stock interno (urgencia, no en catalogo).
+// Crea o reutiliza un material es_externo y carga el sobrante a stock automaticamente.
+router.post("/:id/materials/external", authenticate, checkRole(["ADMIN", "ENCARGADO", "TECNICO"]), addExternalMaterial);
 router.delete("/:id/materials/:detalleId", authenticate, checkRole(["ADMIN", "ENCARGADO", "TECNICO"]), removeMaterial);
 
 module.exports = router;

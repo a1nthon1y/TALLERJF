@@ -101,6 +101,16 @@ export const maintenanceService = {
     }
   },
 
+  // Compra externa: pieza fuera del catálogo. Body:
+  // { nombre, precio_unit, cantidad_usada, cantidad_comprada?, descripcion? }
+  async addExternalMaterial(maintenanceId, payload) {
+    try {
+      return await makePostRequest(`/maintenances/${maintenanceId}/materials/external`, payload);
+    } catch (error) {
+      throw new Error(error.message || 'Error al registrar compra externa');
+    }
+  },
+
   async removeMaintenanceMaterial(maintenanceId, detalleId) {
     try {
       return await makeDeleteRequest(`/maintenances/${maintenanceId}/materials/${detalleId}`);

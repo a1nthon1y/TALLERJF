@@ -3,7 +3,7 @@ const pool = require("../config/db");
 // Obtener todos los materiales
 const getMaterials = async (req, res) => {
   try {
-    const result = await pool.query("SELECT id, nombre, descripcion, stock, precio, activo, creado_en FROM materiales ORDER BY nombre ASC");
+    const result = await pool.query("SELECT id, nombre, descripcion, stock, precio, activo, es_externo, creado_en FROM materiales ORDER BY nombre ASC");
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: "Error al obtener los materiales" });

@@ -115,6 +115,15 @@ function MaterialManager({ jobId, readonly = false }) {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Compra externa: pieza fuera del stock interno (urgencia, no en catálogo)
+  const [externalOpen, setExternalOpen] = useState(false);
+  const [externalSaving, setExternalSaving] = useState(false);
+  const [external, setExternal] = useState({
+    nombre: "", precio_unit: "", cantidad_usada: 1, cantidad_comprada: 1, descripcion: "",
+  });
+  const resetExternal = () => setExternal({
+    nombre: "", precio_unit: "", cantidad_usada: 1, cantidad_comprada: 1, descripcion: "",
+  });
 
   const form = useForm({
     resolver: zodResolver(addMaterialSchema),
@@ -162,6 +171,40 @@ function MaterialManager({ jobId, readonly = false }) {
     }
   };
 
+  const handleAddExternal = async () => {
+    const nombre = external.nombre.trim();
+    const precio = Number(external.precio_unit);
+    const usada = Number(external.cantidad_usada);
+    const comprada = Number(external.cantidad_comprada || external.cantidad_usada);
+    if (!nombre) return toast.error("Indica el nombre de la pieza.");
+    if (!Number.isFinite(precio) || precio < 0) return toast.error("El costo unitario debe ser un número ≥ 0.");
+    if (!Number.isFinite(usada) || usada <= 0) return toast.error("La cantidad usada debe ser mayor a 0.");
+    if (!Number.isFinite(comprada) || comprada < usada) return toast.error("La cantidad comprada debe ser ≥ la usada.");
+    setExternalSaving(true);
+    try {
+      const added = await maintenanceService.addExternalMaterial(jobId, {
+        nombre,
+        precio_unit: precio,
+        cantidad_usada: usada,
+        cantidad_comprada: comprada,
+        descripcion: external.descripcion?.trim() || undefined,
+      });
+      const sobrante = Number(added?.sobrante_a_stock || 0);
+      toast.success(
+        sobrante > 0
+          ? `Compra externa registrada. ${sobrante} unidad(es) sobrante(s) entraron al stock.`
+          : "Compra externa registrada"
+      );
+      resetExternal();
+      setExternalOpen(false);
+      fetchMaterials();
+    } catch (e) {
+      toast.error(e.message || "Error al registrar la compra externa.");
+    } finally {
+      setExternalSaving(false);
+    }
+  };
+
   const total = materials.reduce((s, m) => s + Number(m.costo_total || 0), 0);
 
   return (
@@ -193,7 +236,17 @@ function MaterialManager({ jobId, readonly = false }) {
         <div className="space-y-1">
           {materials.map((m) => (
             <div key={m.id} className="flex items-center justify-between text-xs bg-muted/40 rounded px-2 py-1.5">
-              <span className="font-medium">{m.nombre}</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-medium truncate">{m.nombre}</span>
+                {m.es_externo && (
+                  <span
+                    className="text-[9px] font-semibold uppercase px-1 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300"
+                    title="Compra externa: pieza fuera del stock"
+                  >
+                    Externo
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <span>x{m.cantidad}</span>
                 <span className="font-medium text-foreground">S/ {Number(m.costo_total).toFixed(2)}</span>
@@ -267,6 +320,89 @@ function MaterialManager({ jobId, readonly = false }) {
             </div>
           </form>
         </Form>
+      )}
+
+      {/* Compra externa: pieza fuera del stock interno (urgencia, no en catálogo).
+          Sub-form colapsable para no inflar la UI cuando no se usa. */}
+      {!readonly && !externalOpen && (
+        <button
+          type="button"
+          className="w-full text-[11px] text-orange-700 dark:text-orange-300 border border-dashed border-orange-300 dark:border-orange-900/50 rounded px-2 py-1.5 hover:bg-orange-50/50 dark:hover:bg-orange-950/10 transition-colors flex items-center justify-center gap-1"
+          onClick={() => { resetExternal(); setExternalOpen(true) }}
+        >
+          <Plus className="h-3 w-3" />
+          ¿La pieza no está en el stock? Registra compra externa
+        </button>
+      )}
+      {!readonly && externalOpen && (
+        <div className="border border-orange-300 dark:border-orange-900/50 rounded p-2 bg-orange-50/40 dark:bg-orange-950/10 space-y-1.5">
+          <p className="text-[11px] font-semibold text-orange-800 dark:text-orange-300">
+            Compra externa
+          </p>
+          <Input
+            value={external.nombre}
+            onChange={(e) => setExternal((s) => ({ ...s, nombre: e.target.value }))}
+            placeholder="Nombre de la pieza"
+            className="h-7 text-xs"
+            maxLength={120}
+          />
+          <div className="flex gap-1">
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={external.precio_unit}
+              onChange={(e) => setExternal((s) => ({ ...s, precio_unit: e.target.value }))}
+              placeholder="Costo S/."
+              className="h-7 text-xs flex-1"
+            />
+            <Input
+              type="number"
+              min={1}
+              step="1"
+              value={external.cantidad_usada}
+              onChange={(e) => {
+                const v = Number(e.target.value) || 0
+                setExternal((s) => ({
+                  ...s,
+                  cantidad_usada: v,
+                  cantidad_comprada: Number(s.cantidad_comprada) < v ? v : s.cantidad_comprada,
+                }))
+              }}
+              placeholder="Usada"
+              className="h-7 text-xs w-16"
+              title="Cantidad usada en este trabajo"
+            />
+            <Input
+              type="number"
+              min={Number(external.cantidad_usada) || 1}
+              step="1"
+              value={external.cantidad_comprada}
+              onChange={(e) => setExternal((s) => ({ ...s, cantidad_comprada: Number(e.target.value) || 0 }))}
+              placeholder="Comprada"
+              className="h-7 text-xs w-16"
+              title="Cantidad total comprada (sobrante va al stock)"
+            />
+          </div>
+          {(() => {
+            const usada = Number(external.cantidad_usada) || 0
+            const comprada = Number(external.cantidad_comprada) || 0
+            const sobrante = Math.max(0, comprada - usada)
+            return sobrante > 0 ? (
+              <p className="text-[10px] text-green-700 dark:text-green-400">
+                Sobrarán {sobrante} unidad(es) → entran al stock.
+              </p>
+            ) : null
+          })()}
+          <div className="flex gap-1 pt-0.5">
+            <Button size="sm" className="h-7 text-xs flex-1 bg-orange-600 hover:bg-orange-700" onClick={handleAddExternal} disabled={externalSaving}>
+              {externalSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Registrar"}
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setExternalOpen(false); resetExternal() }} disabled={externalSaving}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );

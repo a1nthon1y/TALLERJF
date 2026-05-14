@@ -252,9 +252,18 @@ export function MaterialsTable({ materials, isLoading, isError, mutate }) {
               <React.Fragment key={material.id}>
                 <TableRow className={material.activo === false ? "opacity-60 bg-muted/30" : ""}>
                   <TableCell>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <Package className="h-4 w-4 text-muted-foreground" />
                       <span className="font-medium">{material.nombre}</span>
+                      {material.es_externo && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] h-5 px-1.5 border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300"
+                          title="Material registrado como compra externa desde un mantenimiento"
+                        >
+                          Externo
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>{material.descripcion}</TableCell>

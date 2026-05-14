@@ -12,7 +12,7 @@ const getMaterials = async (req, res) => {
 
     const result = await pool.query(
       `SELECT dm.id, dm.material_id, dm.cantidad, dm.costo_total,
-              mat.nombre, mat.precio AS precio_unitario
+              mat.nombre, mat.precio AS precio_unitario, mat.es_externo
        FROM detalles_mantenimiento dm
        JOIN materiales mat ON dm.material_id = mat.id
        WHERE dm.mantenimiento_id = $1
@@ -172,4 +172,132 @@ const removeMaterial = async (req, res) => {
   }
 };
 
-module.exports = { getMaterials, addMaterial, removeMaterial };
+// POST /maintenances/:id/materials/external
+//   Registra una "compra externa": pieza adquirida fuera del stock interno
+//   (urgencia, no la teníamos). Acepta:
+//     - nombre        : string (obligatorio)
+//     - precio_unit   : number (obligatorio, costo unitario en S/.)
+//     - cantidad_usada    : number (obligatorio, lo que se consumió en este trabajo)
+//     - cantidad_comprada : number (opcional, default = cantidad_usada)
+//     - descripcion   : string (opcional, notas/marca/proveedor)
+//
+//  Reglas:
+//   - Crea o reutiliza un material `es_externo=true` con el mismo nombre
+//     (case-insensitive) — evita duplicados si la misma pieza se compra
+//     varias veces.
+//   - El detalle del mantenimiento usa `cantidad_usada` y costo = precio*usada.
+//   - El sobrante (comprada - usada) se acumula como stock del material para
+//     futuros trabajos. Si ya existía y se agrega más sobrante, se suma.
+//   - No descuenta stock interno (el material es externo).
+//   - Mismas reglas de bloqueo que addMaterial (estado y ownership).
+const addExternalMaterial = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { nombre, precio_unit, cantidad_usada, cantidad_comprada, descripcion } = req.body;
+
+    const nombreLimpio = (nombre || "").trim();
+    const precio = Number(precio_unit);
+    const usada = Number(cantidad_usada);
+    const comprada = cantidad_comprada == null ? usada : Number(cantidad_comprada);
+
+    if (!nombreLimpio) {
+      return res.status(400).json({ message: "El nombre de la pieza es obligatorio." });
+    }
+    if (!Number.isFinite(precio) || precio < 0) {
+      return res.status(400).json({ message: "El costo unitario debe ser un número >= 0." });
+    }
+    if (!Number.isFinite(usada) || usada <= 0) {
+      return res.status(400).json({ message: "La cantidad usada debe ser mayor a 0." });
+    }
+    if (!Number.isFinite(comprada) || comprada < usada) {
+      return res.status(400).json({ message: "La cantidad comprada debe ser mayor o igual a la usada." });
+    }
+
+    await client.query("BEGIN");
+
+    const mantCheck = await client.query(
+      "SELECT id, tecnico_id, estado FROM mantenimientos WHERE id = $1",
+      [id]
+    );
+    if (mantCheck.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ message: "Mantenimiento no encontrado" });
+    }
+    const mant = mantCheck.rows[0];
+
+    if (['COMPLETADO', 'CERRADO', 'REALIZADO'].includes(mant.estado)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        message: `No se pueden agregar materiales a un mantenimiento en estado ${mant.estado}.`
+      });
+    }
+
+    // Técnico solo en sus propios trabajos
+    if (req.user.rol === 'TECNICO') {
+      const tecResult = await client.query("SELECT id FROM tecnicos WHERE usuario_id = $1", [req.user.id]);
+      if (tecResult.rows.length === 0 || tecResult.rows[0].id !== mant.tecnico_id) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ message: "Solo puedes registrar materiales en tus propios trabajos" });
+      }
+    }
+
+    // Buscar material externo existente con el mismo nombre (case-insensitive).
+    // Si existe → reutilizar. Si no → crear con stock = sobrante.
+    const sobrante = comprada - usada;
+    const existing = await client.query(
+      `SELECT id, stock FROM materiales
+        WHERE es_externo = TRUE AND LOWER(nombre) = LOWER($1)
+        LIMIT 1`,
+      [nombreLimpio]
+    );
+
+    let material_id;
+    if (existing.rows.length > 0) {
+      material_id = existing.rows[0].id;
+      if (sobrante > 0) {
+        await client.query(
+          "UPDATE materiales SET stock = stock + $1, precio = $2 WHERE id = $3",
+          [sobrante, precio, material_id]
+        );
+      } else {
+        await client.query(
+          "UPDATE materiales SET precio = $1 WHERE id = $2",
+          [precio, material_id]
+        );
+      }
+    } else {
+      const created = await client.query(
+        `INSERT INTO materiales (nombre, descripcion, stock, precio, activo, es_externo, creado_en)
+         VALUES ($1, $2, $3, $4, TRUE, TRUE, NOW())
+         RETURNING id`,
+        [nombreLimpio, descripcion || null, sobrante, precio]
+      );
+      material_id = created.rows[0].id;
+    }
+
+    const costo_total = precio * usada;
+    const inserted = await client.query(
+      `INSERT INTO detalles_mantenimiento (mantenimiento_id, material_id, cantidad, costo_total)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [id, material_id, usada, costo_total]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(201).json({
+      ...inserted.rows[0],
+      nombre: nombreLimpio,
+      precio_unitario: precio,
+      es_externo: true,
+      sobrante_a_stock: sobrante,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { getMaterials, addMaterial, removeMaterial, addExternalMaterial };

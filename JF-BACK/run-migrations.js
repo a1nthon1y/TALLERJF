@@ -122,6 +122,15 @@ async function run() {
       ALTER TABLE materiales
         ADD COLUMN IF NOT EXISTS activo BOOLEAN DEFAULT TRUE;
 
+      -- ── materiales: flag es_externo para compras puntuales fuera del stock ──
+      --   Cuando un tecnico necesita una pieza urgente que no esta en el
+      --   inventario, la registra como "compra externa" desde el dialog del
+      --   mantenimiento. Se crea (o reutiliza) un material con es_externo=true,
+      --   el sobrante (cantidad_comprada - cantidad_usada) entra al stock.
+      --   Diferencia visual en frontend: badge "Externo" en catalogo y detalles.
+      ALTER TABLE materiales
+        ADD COLUMN IF NOT EXISTS es_externo BOOLEAN DEFAULT FALSE;
+
       -- ── usuarios: datos de contacto centralizados ───────────────────────
       --   Antes:  choferes.telefono y tecnicos.dni vivian dispersos por tabla.
       --   Ahora:  todo dato personal (telefono, dni) vive en usuarios.

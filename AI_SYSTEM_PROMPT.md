@@ -383,6 +383,42 @@ Reglas:
 
 Si en el futuro se centralizan más datos (dirección, fecha de nacimiento), seguir el mismo patrón: agregar columna en `usuarios`, editar solo desde Usuarios, leer por JOIN en perfiles, panel read-only en sus forms.
 
+### 16.2 Compras externas de materiales (fuera del stock interno)
+
+Caso real: en mitad de un trabajo el técnico necesita una pieza que **no está en el stock** (urgencia, pieza no recurrente, proveedor externo). Antes había que ir al catálogo, crear el material con stock falso y volver al mantenimiento. Ahora se registra en un solo paso.
+
+**Modelo**:
+- `materiales.es_externo BOOLEAN DEFAULT FALSE` distingue catálogo regular de compras externas.
+- Las compras externas viven en la **misma tabla** `materiales` para reusar reportes, índices y joins con `detalles_mantenimiento`. El flag las separa visualmente (badge "Externo" en `/materiales` y en cualquier tabla de detalles del mantenimiento).
+- **Reuso por nombre**: si la misma pieza (case-insensitive) ya fue registrada antes como externa, se **reutiliza** el material existente en lugar de duplicarlo.
+
+**Endpoint**: `POST /maintenances/:id/materials/external` (RBAC: ADMIN + ENCARGADO + TECNICO con ownership).
+
+Body:
+```json
+{
+  "nombre": "Faro delantero LED",
+  "precio_unit": 45.50,
+  "cantidad_usada": 1,
+  "cantidad_comprada": 2,
+  "descripcion": "Marca Bosch — proveedor X" 
+}
+```
+
+Reglas:
+- `cantidad_usada > 0` y `cantidad_comprada >= cantidad_usada`.
+- El detalle del mantenimiento se carga con `precio_unit * cantidad_usada`.
+- **El sobrante (`comprada - usada`) se acumula al stock** del material externo (creado o reusado), quedando disponible para futuros trabajos. Esto evita el "desperdicio contable" de comprar 5 pero usar 2.
+- Mismas reglas de bloqueo que el `addMaterial` regular: estados terminales (`COMPLETADO/CERRADO/REALIZADO`) no permiten agregar; TECNICO solo en sus propios trabajos.
+- Respuesta incluye `sobrante_a_stock: N` para que el frontend muestre confirmación contextual ("N unidad(es) entraron al stock").
+
+**Frontend** — paridad de UX en 3 superficies:
+- Dialog **Completar mantenimiento** (`/mantenimientos`): bloque ámbar debajo del agregar-de-catálogo con botón "Compra externa" → sub-dialog con form completo y resumen de impacto en tiempo real.
+- Dialog **Materiales usados** (`/mantenimientos`): mismo botón cuando el estado permite editar.
+- Página **Mis trabajos del técnico** (`/tecnico/mis-trabajos`): variante compacta inline, sin sub-dialog (UI mobile-friendly).
+
+**Visualización**: badge `Externo` (naranja) en cualquier lista de materiales — `/materiales`, detalles del mantenimiento, mis-trabajos del técnico — para que el ADMIN/ENCARGADO entienda de un vistazo que ese ítem vino de una compra externa, no del catálogo regular.
+
 ### 17. Reportes (PDF / Excel) — arquitectura "Report Library"
 
 Generación de reportes vive en una **librería de componentes reutilizables** — no se reinventa por cada nuevo reporte.

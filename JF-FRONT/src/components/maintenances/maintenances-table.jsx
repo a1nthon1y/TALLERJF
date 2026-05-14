@@ -150,6 +150,25 @@ export function MaintenancesTable() {
   const [compAddMatId, setCompAddMatId] = useState("")
   const [compAddMatQty, setCompAddMatQty] = useState(1)
   const [compAddingMat, setCompAddingMat] = useState(false)
+  // Compra externa: pieza adquirida fuera del catalogo interno (urgencia, no en stock).
+  // El sub-dialog opera sobre `externalTarget` { mantenimientoId, onAdded } para
+  // poder abrirse desde varios contextos (Completar / Materiales usados).
+  const [externalTarget, setExternalTarget] = useState(null)
+  const [compExternalSubmitting, setCompExternalSubmitting] = useState(false)
+  const [compExternal, setCompExternal] = useState({
+    nombre: "", precio_unit: "", cantidad_usada: 1, cantidad_comprada: 1, descripcion: "",
+  })
+  const resetCompExternal = () => setCompExternal({
+    nombre: "", precio_unit: "", cantidad_usada: 1, cantidad_comprada: 1, descripcion: "",
+  })
+  const openExternalDialog = (mantenimientoId, onAdded) => {
+    resetCompExternal()
+    setExternalTarget({ mantenimientoId, onAdded })
+  }
+  const closeExternalDialog = () => {
+    setExternalTarget(null)
+    resetCompExternal()
+  }
   const [compPartes, setCompPartes] = useState([])           // partes que SÍ se repararon
   const [compUnitParts, setCompUnitParts] = useState([])     // partes de la unidad con estado actual
   const [compNota, setCompNota] = useState("")
@@ -447,6 +466,54 @@ export function MaintenancesTable() {
       toast.error(err.message)
     } finally {
       setCompAddingMat(false)
+    }
+  }
+
+  // Registra una compra externa para el `externalTarget` actual.
+  // Si sobra (comprada > usada), el sobrante entra al stock del material
+  // (creado o reusado por el backend) — la respuesta lo confirma con
+  // `sobrante_a_stock` para mostrar feedback al usuario.
+  // El callback `onAdded` se ejecuta para que el caller actualice su lista local.
+  const handleCompAddExternal = async () => {
+    if (!externalTarget) return
+    const nombre = compExternal.nombre.trim()
+    const precio = Number(compExternal.precio_unit)
+    const usada = Number(compExternal.cantidad_usada)
+    const comprada = Number(compExternal.cantidad_comprada || compExternal.cantidad_usada)
+
+    if (!nombre) return toast.error("Indica el nombre de la pieza.")
+    if (!Number.isFinite(precio) || precio < 0) return toast.error("El costo unitario debe ser un número ≥ 0.")
+    if (!Number.isFinite(usada) || usada <= 0) return toast.error("La cantidad usada debe ser mayor a 0.")
+    if (!Number.isFinite(comprada) || comprada < usada) return toast.error("La cantidad comprada debe ser ≥ la usada.")
+
+    setCompExternalSubmitting(true)
+    try {
+      const added = await maintenanceService.addExternalMaterial(externalTarget.mantenimientoId, {
+        nombre,
+        precio_unit: precio,
+        cantidad_usada: usada,
+        cantidad_comprada: comprada,
+        descripcion: compExternal.descripcion?.trim() || undefined,
+      })
+      const sobrante = Number(added?.sobrante_a_stock || 0)
+      // El caller decide cómo refrescar su lista local
+      externalTarget.onAdded?.(added)
+      toast.success(
+        sobrante > 0
+          ? `Compra externa registrada. ${sobrante} unidad(es) sobrante(s) entraron al stock.`
+          : "Compra externa registrada"
+      )
+      // Refrescar catálogo regular por si el material externo creado/actualizado
+      // ahora aparece con stock disponible para futuros usos.
+      try {
+        const cat = await materialService.getMaterials()
+        setCompCatalog((cat || []).filter((m) => m.activo !== false && Number(m.stock) > 0))
+      } catch { /* no bloqueante */ }
+      closeExternalDialog()
+    } catch (err) {
+      toast.error(err.message)
+    } finally {
+      setCompExternalSubmitting(false)
     }
   }
 
@@ -1128,7 +1195,16 @@ export function MaintenancesTable() {
                       <TableBody>
                         {materials.map((m) => (
                           <TableRow key={m.id}>
-                            <TableCell className="font-medium">{m.nombre}</TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{m.nombre}</span>
+                                {m.es_externo && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300" title="Pieza comprada fuera del stock interno">
+                                    Externo
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right">{m.cantidad}</TableCell>
                             <TableCell className="text-right">S/. {Number(m.precio_unitario).toFixed(2)}</TableCell>
                             <TableCell className="text-right font-semibold">S/. {Number(m.costo_total).toFixed(2)}</TableCell>
@@ -1204,6 +1280,35 @@ export function MaintenancesTable() {
                       <Button onClick={handleAddMaterial} disabled={addingMat}>
                         {addingMat ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
                         Agregar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Compra externa (paralelo al de catálogo) — disponible solo
+                    cuando el mantenimiento permite editar materiales. */}
+                {!matReadonly && (
+                  <div className="border rounded-md p-3 bg-orange-50/40 dark:bg-orange-950/10 border-orange-200 dark:border-orange-900/50">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-orange-800 dark:text-orange-300">
+                          ¿La pieza no está en el stock?
+                        </p>
+                        <p className="text-[11px] text-orange-700/80 dark:text-orange-400/80 mt-0.5">
+                          Registra una compra externa: indica nombre, costo y cantidad. El sobrante entra al stock.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-orange-300 text-orange-800 hover:bg-orange-100 dark:hover:bg-orange-950/40 shrink-0"
+                        onClick={() => openExternalDialog(
+                          materialsMaintenance.id,
+                          (added) => setMaterials((prev) => [...prev, added])
+                        )}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Compra externa
                       </Button>
                     </div>
                   </div>
@@ -1293,7 +1398,16 @@ export function MaintenancesTable() {
                       <TableBody>
                         {compMaterials.map((m) => (
                           <TableRow key={m.id}>
-                            <TableCell className="font-medium">{m.nombre}</TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>{m.nombre}</span>
+                                {m.es_externo && (
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1 border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300" title="Pieza comprada fuera del stock interno">
+                                    Externo
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right">{m.cantidad}</TableCell>
                             <TableCell className="text-right">S/. {Number(m.costo_total).toFixed(2)}</TableCell>
                             <TableCell>
@@ -1316,9 +1430,9 @@ export function MaintenancesTable() {
                   </div>
                 )}
 
-                {/* Agregar material adicional */}
+                {/* Agregar material adicional (catálogo) */}
                 <div className="border rounded-md p-3 space-y-2 bg-muted/20">
-                  <p className="text-xs font-medium text-muted-foreground">Agregar material adicional</p>
+                  <p className="text-xs font-medium text-muted-foreground">Del catálogo (stock interno)</p>
                   <div className="flex gap-2 flex-wrap">
                     <Select value={compAddMatId} onValueChange={setCompAddMatId}>
                       <SelectTrigger className="flex-1 min-w-[160px]">
@@ -1341,6 +1455,33 @@ export function MaintenancesTable() {
                       disabled={!compAddMatId || compAddMatQty < 1 || compAddingMat}>
                       {compAddingMat ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
                       Agregar
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Compra externa: pieza adquirida fuera del stock */}
+                <div className="border rounded-md p-3 bg-orange-50/40 dark:bg-orange-950/10 border-orange-200 dark:border-orange-900/50">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-orange-800 dark:text-orange-300">
+                        ¿La pieza no está en el stock?
+                      </p>
+                      <p className="text-[11px] text-orange-700/80 dark:text-orange-400/80 mt-0.5">
+                        Registra una compra externa: indica nombre, costo y cantidad.
+                        El sobrante se suma automáticamente al stock para futuros trabajos.
+                      </p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-orange-300 text-orange-800 hover:bg-orange-100 dark:hover:bg-orange-950/40 shrink-0"
+                      onClick={() => openExternalDialog(
+                        completingMaintenance.id,
+                        (added) => setCompMaterials((prev) => [...prev, added])
+                      )}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Compra externa
                     </Button>
                   </div>
                 </div>
@@ -1476,6 +1617,126 @@ export function MaintenancesTable() {
               className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
               {isCompleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ClipboardCheck className="h-4 w-4 mr-2" />}
               Marcar como Completado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Compra externa (pieza adquirida fuera del stock interno) */}
+      <Dialog open={!!externalTarget} onOpenChange={(v) => { if (!v) closeExternalDialog() }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-4 w-4 text-orange-600" />
+              Registrar compra externa
+            </DialogTitle>
+            <DialogDescription>
+              Pieza adquirida fuera del stock del taller. El sobrante (si lo hay) se sumará al inventario para futuros trabajos.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Nombre de la pieza *</label>
+              <Input
+                placeholder="Ej: Faro delantero LED, Sensor MAP, Manguera radiador..."
+                value={compExternal.nombre}
+                onChange={(e) => setCompExternal((s) => ({ ...s, nombre: e.target.value }))}
+                maxLength={120}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Si ya registraste esta misma pieza antes como externa, se reutilizará el catálogo (no se duplica).
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Costo unitario (S/.) *</label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="Ej: 45.50"
+                value={compExternal.precio_unit}
+                onChange={(e) => setCompExternal((s) => ({ ...s, precio_unit: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Cantidad usada *</label>
+                <Input
+                  type="number"
+                  min={1}
+                  step="1"
+                  value={compExternal.cantidad_usada}
+                  onChange={(e) => {
+                    const v = Number(e.target.value) || 0
+                    setCompExternal((s) => ({
+                      ...s,
+                      cantidad_usada: v,
+                      // Si la "comprada" estaba sincronizada con la usada, sigue acompañando
+                      cantidad_comprada: Number(s.cantidad_comprada) < v ? v : s.cantidad_comprada,
+                    }))
+                  }}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Cantidad comprada</label>
+                <Input
+                  type="number"
+                  min={Number(compExternal.cantidad_usada) || 1}
+                  step="1"
+                  value={compExternal.cantidad_comprada}
+                  onChange={(e) => setCompExternal((s) => ({ ...s, cantidad_comprada: Number(e.target.value) || 0 }))}
+                />
+              </div>
+            </div>
+
+            {/* Resumen de impacto */}
+            {(() => {
+              const usada = Number(compExternal.cantidad_usada) || 0
+              const comprada = Number(compExternal.cantidad_comprada) || 0
+              const precio = Number(compExternal.precio_unit) || 0
+              const sobrante = Math.max(0, comprada - usada)
+              const costoMant = precio * usada
+              if (usada <= 0 || precio < 0) return null
+              return (
+                <div className="rounded-md border bg-muted/30 p-2.5 text-xs space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Costo cargado al mantenimiento:</span>
+                    <span className="font-mono font-semibold">S/. {costoMant.toFixed(2)}</span>
+                  </div>
+                  {sobrante > 0 && (
+                    <div className="flex justify-between text-green-700 dark:text-green-400">
+                      <span>Sobrante al stock:</span>
+                      <span className="font-mono font-semibold">+{sobrante} unidad(es)</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                Notas <span className="text-muted-foreground font-normal">(opcional)</span>
+              </label>
+              <Textarea
+                placeholder="Marca, proveedor, motivo de la compra externa..."
+                rows={2}
+                maxLength={400}
+                value={compExternal.descripcion}
+                onChange={(e) => setCompExternal((s) => ({ ...s, descripcion: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeExternalDialog} disabled={compExternalSubmitting}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCompAddExternal} disabled={compExternalSubmitting} className="bg-orange-600 hover:bg-orange-700">
+              {compExternalSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+              Registrar
             </Button>
           </DialogFooter>
         </DialogContent>
