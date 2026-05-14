@@ -142,24 +142,39 @@ async function run() {
         ADD COLUMN IF NOT EXISTS dni VARCHAR(15);
 
       -- Backfill: mover datos legacy de choferes.telefono a usuarios.telefono
-      --   Solo donde el usuario aún no tiene teléfono (no sobreescribe) y el
-      --   chofer tenía uno. Idempotente: en runs siguientes, ya no hay datos.
-      UPDATE usuarios u
-      SET    telefono = c.telefono
-      FROM   choferes c
-      WHERE  c.usuario_id = u.id
-        AND  c.telefono IS NOT NULL
-        AND  c.telefono <> ''
-        AND  (u.telefono IS NULL OR u.telefono = '');
+      --   Sólo si la columna aún existe (idempotente entre ejecuciones).
+      DO $mig$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'choferes' AND column_name = 'telefono'
+        ) THEN
+          UPDATE usuarios u
+          SET    telefono = c.telefono
+          FROM   choferes c
+          WHERE  c.usuario_id = u.id
+            AND  c.telefono IS NOT NULL
+            AND  c.telefono <> ''
+            AND  (u.telefono IS NULL OR u.telefono = '');
+        END IF;
+      END $mig$;
 
       -- Backfill: mover datos legacy de tecnicos.dni a usuarios.dni
-      UPDATE usuarios u
-      SET    dni = t.dni
-      FROM   tecnicos t
-      WHERE  t.usuario_id = u.id
-        AND  t.dni IS NOT NULL
-        AND  t.dni <> ''
-        AND  (u.dni IS NULL OR u.dni = '');
+      DO $mig2$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'tecnicos' AND column_name = 'dni'
+        ) THEN
+          UPDATE usuarios u
+          SET    dni = t.dni
+          FROM   tecnicos t
+          WHERE  t.usuario_id = u.id
+            AND  t.dni IS NOT NULL
+            AND  t.dni <> ''
+            AND  (u.dni IS NULL OR u.dni = '');
+        END IF;
+      END $mig2$;
 
       -- DROP de columnas legacy (single source of truth en usuarios)
       ALTER TABLE choferes DROP COLUMN IF EXISTS telefono;
