@@ -648,6 +648,48 @@ export function MaintenancesTable() {
     return tech ? tech.nombre : "No asignado"
   }
 
+  // Extrae solo el problema reportado original (lo escrito al crear),
+  // separándolo de notas posteriores del técnico/encargado/cierre.
+  const getProblemSummary = (obs) => {
+    if (!obs) return ""
+    const SEPS = ["\n\n--- NOTA DEL TÉCNICO ---", "\n\n--- NOTA DEL ENCARGADO ---", "\n\n--- CIERRE DEL ENCARGADO ---"]
+    let firstIdx = -1
+    for (const s of SEPS) {
+      const idx = obs.indexOf(s)
+      if (idx !== -1 && (firstIdx === -1 || idx < firstIdx)) firstIdx = idx
+    }
+    return (firstIdx === -1 ? obs : obs.slice(0, firstIdx)).trim()
+  }
+
+  // ¿Tiene notas adicionales después del problema inicial?
+  const hasExtraNotes = (obs) => {
+    if (!obs) return false
+    return /\n\n--- (NOTA|CIERRE) /.test(obs)
+  }
+
+  // Antigüedad relativa con código de color para urgencia visual.
+  // Solo aplica a estados activos (Pendiente / En Proceso) — ahí importa el SLA.
+  const getAgeInfo = (date, estado) => {
+    if (!date) return null
+    const ms = Date.now() - new Date(date).getTime()
+    const hours = Math.floor(ms / (1000 * 60 * 60))
+    const days = Math.floor(hours / 24)
+    let label
+    if (hours < 1)      label = "Hace minutos"
+    else if (hours < 24) label = `Hace ${hours}h`
+    else if (days < 7)   label = `Hace ${days}d`
+    else                 label = `Hace ${Math.floor(days / 7)}sem`
+
+    const isActive = ["PENDIENTE", "EN_PROCESO"].includes(estado?.toUpperCase())
+    let cls = "text-muted-foreground"
+    if (isActive) {
+      if (days >= 3)       cls = "text-red-600 font-semibold"     // Crítico
+      else if (hours >= 24) cls = "text-orange-600 font-medium"    // Atención
+      else if (hours >= 8)  cls = "text-amber-600"                 // Advertencia
+    }
+    return { label, cls }
+  }
+
   const filteredMaintenances = maintenances?.filter((maintenance) => {
     const searchLower = searchTerm.toLowerCase()
     const matchSearch =
@@ -856,10 +898,19 @@ export function MaintenancesTable() {
                         Sin registros
                       </div>
                     )}
-                    {colItems.map((maintenance) => (
+                    {colItems.map((maintenance) => {
+                      const problem = getProblemSummary(maintenance.observaciones)
+                      const hasNotes = hasExtraNotes(maintenance.observaciones)
+                      const age = getAgeInfo(maintenance.fecha_solicitud, maintenance.estado)
+                      const isUrgent = age?.cls?.includes("red") || age?.cls?.includes("orange")
+                      return (
                       <div
                         key={maintenance.id}
-                        className="rounded-lg border bg-card p-3 shadow-sm hover:shadow-md transition-shadow flex flex-col gap-2"
+                        onClick={(e) => {
+                          if (e.target.closest("[data-no-card-click]")) return
+                          openDetailDialog(maintenance)
+                        }}
+                        className={`rounded-lg border bg-card p-3 shadow-sm hover:shadow-md hover:border-primary/40 transition-all flex flex-col gap-2 cursor-pointer ${isUrgent ? "border-l-4 border-l-orange-400" : ""}`}
                       >
                         <div className="flex items-start justify-between gap-1">
                           <div className="min-w-0">
@@ -868,6 +919,7 @@ export function MaintenancesTable() {
                               <p className="text-xs text-muted-foreground truncate">{maintenance.modelo}</p>
                             )}
                           </div>
+                          <div data-no-card-click>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" className="h-6 w-6 p-0 shrink-0" aria-label="Acciones">
@@ -922,7 +974,25 @@ export function MaintenancesTable() {
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </div>
                         </div>
+
+                        {/* Problema reportado — primeras líneas, máx 3 con line-clamp */}
+                        {problem && (
+                          <div className="rounded-md bg-muted/40 border border-muted px-2 py-1.5">
+                            <p className="text-[10px] uppercase tracking-wide text-muted-foreground/80 font-medium mb-0.5 flex items-center gap-1">
+                              <FileText className="h-2.5 w-2.5" />
+                              Problema reportado
+                              {hasNotes && (
+                                <span className="ml-auto text-[9px] text-blue-600 normal-case font-medium">+ notas</span>
+                              )}
+                            </p>
+                            <p className="text-xs text-foreground/80 line-clamp-3 leading-snug" title={problem}>
+                              {problem}
+                            </p>
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {getTipoBadge(maintenance.tipo)}
                           {maintenance.tecnico_nombre
@@ -930,18 +1000,18 @@ export function MaintenancesTable() {
                             : <span className="text-xs text-yellow-600 font-medium flex items-center gap-0.5"><AlertCircle className="h-3 w-3" />Sin asignar</span>
                           }
                         </div>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                           <code className="text-[10px] font-mono bg-muted px-1 py-0.5 rounded text-muted-foreground">
                             {maintenance.codigo ?? `#${maintenance.id}`}
                           </code>
-                          {maintenance.fecha_solicitud && (
-                            <span className="text-[10px] text-muted-foreground">
-                              {new Date(maintenance.fecha_solicitud).toLocaleDateString("es-PE")}
+                          {age && (
+                            <span className={`text-[10px] ${age.cls}`} title={maintenance.fecha_solicitud ? new Date(maintenance.fecha_solicitud).toLocaleString("es-PE") : ""}>
+                              {age.label}
                             </span>
                           )}
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
               )
