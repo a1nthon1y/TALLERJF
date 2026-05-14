@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { UsersTable } from "@/components/users/users-table"
 import { Button } from "@/components/ui/button"
-import { Plus, RefreshCw } from "lucide-react"
+import { Plus } from "lucide-react"
 import { userService } from "@/services/userService"
 import { toast } from "sonner"
 import {
@@ -21,7 +21,21 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import { makeGetRequest } from "@/utils/api"
+
+// Genera un username local a partir del nombre completo:
+// primera letra del primer nombre + apellidos concatenados.
+// Ej: "Juan Pérez Huamán" → "jperezhuaman"
+//     "María de los Ángeles" → "mdelosangeles"
+const slugify = (str) =>
+  str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "")
+
+const generateUsername = (nombre) => {
+  const words = nombre.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return ""
+  const initial = slugify(words[0]).charAt(0)
+  const rest    = words.slice(1).map(slugify).join("")
+  return initial + rest
+}
 
 const formSchema = z.object({
   nombre:   z.string().min(1, { message: "El nombre es requerido" }),
@@ -34,9 +48,12 @@ const formSchema = z.object({
 })
 
 export default function UsersPage() {
-  const [isCreating, setIsCreating]           = useState(false)
-  const [suggestingUsername, setSuggesting]   = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
   const { data: users, isLoading, isError, mutate } = useUsers()
+
+  // Rastrea si el admin editó el username manualmente para no sobreescribir
+  // su elección cuando el nombre siga cambiando.
+  const userEditedUsername = useRef(false)
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -45,24 +62,18 @@ export default function UsersPage() {
 
   const nombre = form.watch("nombre")
 
-  // Auto-sugerir username cuando cambia el nombre (con debounce de 600ms)
+  // Genera el username localmente en cada cambio del nombre, sin red.
+  // Si el admin ya tocó el campo de username, se respeta su elección.
   useEffect(() => {
-    if (!nombre || nombre.trim().length < 2) return
-    const timer = setTimeout(async () => {
-      try {
-        setSuggesting(true)
-        const data = await makeGetRequest(`/users/suggest-username?nombre=${encodeURIComponent(nombre.trim())}`)
-        // Solo auto-completar si el campo está vacío o no fue editado manualmente
-        const current = form.getValues("username")
-        if (!current || current === form.formState.defaultValues?.username) {
-          form.setValue("username", data.username, { shouldValidate: true })
-        }
-      } catch { toast.warning("No se pudo sugerir un nombre de usuario automáticamente") } finally {
-        setSuggesting(false)
-      }
-    }, 600)
-    return () => clearTimeout(timer)
+    if (userEditedUsername.current) return
+    const suggested = generateUsername(nombre)
+    form.setValue("username", suggested, { shouldValidate: suggested.length > 0 })
   }, [nombre])
+
+  const resetCreateForm = () => {
+    form.reset()
+    userEditedUsername.current = false
+  }
 
   const handleCreateUser = async (values) => {
     try {
@@ -76,7 +87,7 @@ export default function UsersPage() {
       })
       toast.success("Usuario creado correctamente")
       setIsCreating(false)
-      form.reset()
+      resetCreateForm()
       await mutate()
     } catch (error) {
       toast.error(error.message)
@@ -87,7 +98,7 @@ export default function UsersPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Usuarios</h1>
-        <Dialog open={isCreating} onOpenChange={(open) => { setIsCreating(open); if (!open) form.reset() }}>
+        <Dialog open={isCreating} onOpenChange={(open) => { setIsCreating(open); if (!open) resetCreateForm() }}>
           <DialogTrigger asChild>
             <Button><Plus className="mr-2 h-4 w-4" /> Agregar Usuario</Button>
           </DialogTrigger>
@@ -112,21 +123,24 @@ export default function UsersPage() {
                   </FormItem>
                 )} />
 
-                {/* Username — auto-sugerido, editable */}
+                {/* Username — se genera reactivamente; si el admin lo toca, se respeta */}
                 <FormField control={form.control} name="username" render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      Usuario (para iniciar sesión)
-                      {suggestingUsername && <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />}
-                    </FormLabel>
+                    <FormLabel>Usuario (para iniciar sesión)</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="aespinoza"
+                        className="font-mono"
                         {...field}
-                        onChange={e => field.onChange(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
+                        onChange={e => {
+                          userEditedUsername.current = true
+                          field.onChange(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))
+                        }}
                       />
                     </FormControl>
-                    <p className="text-xs text-muted-foreground">Se genera automáticamente desde el nombre. Solo minúsculas y números.</p>
+                    <p className="text-xs text-muted-foreground">
+                      Se genera automáticamente desde el nombre. Solo minúsculas y números.
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -174,7 +188,7 @@ export default function UsersPage() {
                 )} />
 
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>Cancelar</Button>
+                  <Button type="button" variant="outline" onClick={() => { setIsCreating(false); resetCreateForm() }}>Cancelar</Button>
                   <Button type="submit">Crear Usuario</Button>
                 </div>
               </form>
