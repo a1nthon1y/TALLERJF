@@ -584,11 +584,14 @@ export function MaintenancesTable() {
   })
 
   // ── Kanban: variables calculadas aquí para no usar IIFE en JSX ──
+  // REALIZADO es un estado terminal acumulativo (como CERRADO). Se muestra
+  // aparte como columna colapsable con máximo REALIZADO_VISIBLE items para
+  // que no domine el tablero a medida que crece el historial.
+  const REALIZADO_VISIBLE = 5
   const KANBAN_COLS = [
     { key: "PENDIENTE",  label: "Pendiente",  headerCls: "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/20",  dotCls: "bg-yellow-400", countCls: "bg-yellow-100 text-yellow-800" },
     { key: "EN_PROCESO", label: "En Proceso",  headerCls: "bg-blue-50 border-blue-300 dark:bg-blue-950/20",       dotCls: "bg-blue-500",   countCls: "bg-blue-100 text-blue-800" },
     { key: "COMPLETADO", label: "Completado",  headerCls: "bg-green-50 border-green-300 dark:bg-green-950/20",    dotCls: "bg-green-500",  countCls: "bg-green-100 text-green-800" },
-    { key: "REALIZADO",  label: "Resuelto en ruta", headerCls: "bg-purple-50 border-purple-300 dark:bg-purple-950/20", dotCls: "bg-purple-500", countCls: "bg-purple-100 text-purple-800" },
   ]
   const cerradosCount = (maintenances ?? []).filter(m => m.estado?.toUpperCase() === "CERRADO").length
   const kanbanBase = (maintenances ?? []).filter((m) => {
@@ -748,7 +751,8 @@ export function MaintenancesTable() {
       {/* ─── Vista Kanban ─── */}
       {viewMode === "kanban" && (
         <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pb-2">
+          {/* Columnas de flujo activo: Pendiente / En Proceso / Completado */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pb-2">
             {KANBAN_COLS.map(({ key, label, headerCls, dotCls, countCls }) => {
               const colItems = kanbanBase.filter(m => m.estado?.toUpperCase() === key)
               return (
@@ -848,6 +852,85 @@ export function MaintenancesTable() {
               )
             })}
           </div>
+          {/* ── Resuelto en ruta: historial acumulativo, colapsable ── */}
+          {(() => {
+            const realizadoAll = kanbanBase
+              .filter(m => m.estado?.toUpperCase() === "REALIZADO")
+              .sort((a, b) => new Date(b.fecha_solicitud ?? 0) - new Date(a.fecha_solicitud ?? 0))
+            const realizadoVisible = realizadoAll.slice(0, REALIZADO_VISIBLE)
+            const realizadoExtra  = realizadoAll.length - realizadoVisible.length
+            if (realizadoAll.length === 0) return null
+            return (
+              <div className="rounded-lg border border-purple-200 dark:border-purple-800/50 bg-purple-50/40 dark:bg-purple-950/10 p-3 space-y-2">
+                {/* Cabecera de la sección */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-purple-500 shrink-0" />
+                    <span className="text-xs font-semibold text-purple-800 dark:text-purple-300">
+                      Resuelto en ruta
+                    </span>
+                    <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                      {realizadoAll.length}
+                    </span>
+                    <span className="text-[10px] text-purple-600/70 dark:text-purple-400/70 hidden sm:inline">
+                      · fallas cerradas por el chofer en campo
+                    </span>
+                  </div>
+                  <button
+                    className="text-xs text-purple-700 dark:text-purple-300 underline underline-offset-2 hover:no-underline"
+                    onClick={() => { setViewMode("tabla"); setEstadoFilter("REALIZADO") }}
+                  >
+                    Ver todos en tabla
+                  </button>
+                </div>
+
+                {/* Grilla horizontal de tarjetas (máx REALIZADO_VISIBLE) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
+                  {realizadoVisible.map((maintenance) => (
+                    <div
+                      key={maintenance.id}
+                      className="rounded-lg border border-purple-200 dark:border-purple-800/50 bg-card p-3 shadow-sm flex flex-col gap-2 opacity-80"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{maintenance.placa ?? `U-${maintenance.unidad_id}`}</p>
+                        {maintenance.modelo && (
+                          <p className="text-xs text-muted-foreground truncate">{maintenance.modelo}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {getTipoBadge(maintenance.tipo)}
+                        {maintenance.tecnico_nombre && (
+                          <span className="text-xs text-muted-foreground truncate">{maintenance.tecnico_nombre}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <code className="text-[10px] font-mono bg-muted px-1 py-0.5 rounded text-muted-foreground">
+                          {maintenance.codigo ?? `#${maintenance.id}`}
+                        </code>
+                        {maintenance.fecha_solicitud && (
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(maintenance.fecha_solicitud).toLocaleDateString("es-PE")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Enlace a "X más" si hay más del límite */}
+                {realizadoExtra > 0 && (
+                  <button
+                    className="text-xs text-purple-700 dark:text-purple-300 underline underline-offset-2 hover:no-underline"
+                    onClick={() => { setViewMode("tabla"); setEstadoFilter("REALIZADO") }}
+                  >
+                    + {realizadoExtra} más — ver todos en tabla
+                  </button>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Nota de cerrados */}
           {cerradosCount > 0 && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground border rounded-lg px-3 py-2 bg-muted/30">
               <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
