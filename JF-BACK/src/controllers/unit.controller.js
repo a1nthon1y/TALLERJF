@@ -217,8 +217,50 @@ const updateUnit = async (req, res) => {
     );
 
     let motor = null;
+    let advertencias = [];
+
     if (kmCambio) {
       motor = await evaluarMotorPredictivo(id, kmNuevo);
+
+      // ── Advertencia de inconsistencia histórica ──────────────────────────
+      // Si el km nuevo es MENOR que algún mantenimiento ya registrado,
+      // los registros históricos quedarán con kilometraje_actual > km actual
+      // de la unidad (inconsistencia semántica). No bloqueamos — es una
+      // corrección intencional del admin — pero avisamos para que lo tenga en cuenta.
+      if (kmNuevo < kmActual) {
+        const inconsistenteMant = await pool.query(
+          `SELECT COUNT(*) AS total, MAX(kilometraje_actual) AS max_km
+           FROM mantenimientos
+           WHERE unidad_id = $1
+             AND kilometraje_actual IS NOT NULL
+             AND kilometraje_actual > $2`,
+          [id, kmNuevo]
+        );
+        const totalInc = parseInt(inconsistenteMant.rows[0].total) || 0;
+        if (totalInc > 0) {
+          const maxKm = parseInt(inconsistenteMant.rows[0].max_km).toLocaleString();
+          advertencias.push(
+            `${totalInc} mantenimiento(s) registrado(s) muestran un km histórico mayor al nuevo valor ` +
+            `(máx. ${maxKm} km). Los registros históricos no se modifican — esto es esperado en una ` +
+            `corrección hacia atrás, pero puede confundir en reportes.`
+          );
+        }
+
+        // También advertir si hay mantenimientos activos que verán el km
+        // de la unidad reducido mientras están en proceso.
+        const activosMant = await pool.query(
+          `SELECT COUNT(*) AS total FROM mantenimientos
+           WHERE unidad_id = $1 AND estado IN ('PENDIENTE','EN_PROCESO')`,
+          [id]
+        );
+        const totalActivos = parseInt(activosMant.rows[0].total) || 0;
+        if (totalActivos > 0) {
+          advertencias.push(
+            `Hay ${totalActivos} mantenimiento(s) activo(s) en esta unidad. El técnico asignado ` +
+            `verá el km actualizado (${kmNuevo.toLocaleString()} km) en su pantalla.`
+          );
+        }
+      }
     }
 
     let mensaje = "Unidad actualizada correctamente";
@@ -233,6 +275,7 @@ const updateUnit = async (req, res) => {
 
     res.json({
       message: mensaje,
+      advertencias: advertencias.length > 0 ? advertencias : undefined,
       unidad: result.rows[0],
       motor: motor || undefined,
     });

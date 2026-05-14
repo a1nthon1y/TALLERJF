@@ -143,12 +143,16 @@ export function UnitsTable() {
     setIsSubmitting(true)
     try {
       if (unitToEdit) {
-        // Actualizar unidad
-        await updateUnit(unitToEdit.id, values)
-        toast.success("Unidad actualizada correctamente")
+        const res = await updateUnit(unitToEdit.id, values)
+        // Mensaje principal (puede incluir info del motor predictivo)
+        toast.success(res?.message || "Unidad actualizada correctamente")
+        // Si el backend detectó inconsistencias históricas al bajar el km,
+        // las muestra como advertencias informativas (no bloquean la acción).
+        if (Array.isArray(res?.advertencias)) {
+          res.advertencias.forEach((adv) => toast.warning(adv, { duration: 8000 }))
+        }
         setIsEditing(false)
       } else {
-        // Crear unidad
         await createUnit(values)
         toast.success("Unidad creada correctamente")
         setIsCreating(false)
