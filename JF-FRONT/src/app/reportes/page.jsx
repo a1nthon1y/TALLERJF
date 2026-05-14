@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import {
   Wrench, Hammer, ChevronLeft, FileBarChart, ChevronRight,
+  Wallet, Package, TrendingUp, Activity, MapPin,
 } from "lucide-react"
 import { ReportViewer } from "@/components/reports/report-viewer"
 import { ReportFiltersBar } from "@/components/reports/report-filters-bar"
@@ -35,6 +36,17 @@ const REPORTS = [
     color: "blue",
     endpoint: "/reports/maintenances",
     fields: ["dueno", "unidad", "tecnico", "tipo", "estado"],
+    category: "Operativo",
+  },
+  {
+    id: "cost-by-owner",
+    title: "Costos por dueño",
+    description: "Consolidado de mantenimientos y costos agrupados por dueño. Ideal para facturación.",
+    icon: Wallet,
+    color: "green",
+    endpoint: "/reports/cost-by-owner",
+    fields: [],
+    category: "Financiero",
   },
   {
     id: "technician-productivity",
@@ -44,6 +56,47 @@ const REPORTS = [
     color: "amber",
     endpoint: "/reports/technician-productivity",
     fields: ["tecnico"],
+    category: "Operativo",
+  },
+  {
+    id: "materials-consumption",
+    title: "Consumo de materiales",
+    description: "Qué materiales se usaron más, en cuántos mantenimientos y cuánto costó.",
+    icon: Package,
+    color: "purple",
+    endpoint: "/reports/materials-consumption",
+    fields: ["material"],
+    category: "Inventario",
+  },
+  {
+    id: "top-units",
+    title: "Top unidades problemáticas",
+    description: "Qué unidades generan más mantenimientos y cuánto cuestan en el período.",
+    icon: TrendingUp,
+    color: "red",
+    endpoint: "/reports/top-units",
+    fields: [],
+    category: "Operativo",
+  },
+  {
+    id: "predictive-compliance",
+    title: "Cumplimiento predictivo",
+    description: "% mensual de mantenimientos preventivos vs correctivos. Mide calidad del plan.",
+    icon: Activity,
+    color: "indigo",
+    endpoint: "/reports/predictive-compliance",
+    fields: [],
+    category: "Operativo",
+  },
+  {
+    id: "arrivals-log",
+    title: "Bitácora de llegadas",
+    description: "Reportes de llegada que enviaron los choferes (km, ruta, comentarios).",
+    icon: MapPin,
+    color: "teal",
+    endpoint: "/reports/arrivals-log",
+    fields: [],
+    category: "Operativo",
   },
 ]
 
@@ -52,6 +105,9 @@ const colorMap = {
   amber:  "bg-amber-100  text-amber-600  dark:bg-amber-900/40  dark:text-amber-400",
   green:  "bg-green-100  text-green-600  dark:bg-green-900/40  dark:text-green-400",
   purple: "bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400",
+  red:    "bg-red-100    text-red-600    dark:bg-red-900/40    dark:text-red-400",
+  indigo: "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400",
+  teal:   "bg-teal-100   text-teal-600   dark:bg-teal-900/40   dark:text-teal-400",
 }
 
 export default function ReportsPage() {
@@ -62,16 +118,19 @@ export default function ReportsPage() {
   const [duenos, setDuenos] = useState([])
   const [unidades, setUnidades] = useState([])
   const [tecnicos, setTecnicos] = useState([])
+  const [materiales, setMateriales] = useState([])
 
   useEffect(() => {
     Promise.allSettled([
       makeGetRequest("/owners"),
       makeGetRequest("/units"),
       makeGetRequest("/technicians"),
-    ]).then(([dRes, uRes, tRes]) => {
+      makeGetRequest("/materials"),
+    ]).then(([dRes, uRes, tRes, mRes]) => {
       if (dRes.status === "fulfilled" && Array.isArray(dRes.value)) setDuenos(dRes.value)
       if (uRes.status === "fulfilled" && Array.isArray(uRes.value)) setUnidades(uRes.value)
       if (tRes.status === "fulfilled" && Array.isArray(tRes.value)) setTecnicos(tRes.value)
+      if (mRes.status === "fulfilled" && Array.isArray(mRes.value)) setMateriales(mRes.value)
     })
   }, [])
 
@@ -132,6 +191,14 @@ export default function ReportsPage() {
                   options={tecnicos.map((t) => ({ value: String(t.id), label: t.nombre }))}
                 />
               )}
+              {fields.has("material") && (
+                <FilterSelect
+                  label="Material"
+                  value={filters.material_id}
+                  onChange={(v) => setFilters({ ...filters, material_id: v })}
+                  options={materiales.map((m) => ({ value: String(m.id), label: m.nombre }))}
+                />
+              )}
               {fields.has("tipo") && (
                 <FilterSelect
                   label="Tipo"
@@ -164,44 +231,62 @@ export default function ReportsPage() {
     )
   }
 
+  // Agrupar por categoría para mantener orden cuando haya muchos reportes
+  const groups = REPORTS.reduce((acc, r) => {
+    const cat = r.category || "Otros"
+    ;(acc[cat] ||= []).push(r)
+    return acc
+  }, {})
+  const categoryOrder = ["Operativo", "Financiero", "Inventario", "Otros"]
+  const orderedGroups = categoryOrder.filter((c) => groups[c]).map((c) => [c, groups[c]])
+
   // ── Vista biblioteca (tarjetas) ────────────────────────────────────────
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <FileBarChart className="h-6 w-6" /> Reportes
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Genera reportes operativos y financieros en pantalla, PDF o Excel.
+          {REPORTS.length} reportes disponibles. Genéralos en pantalla, PDF o Excel.
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {REPORTS.map((r) => (
-          <Card
-            key={r.id}
-            className="group hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
-            onClick={() => openReport(r.id)}
-          >
-            <CardContent className="p-5 flex flex-col h-full">
-              <div className="flex items-start gap-3 mb-3">
-                <div className={`rounded-lg p-2.5 shrink-0 ${colorMap[r.color]}`}>
-                  <r.icon className="h-5 w-5" />
-                </div>
-                <Badge variant="outline" className="text-[10px] uppercase">PDF · Excel</Badge>
-              </div>
-              <h3 className="font-semibold text-base leading-tight mb-1">{r.title}</h3>
-              <p className="text-xs text-muted-foreground flex-1">{r.description}</p>
-              <div className="mt-4 flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{r.fields.length} filtro(s)</span>
-                <span className="text-xs font-medium text-primary inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                  Generar <ChevronRight className="h-3.5 w-3.5" />
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {orderedGroups.map(([category, items]) => (
+        <div key={category} className="space-y-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {category}
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((r) => (
+              <Card
+                key={r.id}
+                className="group hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer"
+                onClick={() => openReport(r.id)}
+              >
+                <CardContent className="p-5 flex flex-col h-full">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className={`rounded-lg p-2.5 shrink-0 ${colorMap[r.color]}`}>
+                      <r.icon className="h-5 w-5" />
+                    </div>
+                    <Badge variant="outline" className="text-[10px] uppercase">PDF · Excel</Badge>
+                  </div>
+                  <h3 className="font-semibold text-base leading-tight mb-1">{r.title}</h3>
+                  <p className="text-xs text-muted-foreground flex-1">{r.description}</p>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {r.fields.length === 0 ? "Solo fechas" : `${r.fields.length} filtro(s)`}
+                    </span>
+                    <span className="text-xs font-medium text-primary inline-flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                      Generar <ChevronRight className="h-3.5 w-3.5" />
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

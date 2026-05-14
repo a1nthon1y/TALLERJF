@@ -7,37 +7,25 @@ const checkRole = require("../middlewares/role.middleware");
 // Convención: todos los reportes aceptan ?formato=json|xlsx|pdf
 // y filtros vía query string (ver report.controller.js para cada uno).
 
-// ── Reportes administrativos ───────────────────────────────────────────────
-// Mantenimientos por período (con filtros: desde, hasta, tipo, estado, dueno_id, unidad_id, tecnico_id)
-router.get(
-  "/maintenances",
-  authenticate,
-  checkRole(["ADMIN", "ENCARGADO"]),
-  reportController.getMaintenanceReport
-);
+const adminOnly = checkRole(["ADMIN", "ENCARGADO"]);
 
-// Productividad por técnico (filtros: desde, hasta, tecnico_id)
-router.get(
-  "/technician-productivity",
-  authenticate,
-  checkRole(["ADMIN", "ENCARGADO"]),
-  reportController.getTechnicianProductivity
-);
+// ── Reportes administrativos (admin / encargado) ───────────────────────────
+router.get("/maintenances",            authenticate, adminOnly, reportController.getMaintenanceReport);
+router.get("/technician-productivity", authenticate, adminOnly, reportController.getTechnicianProductivity);
+router.get("/cost-by-owner",           authenticate, adminOnly, reportController.getCostByOwner);
+router.get("/materials-consumption",   authenticate, adminOnly, reportController.getMaterialsConsumption);
+router.get("/top-units",               authenticate, adminOnly, reportController.getTopUnits);
+router.get("/predictive-compliance",   authenticate, adminOnly, reportController.getPredictiveCompliance);
+router.get("/arrivals-log",            authenticate, adminOnly, reportController.getArrivalsLog);
 
 // ── Reportes para owner (estado de cuenta de SUS unidades) ─────────────────
-router.get(
-  "/owner-statement",
-  authenticate,
-  checkRole(["OWNER"]),
-  reportController.getOwnerStatement
-);
+router.get("/owner-statement",  authenticate, checkRole(["OWNER"]), reportController.getOwnerStatement);
+router.get("/owner-upcoming",   authenticate, checkRole(["OWNER"]), reportController.getOwnerUpcomingMaintenance);
 
 // ── Reporte para chofer (su unidad asignada) ───────────────────────────────
-router.get(
-  "/my-unit",
-  authenticate,
-  checkRole(["CHOFER"]),
-  reportController.getDriverUnitReport
-);
+router.get("/my-unit",          authenticate, checkRole(["CHOFER"]),  reportController.getDriverUnitReport);
+
+// ── Reporte para técnico (sus trabajos) ────────────────────────────────────
+router.get("/my-jobs",          authenticate, checkRole(["TECNICO"]), reportController.getTechnicianMyJobs);
 
 module.exports = router;

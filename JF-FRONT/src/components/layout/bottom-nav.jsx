@@ -22,8 +22,9 @@ const primaryByRole = {
     { title: "Reportes",  href: "/chofer/reportes",                icon: FileBarChart },
   ],
   TECNICO: [
-    { title: "Inicio",       href: "/tecnico/dashboard",  icon: LayoutDashboard },
+    { title: "Inicio",       href: "/tecnico/dashboard",   icon: LayoutDashboard },
     { title: "Mis Trabajos", href: "/tecnico/mis-trabajos", icon: Hammer },
+    { title: "Reportes",     href: "/tecnico/reportes",    icon: FileBarChart },
   ],
   OWNER: [
     { title: "Inicio",    href: "/dueno/dashboard",       icon: LayoutDashboard },

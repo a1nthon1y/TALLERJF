@@ -55,6 +55,7 @@ const choferNavItems = [
 const tecnicoNavItems = [
   { title: "Panel", href: "/tecnico/dashboard", icon: BarChart3 },
   { title: "Mis Trabajos", href: "/tecnico/mis-trabajos", icon: Wrench },
+  { title: "Mis Reportes", href: "/tecnico/reportes", icon: FileBarChart },
 ]
 
 const ownerNavItems = [
